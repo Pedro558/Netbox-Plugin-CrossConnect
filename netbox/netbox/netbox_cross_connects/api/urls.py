@@ -1,0 +1,1 @@
+#Plugin API routes for Cross Connects, defining endpoints for listing, retrieving, creating, updating, and deleting cross connect instances.
