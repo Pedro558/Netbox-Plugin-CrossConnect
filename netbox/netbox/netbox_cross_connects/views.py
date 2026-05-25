@@ -1,1 +1,0 @@
-# UI views for list, detail, add/edit, delete, and possibly bulk actions.
