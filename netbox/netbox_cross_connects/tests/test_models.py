@@ -25,7 +25,8 @@ class CrossConnectModelTestCase(TestCase):
         )
         cross_connect.full_clean()
 
-        self.assertEqual(cross_connect.status, CrossConnectStatusChoices.STATUS_PLANNED)
+        self.assertEqual(cross_connect.status, CrossConnectStatusChoices.STATUS_ACTIVE)
+        self.assertEqual(cross_connect.get_status_color(), 'green')
         self.assertEqual(str(cross_connect), 'ID-RJO1-00650')
 
     def test_cross_connect_id_validation(self):

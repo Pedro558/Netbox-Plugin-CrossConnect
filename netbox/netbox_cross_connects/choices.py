@@ -12,12 +12,12 @@ class CrossConnectStatusChoices(ChoiceSet):
     STATUS_ACTIVE = 'active'
     STATUS_OFFLINE = 'offline'
     STATUS_DECOMMISSIONING = 'decommissioning'
-    STATUS_DECOMMISSIONED = 'decommissioned'
+    #STATUS_DECOMMISSIONED = 'decommissioned'
 
     CHOICES = [
-        (STATUS_PLANNED, _('Planned'), 'cyan'),
+        (STATUS_PLANNED, _('Planned'), 'yellow'),
         (STATUS_ACTIVE, _('Active'), 'green'),
         (STATUS_OFFLINE, _('Offline'), 'red'),
-        (STATUS_DECOMMISSIONING, _('Decommissioning'), 'yellow'),
-        (STATUS_DECOMMISSIONED, _('Decommissioned'), 'gray'),
+        (STATUS_DECOMMISSIONING, _('Decommissioning'), 'orange'),
+        #(STATUS_DECOMMISSIONED, _('Decommissioned'), 'gray'),
     ]

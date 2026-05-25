@@ -63,33 +63,48 @@ class CrossConnectTable(PrimaryModelTable):
 
 
 class CableEndpointsColumn(tables.Column):
-    def _format_termination(self, termination):
-        device = getattr(termination, '_device', None)
-        label = f'{device}/{termination}' if device else str(termination)
+    def __init__(self, side, *args, **kwargs):
+        self.side = side.lower()
+        kwargs.setdefault('empty_values', ())
+        super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _termination_label(termination):
+        parent = getattr(termination, 'parent_object', None)
+        device = getattr(termination, '_device', None) or parent
+        site = getattr(termination, '_site', None)
+        location = getattr(termination, '_location', None)
+        rack = getattr(termination, '_rack', None)
+
+        parts = [str(value) for value in (site, location, rack, device) if value]
+        if parts:
+            return f'{" : ".join(parts)} > {termination}'.replace(' : ', ':')
+        if device:
+            return f'{device} > {termination}'
+        return str(termination)
+
+    @classmethod
+    def _format_termination(cls, termination):
+        label = cls._termination_label(termination)
         return f'<a href="{termination.get_absolute_url()}">{escape(label)}</a>'
 
-    def _get_side_terms(self, record, side):
+    def _get_side_terms(self, record):
         return [
             self._format_termination(term)
-            for term in getattr(record, f'{side.lower()}_terminations')
+            for term in getattr(record, f'{self.side}_terminations')
         ]
 
     def render(self, record):
-        a_side = ' / '.join(self._get_side_terms(record, 'A'))
-        b_side = ' / '.join(self._get_side_terms(record, 'B'))
-        if not a_side and not b_side:
+        terms = ' / '.join(self._get_side_terms(record))
+        if not terms:
             return mark_safe('&mdash;')
-        return mark_safe(f'{a_side} &rarr; {b_side}')
+        return mark_safe(terms)
 
     def value(self, record):
-        def _plain(side):
-            values = []
-            for termination in getattr(record, f'{side.lower()}_terminations'):
-                device = getattr(termination, '_device', None)
-                values.append(f'{device}/{termination}' if device else str(termination))
-            return ' / '.join(values)
-
-        return f'{_plain("A")} -> {_plain("B")}'
+        return ' / '.join(
+            self._termination_label(term)
+            for term in getattr(record, f'{self.side}_terminations')
+        )
 
 
 class RelatedCableTable(NetBoxTable):
@@ -98,8 +113,14 @@ class RelatedCableTable(NetBoxTable):
         verbose_name=_('Cable'),
         orderable=False,
     )
-    endpoints = CableEndpointsColumn(
-        verbose_name=_('Path'),
+    termination_a = CableEndpointsColumn(
+        side='a',
+        verbose_name=_('Termination A'),
+        orderable=False,
+    )
+    termination_b = CableEndpointsColumn(
+        side='b',
+        verbose_name=_('Termination B'),
         orderable=False,
     )
     status = columns.ChoiceFieldColumn()
@@ -108,11 +129,13 @@ class RelatedCableTable(NetBoxTable):
         model = Cable
         fields = (
             'cable',
-            'endpoints',
+            'termination_a',
+            'termination_b',
             'status',
         )
         default_columns = (
             'cable',
-            'endpoints',
+            'termination_a',
+            'termination_b',
             'status',
         )

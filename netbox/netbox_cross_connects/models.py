@@ -35,7 +35,7 @@ class CrossConnect(PrimaryModel):
         verbose_name=_('status'),
         max_length=50,
         choices=CrossConnectStatusChoices,
-        default=CrossConnectStatusChoices.STATUS_PLANNED,
+        default=CrossConnectStatusChoices.STATUS_ACTIVE,
     )
     site = models.ForeignKey(
         to='dcim.Site',
@@ -64,3 +64,6 @@ class CrossConnect(PrimaryModel):
 
     def __str__(self):
         return self.cross_connect_id
+
+    def get_status_color(self):
+        return CrossConnectStatusChoices.colors.get(self.status)

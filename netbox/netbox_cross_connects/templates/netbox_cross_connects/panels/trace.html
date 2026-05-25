@@ -1,0 +1,42 @@
+{% extends "ui/panels/_base.html" %}
+{% load helpers %}
+{% load i18n %}
+
+{% block panel_content %}
+  <div class="card-body">
+    {% if trace_status == 'ready' %}
+      <p class="mb-3">
+        {% blocktrans with origin=trace_origin_interface|linkify destination=trace_destination_interface|linkify %}
+          Native trace resolved from {{ origin }} to {{ destination }}.
+        {% endblocktrans %}
+      </p>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary" href="{{ trace_url }}">
+          <i class="mdi mdi-transit-connection-variant"></i> {% trans "Open Trace" %}
+        </a>
+        <a class="btn btn-outline-primary" href="{{ trace_svg_url }}">
+          <i class="mdi mdi-file-image-outline"></i> {% trans "Open SVG" %}
+        </a>
+      </div>
+    {% elif trace_status == 'ambiguous' %}
+      <div class="alert alert-warning mb-3" role="alert">
+        {{ trace_message }}
+      </div>
+      {% if trace_links %}
+        <ul class="mb-0">
+          {% for link in trace_links %}
+            <li>
+              <a href="{{ link.url }}">
+                {% blocktrans with interface=link.interface %}Trace from {{ interface }}{% endblocktrans %}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+    {% else %}
+      <div class="alert alert-info mb-0" role="alert">
+        {{ trace_message }}
+      </div>
+    {% endif %}
+  </div>
+{% endblock panel_content %}
