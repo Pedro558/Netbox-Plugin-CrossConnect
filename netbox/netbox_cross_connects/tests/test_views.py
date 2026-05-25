@@ -1,8 +1,11 @@
+from core.models import ObjectType
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from dcim.choices import InterfaceTypeChoices
 from dcim.models import Cable, Interface, Region, Site
+from extras.choices import CustomFieldTypeChoices
+from extras.models import CustomField
 from tenancy.models import Tenant, TenantGroup
 from utilities.testing import create_test_device, create_test_user
 
@@ -57,6 +60,10 @@ class CrossConnectViewTestCase(TestCase):
             reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk}),
             f'/plugins/cross-connects/cross-connects/{cross_connect.pk}/',
         )
+        self.assertEqual(
+            reverse('plugins-api:netbox_cross_connects-api:crossconnect-list'),
+            '/api/plugins/cross-connects/cross-connects/',
+        )
 
     def test_detail_view_includes_related_cables_table(self):
         cross_connect = CrossConnect.objects.create(
@@ -66,6 +73,12 @@ class CrossConnectViewTestCase(TestCase):
             site=self.site,
             tenant=self.tenant,
         )
+        custom_field = CustomField.objects.create(
+            name='cross_connect',
+            type=CustomFieldTypeChoices.TYPE_OBJECT,
+            related_object_type=ObjectType.objects.get_for_model(CrossConnect),
+        )
+        custom_field.object_types.set([ObjectType.objects.get_for_model(Cable)])
         device_a = create_test_device('device-a', site=self.site)
         device_b = create_test_device('device-b', site=self.site)
         interface_a = Interface.objects.create(
@@ -92,4 +105,23 @@ class CrossConnectViewTestCase(TestCase):
         context = view.get_extra_context(request, cross_connect)
         table = context['related_cables_table']
 
+        self.assertEqual(context['related_cables_custom_field'], custom_field)
         self.assertEqual(next(iter(table.rows)).record.pk, cable.pk)
+
+    def test_detail_view_reports_missing_related_cables_custom_field(self):
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00651',
+            ritm='RITM0012346',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        request = self.factory.get('/')
+        request.user = self.user
+
+        view = CrossConnectView()
+        context = view.get_extra_context(request, cross_connect)
+
+        self.assertIsNone(context['related_cables_custom_field'])
+        self.assertIsNone(context['related_cables_table'])

@@ -1,9 +1,12 @@
+from core.models import ObjectType
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Cable
+from extras.choices import CustomFieldTypeChoices
+from extras.models import CustomField
 from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from netbox.ui import layout
-from netbox.ui.panels import CommentsPanel, ContextTablePanel
+from netbox.ui.panels import CommentsPanel, TemplatePanel
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -34,18 +37,34 @@ class CrossConnectView(generic.ObjectView):
             CustomFieldsPanel(),
         ],
         bottom_panels=[
-            ContextTablePanel('related_cables_table', title=_('Related Cables')),
+            TemplatePanel('netbox_cross_connects/panels/related_cables.html', title=_('Related Cables')),
         ],
     )
 
+    @staticmethod
+    def _get_related_cables_custom_field():
+        cable_type = ObjectType.objects.get_for_model(Cable)
+
+        return CustomField.objects.filter(
+            name='cross_connect',
+            object_types=cable_type,
+            type=CustomFieldTypeChoices.TYPE_OBJECT,
+            related_object_type=ObjectType.objects.get_for_model(CrossConnect),
+        ).first()
+
     def get_extra_context(self, request, instance):
-        related_cables = Cable.objects.restrict(request.user, 'view').filter(
-            custom_field_data__cross_connect=instance.pk
-        )
-        related_cables_table = tables.RelatedCableTable(related_cables)
-        related_cables_table.configure(request)
+        related_cables_custom_field = self._get_related_cables_custom_field()
+        related_cables_table = None
+
+        if related_cables_custom_field:
+            related_cables = Cable.objects.restrict(request.user, 'view').filter(
+                custom_field_data__cross_connect=instance.pk
+            )
+            related_cables_table = tables.RelatedCableTable(related_cables)
+            related_cables_table.configure(request)
 
         return {
+            'related_cables_custom_field': related_cables_custom_field,
             'related_cables_table': related_cables_table,
         }
 

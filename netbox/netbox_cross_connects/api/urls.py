@@ -1,3 +1,9 @@
-from . import views  # noqa: F401
+from netbox.api.routers import NetBoxRouter
 
-urlpatterns = []
+from . import views
+
+router = NetBoxRouter()
+router.register('cross-connects', views.CrossConnectViewSet)
+
+app_name = 'netbox_cross_connects-api'
+urlpatterns = router.urls
