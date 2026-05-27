@@ -609,3 +609,103 @@ class SiteFormTestCase(TestCase):
         self.assertEqual(site.asns.count(), M2MAddRemoveFields.THRESHOLD)
         self.assertTrue(site.asns.filter(pk__in=add_pks).count() == 3)
         self.assertFalse(site.asns.filter(pk__in=remove_pks).exists())
+
+
+class CableFormTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.device_a = create_test_device('Cable Form Device A')
+        cls.device_b = create_test_device('Cable Form Device B')
+        cls.interface_a = Interface.objects.create(
+            device=cls.device_a,
+            name='eth0',
+            type=InterfaceTypeChoices.TYPE_1GE_FIXED,
+        )
+        cls.interface_b = Interface.objects.create(
+            device=cls.device_b,
+            name='eth0',
+            type=InterfaceTypeChoices.TYPE_1GE_FIXED,
+        )
+
+    def test_label_is_required(self):
+        form = get_cable_form(Interface, Interface)(data={
+            'a_terminations_type': 'dcim.interface',
+            'b_terminations_type': 'dcim.interface',
+            'a_terminations': [self.interface_a.pk],
+            'b_terminations': [self.interface_b.pk],
+            'status': LinkStatusChoices.STATUS_CONNECTED,
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('label', form.errors)
+
+    def test_label_must_match_cross_connect_pattern(self):
+        form = get_cable_form(Interface, Interface)(data={
+            'a_terminations_type': 'dcim.interface',
+            'b_terminations_type': 'dcim.interface',
+            'a_terminations': [self.interface_a.pk],
+            'b_terminations': [self.interface_b.pk],
+            'status': LinkStatusChoices.STATUS_CONNECTED,
+            'label': 'bad-label',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('label', form.errors)
+
+
+class CableImportFormTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.site = Site.objects.create(name='Cable Import Site', slug='cable-import-site')
+        manufacturer = Manufacturer.objects.create(name='Cable Import Manufacturer', slug='cable-import-manufacturer')
+        device_type = DeviceType.objects.create(
+            manufacturer=manufacturer,
+            model='Cable Import Device Type',
+            slug='cable-import-device-type',
+        )
+        role = DeviceRole.objects.create(name='Cable Import Role', slug='cable-import-role', color='ff0000')
+        cls.device_a = Device.objects.create(
+            name='Cable Import Device A',
+            site=cls.site,
+            device_type=device_type,
+            role=role,
+        )
+        cls.device_b = Device.objects.create(
+            name='Cable Import Device B',
+            site=cls.site,
+            device_type=device_type,
+            role=role,
+        )
+        Interface.objects.create(device=cls.device_a, name='eth0', type=InterfaceTypeChoices.TYPE_1GE_FIXED)
+        Interface.objects.create(device=cls.device_b, name='eth0', type=InterfaceTypeChoices.TYPE_1GE_FIXED)
+
+    def test_label_is_required(self):
+        form = CableImportForm(data={
+            'side_a_site': self.site.name,
+            'side_a_device': self.device_a.name,
+            'side_a_type': 'dcim.interface',
+            'side_a_name': 'eth0',
+            'side_b_site': self.site.name,
+            'side_b_device': self.device_b.name,
+            'side_b_type': 'dcim.interface',
+            'side_b_name': 'eth0',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('label', form.errors)
+
+    def test_label_must_match_cross_connect_pattern(self):
+        form = CableImportForm(data={
+            'side_a_site': self.site.name,
+            'side_a_device': self.device_a.name,
+            'side_a_type': 'dcim.interface',
+            'side_a_name': 'eth0',
+            'side_b_site': self.site.name,
+            'side_b_device': self.device_b.name,
+            'side_b_type': 'dcim.interface',
+            'side_b_name': 'eth0',
+            'label': 'bad-label',
+        })
+
+        self.assertFalse(form.is_valid())
+        self.assertIn('label', form.errors)

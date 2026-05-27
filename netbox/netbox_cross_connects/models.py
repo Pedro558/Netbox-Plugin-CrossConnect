@@ -3,6 +3,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import PrimaryModel
+from utilities.validators import CrossConnectIDValidator
 
 from .choices import CrossConnectStatusChoices
 
@@ -14,12 +15,7 @@ class CrossConnect(PrimaryModel):
         verbose_name=_('cross connect ID'),
         max_length=100,
         unique=True,
-        validators=(
-            RegexValidator(
-                regex=r'^ID-[A-Z0-9]+-\d{5}$',
-                message=_('Cross connect ID must match the format ID-<CODE>-<5 digits>.'),
-            ),
-        ),
+        validators=(CrossConnectIDValidator,),
     )
     ritm = models.CharField(
         verbose_name=_('RITM'),

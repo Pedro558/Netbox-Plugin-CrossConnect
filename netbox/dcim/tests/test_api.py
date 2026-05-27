@@ -3323,7 +3323,7 @@ class CableTestCase(APIViewTestCases.APIViewTestCase):
                     'object_type': 'dcim.interface',
                     'object_id': interfaces[14].pk,
                 }],
-                'label': 'Cable 4',
+                'label': 'ID-CBL4-00004',
                 'profile': CableProfileChoices.SINGLE_1C1P,
             },
             {
@@ -3335,7 +3335,7 @@ class CableTestCase(APIViewTestCases.APIViewTestCase):
                     'object_type': 'dcim.interface',
                     'object_id': interfaces[15].pk,
                 }],
-                'label': 'Cable 5',
+                'label': 'ID-CBL5-00005',
                 'profile': CableProfileChoices.SINGLE_1C1P,
             },
             {
@@ -3347,7 +3347,7 @@ class CableTestCase(APIViewTestCases.APIViewTestCase):
                     'object_type': 'dcim.interface',
                     'object_id': interfaces[16].pk,
                 }],
-                'label': 'Cable 6',
+                'label': 'ID-CBL6-00006',
                 # No profile (legacy behavior)
             },
         ]

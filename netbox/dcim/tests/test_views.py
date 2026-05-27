@@ -3919,7 +3919,7 @@ class CableTestCase(
             'b_terminations': [interfaces[3].pk],
             'type': CableTypeChoices.TYPE_CAT6,
             'status': LinkStatusChoices.STATUS_PLANNED,
-            'label': 'Label',
+            'label': 'ID-CBL1-00001',
             'color': 'c0c0c0',
             'length': 100,
             'length_unit': CableLengthUnitChoices.UNIT_FOOT,
@@ -3928,10 +3928,10 @@ class CableTestCase(
 
         cls.csv_data = {
             'default': (
-                "side_a_device,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name",
-                "Device 4,dcim.interface,Interface 1,Device 5,dcim.interface,Interface 1",
-                "Device 3,dcim.interface,Interface 2,Device 4,dcim.interface,Interface 2",
-                "Device 3,dcim.interface,Interface 3,Device 4,dcim.interface,Interface 3",
+                "side_a_device,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name,label",
+                "Device 4,dcim.interface,Interface 1,Device 5,dcim.interface,Interface 1,ID-CBL4-00004",
+                "Device 3,dcim.interface,Interface 2,Device 4,dcim.interface,Interface 2,ID-CBL5-00005",
+                "Device 3,dcim.interface,Interface 3,Device 4,dcim.interface,Interface 3,ID-CBL6-00006",
 
                 # The following is no longer possible in this scenario, because there are multiple
                 # devices named "Device 1" across multiple sites. See the "site-filtering" scenario
@@ -3941,33 +3941,42 @@ class CableTestCase(
             'site-filtering': (
                 # Ensure that CSV bulk import supports assigning terminations from parent devices
                 # that share the same device name, provided those devices belong to different sites.
-                "side_a_site,side_a_device,side_a_type,side_a_name,side_b_site,side_b_device,side_b_type,side_b_name",
-                "Site 1,Device 3,dcim.interface,Interface 1,Site 2,Device 1,dcim.interface,Interface 1",
-                "Site 1,Device 3,dcim.interface,Interface 2,Site 2,Device 1,dcim.interface,Interface 2",
-                "Site 1,Device 3,dcim.interface,Interface 3,Site 2,Device 1,dcim.interface,Interface 3",
-                "Site 1,Device 1,dcim.interface,Device 2 Interface,Site 2,Device 1,dcim.interface,Interface 4",
-                "Site 1,Device 1,dcim.interface,Device 3 Interface,Site 2,Device 1,dcim.interface,Interface 5",
+                (
+                    "side_a_site,side_a_device,side_a_type,side_a_name,side_b_site,side_b_device,"
+                    "side_b_type,side_b_name,label"
+                ),
+                "Site 1,Device 3,dcim.interface,Interface 1,Site 2,Device 1,dcim.interface,Interface 1,ID-CBL7-00007",
+                "Site 1,Device 3,dcim.interface,Interface 2,Site 2,Device 1,dcim.interface,Interface 2,ID-CBL8-00008",
+                "Site 1,Device 3,dcim.interface,Interface 3,Site 2,Device 1,dcim.interface,Interface 3,ID-CBL9-00009",
+                (
+                    "Site 1,Device 1,dcim.interface,Device 2 Interface,Site 2,Device 1,"
+                    "dcim.interface,Interface 4,ID-CBL1-00010"
+                ),
+                (
+                    "Site 1,Device 1,dcim.interface,Device 3 Interface,Site 2,Device 1,"
+                    "dcim.interface,Interface 5,ID-CBL1-00011"
+                ),
             ),
             'powerfeed-to-powerport': (
                 # Ensure that powerfeed-to-powerport cables can be imported via CSV using side_a_power_panel
-                "side_a_power_panel,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name",
-                "Power Panel 1,dcim.powerfeed,Power Feed 1,Device 4,dcim.powerport,Power Port 1",
-                "Power Panel 1,dcim.powerfeed,Power Feed 2,Device 4,dcim.powerport,Power Port 2",
-                "Power Panel 1,dcim.powerfeed,Power Feed 3,Device 4,dcim.powerport,Power Port 3",
+                "side_a_power_panel,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name,label",
+                "Power Panel 1,dcim.powerfeed,Power Feed 1,Device 4,dcim.powerport,Power Port 1,ID-CBL1-00012",
+                "Power Panel 1,dcim.powerfeed,Power Feed 2,Device 4,dcim.powerport,Power Port 2,ID-CBL1-00013",
+                "Power Panel 1,dcim.powerfeed,Power Feed 3,Device 4,dcim.powerport,Power Port 3,ID-CBL1-00014",
             ),
         }
 
         cls.csv_update_data = (
             "id,label,color",
-            f"{cable1.pk},New label7,00ff00",
-            f"{cable2.pk},New label8,00ff00",
-            f"{cable3.pk},New label9,00ff00",
+            f"{cable1.pk},ID-CBL7-00015,00ff00",
+            f"{cable2.pk},ID-CBL8-00016,00ff00",
+            f"{cable3.pk},ID-CBL9-00017,00ff00",
         )
 
         cls.bulk_edit_data = {
             'type': CableTypeChoices.TYPE_CAT5E,
             'status': LinkStatusChoices.STATUS_CONNECTED,
-            'label': 'New label',
+            'label': 'ID-CBL1-00018',
             'color': '00ff00',
             'length': 50,
             'length_unit': CableLengthUnitChoices.UNIT_METER,

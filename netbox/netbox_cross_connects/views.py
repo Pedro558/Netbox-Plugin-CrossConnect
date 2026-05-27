@@ -1,4 +1,5 @@
 from collections import OrderedDict
+from urllib.parse import urlencode
 
 from core.models import ObjectType
 from django.urls import reverse
@@ -176,6 +177,24 @@ class CrossConnectView(generic.ObjectView):
             ],
         }
 
+    @staticmethod
+    def _add_cross_connect_trace_context(trace_context, instance):
+        if trace_context.get('trace_url'):
+            trace_context['trace_url'] = (
+                f"{trace_context['trace_url']}?{urlencode({'cross_connect': instance.pk})}"
+            )
+
+        if trace_context.get('trace_links'):
+            trace_context['trace_links'] = [
+                {
+                    **link,
+                    'url': f"{link['url']}?{urlencode({'cross_connect': instance.pk})}",
+                }
+                for link in trace_context['trace_links']
+            ]
+
+        return trace_context
+
     def get_extra_context(self, request, instance):
         related_cables_custom_field = self._get_related_cables_custom_field()
         related_cables_table = None
@@ -195,6 +214,7 @@ class CrossConnectView(generic.ObjectView):
             related_cables_table.configure(request)
             if related_cables:
                 trace_context = self._resolve_trace(request, related_cables)
+                trace_context = self._add_cross_connect_trace_context(trace_context, instance)
             else:
                 trace_context['trace_message'] = _('No related cables are linked to this CrossConnect.')
 

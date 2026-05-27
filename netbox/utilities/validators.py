@@ -8,6 +8,7 @@ from django.utils.translation import gettext_lazy as _
 from netbox.config import get_config
 
 __all__ = (
+    'CrossConnectIDValidator',
     'ColorValidator',
     'EnhancedURLValidator',
     'ExclusionValidator',
@@ -19,6 +20,12 @@ __all__ = (
 ColorValidator = RegexValidator(
     regex='^[0-9a-f]{6}$',
     message='Enter a valid hexadecimal RGB color code.',
+    code='invalid'
+)
+
+CrossConnectIDValidator = RegexValidator(
+    regex=r'^ID-[A-Z0-9]+-\d{5}$',
+    message=_('Cross connect ID must match the format ID-SITE-00123.'),
     code='invalid'
 )
 

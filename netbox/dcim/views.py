@@ -1,3 +1,4 @@
+from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
@@ -173,6 +174,19 @@ class PathTraceView(generic.ObjectView):
     additional_permissions = ['dcim.view_cable']
     template_name = 'dcim/cable_trace.html'
 
+    @staticmethod
+    def _get_cross_connect(request):
+        cross_connect_pk = request.GET.get('cross_connect')
+        if not cross_connect_pk:
+            return None
+
+        try:
+            CrossConnect = apps.get_model('netbox_cross_connects', 'CrossConnect')
+        except LookupError:
+            return None
+
+        return CrossConnect.objects.restrict(request.user, 'view').filter(pk=cross_connect_pk).first()
+
     def dispatch(self, request, *args, **kwargs):
         model = kwargs.pop('model')
         self.queryset = model.objects.all()
@@ -181,6 +195,7 @@ class PathTraceView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         related_paths = []
+        cross_connect = self._get_cross_connect(request)
 
         # If tracing a PathEndpoint, locate the CablePath (if one exists) by its origin
         if isinstance(instance, PathEndpoint):
@@ -202,7 +217,8 @@ class PathTraceView(generic.ObjectView):
         # No paths found
         if path is None:
             return {
-                'path': None
+                'path': None,
+                'cross_connect': cross_connect,
             }
 
         # Get the total length of the cable and whether the length is definitive (fully defined)
@@ -218,6 +234,7 @@ class PathTraceView(generic.ObjectView):
             'total_length': total_length,
             'is_definitive': is_definitive,
             'svg_url': svg_url,
+            'cross_connect': cross_connect,
         }
 
 

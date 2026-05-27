@@ -27,6 +27,7 @@ from utilities.exceptions import AbortRequest
 from utilities.fields import ColorField, GenericArrayForeignKey
 from utilities.querysets import RestrictedQuerySet
 from utilities.serialization import deserialize_object, serialize_object
+from utilities.validators import CrossConnectIDValidator
 from wireless.models import WirelessLink
 
 from .device_components import FrontPort, PathEndpoint, PortMapping, RearPort
@@ -111,7 +112,7 @@ class Cable(PrimaryModel):
     label = models.CharField(
         verbose_name=_('label'),
         max_length=100,
-        blank=True
+        validators=(CrossConnectIDValidator,),
     )
     color = ColorField(
         verbose_name=_('color'),

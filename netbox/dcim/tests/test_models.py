@@ -1768,6 +1768,28 @@ class CableTestCase(TestCase):
         self.assertEqual(interface1.link_peers, [interface2])
         self.assertEqual(interface2.link_peers, [interface1])
 
+    def test_cable_label_is_required(self):
+        interface1 = Interface.objects.get(device__name='TestDevice1', name='eth0')
+        interface2 = Interface.objects.get(device__name='TestDevice2', name='eth1')
+
+        cable = Cable(a_terminations=[interface1], b_terminations=[interface2], label='')
+
+        with self.assertRaises(ValidationError) as context:
+            cable.full_clean()
+
+        self.assertIn('label', context.exception.message_dict)
+
+    def test_cable_label_validates_cross_connect_pattern(self):
+        interface1 = Interface.objects.get(device__name='TestDevice1', name='eth0')
+        interface2 = Interface.objects.get(device__name='TestDevice2', name='eth1')
+
+        cable = Cable(a_terminations=[interface1], b_terminations=[interface2], label='invalid-label')
+
+        with self.assertRaises(ValidationError) as context:
+            cable.full_clean()
+
+        self.assertIn('label', context.exception.message_dict)
+
     def test_cable_deletion(self):
         """
         When a Cable is deleted, the `cable` field on its termination points must be nullified. The str() method

@@ -157,8 +157,16 @@ class CrossConnectViewTestCase(TestCase):
         patch_panel_1 = create_test_device('patch-panel-1', site=self.site)
         patch_panel_2 = create_test_device('patch-panel-2', site=self.site)
 
-        interface_a = Interface.objects.create(device=device_a, name='xe-0/0/0', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
-        interface_z = Interface.objects.create(device=device_b, name='xe-0/0/1', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_z = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
         front_port_1 = FrontPort.objects.create(device=patch_panel_1, name='FP1', type=PortTypeChoices.TYPE_8P8C)
         rear_port_1 = RearPort.objects.create(device=patch_panel_1, name='RP1', type=PortTypeChoices.TYPE_8P8C)
         front_port_2 = FrontPort.objects.create(device=patch_panel_2, name='FP1', type=PortTypeChoices.TYPE_8P8C)
@@ -190,8 +198,43 @@ class CrossConnectViewTestCase(TestCase):
         self.assertEqual(context['trace_status'], 'ready')
         self.assertEqual(context['trace_origin_interface'], interface_a)
         self.assertEqual(context['trace_destination_interface'], interface_z)
-        self.assertEqual(context['trace_url'], reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk}))
+        self.assertEqual(
+            context['trace_url'],
+            f"{reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk})}?cross_connect={cross_connect.pk}",
+        )
         self.assertIn(reverse('dcim-api:interface-trace', kwargs={'pk': interface_a.pk}), context['trace_svg_url'])
+
+    def test_native_trace_view_shows_cross_connect_subtitle(self):
+        self.user.user_permissions.add(Permission.objects.get(codename='view_interface'))
+        self.client.force_login(self.user)
+
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00663',
+            ritm='RITM0012363',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        device_a = create_test_device('trace-header-device-a', site=self.site)
+        device_b = create_test_device('trace-header-device-b', site=self.site)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        Cable(a_terminations=[interface_a], b_terminations=[interface_b]).save()
+
+        response = self.client.get(
+            f"{reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk})}?cross_connect={cross_connect.pk}"
+        )
+
+        self.assertContains(response, cross_connect.cross_connect_id)
 
     def test_detail_view_reports_ambiguous_trace_direction_when_both_endpoints_are_a_side(self):
         self.user.user_permissions.add(Permission.objects.get(codename='view_interface'))
@@ -209,8 +252,16 @@ class CrossConnectViewTestCase(TestCase):
         device_z = create_test_device('ambiguous-device-z', site=self.site)
         patch_panel = create_test_device('ambiguous-patch-panel', site=self.site)
 
-        interface_a = Interface.objects.create(device=device_a, name='xe-0/0/0', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
-        interface_z = Interface.objects.create(device=device_z, name='xe-0/0/1', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_z = Interface.objects.create(
+            device=device_z,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
         front_port = FrontPort.objects.create(device=patch_panel, name='FP1', type=PortTypeChoices.TYPE_8P8C)
         rear_port = RearPort.objects.create(device=patch_panel, name='RP1', type=PortTypeChoices.TYPE_8P8C)
         PortMapping.objects.create(front_port=front_port, rear_port=rear_port)
@@ -254,9 +305,21 @@ class CrossConnectViewTestCase(TestCase):
         device_b = create_test_device('invalid-device-b', site=self.site)
         device_c = create_test_device('invalid-device-c', site=self.site)
 
-        interface_a = Interface.objects.create(device=device_a, name='xe-0/0/0', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
-        interface_b = Interface.objects.create(device=device_b, name='xe-0/0/1', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
-        interface_c = Interface.objects.create(device=device_c, name='xe-0/0/2', type=InterfaceTypeChoices.TYPE_10GE_FIXED)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_c = Interface.objects.create(
+            device=device_c,
+            name='xe-0/0/2',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
 
         Cable(
             a_terminations=[interface_a],
