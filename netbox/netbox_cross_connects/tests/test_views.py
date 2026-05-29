@@ -11,7 +11,7 @@ from tenancy.models import Tenant, TenantGroup
 from utilities.testing import create_test_device, create_test_user
 
 from netbox_cross_connects.choices import CrossConnectStatusChoices
-from netbox_cross_connects.forms import CrossConnectForm
+from netbox_cross_connects.forms import CrossConnectForm, CrossConnectImportForm
 from netbox_cross_connects.models import CrossConnect
 from netbox_cross_connects.tables import RelatedCableTable
 from netbox_cross_connects.views import CrossConnectView
@@ -50,6 +50,20 @@ class CrossConnectViewTestCase(TestCase):
 
         self.assertTrue(form.is_valid(), form.errors)
 
+    def test_cross_connect_import_form_is_valid(self):
+        form = CrossConnectImportForm(data={
+            'cross_connect_id': 'ID-RJO1-00654',
+            'ritm': 'RITM0012349',
+            'status': CrossConnectStatusChoices.STATUS_ACTIVE,
+            'site': self.site.name,
+            'tenant': self.tenant.name,
+            'activation_date': '2026-05-25',
+            'last_known_path': 'Panel A > Panel B',
+            'description': 'Imported cross connect',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
     def test_cross_connect_ui_routes(self):
         cross_connect = CrossConnect.objects.create(
             cross_connect_id='ID-RJO1-00652',
@@ -66,6 +80,10 @@ class CrossConnectViewTestCase(TestCase):
         self.assertEqual(
             reverse('plugins:netbox_cross_connects:crossconnect_add'),
             '/plugins/cross-connects/cross-connects/add/',
+        )
+        self.assertEqual(
+            reverse('plugins:netbox_cross_connects:crossconnect_bulk_import'),
+            '/plugins/cross-connects/cross-connects/import/',
         )
         self.assertEqual(
             reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk}),
@@ -235,6 +253,26 @@ class CrossConnectViewTestCase(TestCase):
         )
 
         self.assertContains(response, cross_connect.cross_connect_id)
+
+    def test_bulk_import_view_creates_cross_connect(self):
+        user = create_test_user('crossconnect-import-user', permissions=('netbox_cross_connects.add_crossconnect',))
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('plugins:netbox_cross_connects:crossconnect_bulk_import'),
+            {
+                'data': '\n'.join((
+                    'cross_connect_id,ritm,status,site,tenant,activation_date,last_known_path,description',
+                    'ID-RJO1-00655,RITM0012350,active,Site 1,Tenant 1,2026-05-26,Patch panel A > Patch panel B,Imported from CSV',
+                )),
+                'format': 'csv',
+                'csv_delimiter': 'auto',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers['Location'], '/plugins/cross-connects/cross-connects/?modified_by_request=' + response.headers['X-Request-ID'])
+        self.assertTrue(CrossConnect.objects.filter(cross_connect_id='ID-RJO1-00655').exists())
 
     def test_detail_view_reports_ambiguous_trace_direction_when_both_endpoints_are_a_side(self):
         self.user.user_permissions.add(Permission.objects.get(codename='view_interface'))

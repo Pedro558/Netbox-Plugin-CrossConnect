@@ -2,9 +2,15 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site
-from netbox.forms import PrimaryModelFilterSetForm, PrimaryModelForm
+from netbox.forms import PrimaryModelFilterSetForm, PrimaryModelForm, PrimaryModelImportForm
 from tenancy.models import Tenant
-from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField, TagFilterField
+from utilities.forms.fields import (
+    CSVChoiceField,
+    CSVModelChoiceField,
+    DynamicModelChoiceField,
+    DynamicModelMultipleChoiceField,
+    TagFilterField,
+)
 from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import DatePicker
 
@@ -14,6 +20,7 @@ from .models import CrossConnect
 __all__ = (
     'CrossConnectFilterForm',
     'CrossConnectForm',
+    'CrossConnectImportForm',
 )
 
 
@@ -89,3 +96,39 @@ class CrossConnectFilterForm(PrimaryModelFilterSetForm):
         label=_('Tenant'),
     )
     tag = TagFilterField(model)
+
+
+class CrossConnectImportForm(PrimaryModelImportForm):
+    status = CSVChoiceField(
+        label=_('Status'),
+        choices=CrossConnectStatusChoices,
+        help_text=_('Operational status'),
+    )
+    site = CSVModelChoiceField(
+        label=_('Site'),
+        queryset=Site.objects.all(),
+        to_field_name='name',
+        help_text=_('Assigned site'),
+    )
+    tenant = CSVModelChoiceField(
+        label=_('Tenant'),
+        queryset=Tenant.objects.all(),
+        to_field_name='name',
+        help_text=_('Assigned tenant'),
+    )
+
+    class Meta:
+        model = CrossConnect
+        fields = (
+            'cross_connect_id',
+            'ritm',
+            'status',
+            'site',
+            'tenant',
+            'activation_date',
+            'last_known_path',
+            'description',
+            'owner',
+            'comments',
+            'tags',
+        )

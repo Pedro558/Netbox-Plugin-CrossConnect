@@ -232,6 +232,12 @@ class CrossConnectEditView(generic.ObjectEditView):
     form = forms.CrossConnectForm
 
 
+@register_model_view(CrossConnect, 'bulk_import', path='import', detail=False)
+class CrossConnectBulkImportView(generic.BulkImportView):
+    queryset = CrossConnect.objects.all()
+    model_form = forms.CrossConnectImportForm
+
+
 @register_model_view(CrossConnect, 'delete')
 class CrossConnectDeleteView(generic.ObjectDeleteView):
     queryset = CrossConnect.objects.all()
