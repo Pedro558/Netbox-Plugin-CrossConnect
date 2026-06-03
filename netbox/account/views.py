@@ -2,15 +2,14 @@ import logging
 
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import login as auth_login
-from django.contrib.auth import logout as auth_logout
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import login as auth_login, logout as auth_logout, update_session_auth_hash
 from django.contrib.auth.forms import AuthenticationForm, PasswordChangeForm
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.models import update_last_login
 from django.contrib.auth.signals import user_logged_in
 from django.http import HttpResponseRedirect
-from django.shortcuts import get_object_or_404, redirect, render, resolve_url
+from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import render, resolve_url
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.http import urlencode
@@ -26,20 +25,17 @@ from extras.models import Bookmark
 from extras.tables import BookmarkTable, NotificationTable, SubscriptionTable
 from netbox.authentication import get_auth_backend_display, get_saml_idps
 from netbox.config import get_config
-from netbox.ui import layout
 from netbox.views import generic
-from users import forms
+from users import forms, tables
 from users.models import UserConfig
-from users.tables import TokenTable
-from users.ui.panels import TokenExamplePanel, TokenPanel
 from utilities.request import safe_for_redirect
 from utilities.string import remove_linebreaks
 from utilities.views import register_model_view
 
+
 #
 # Login/logout
 #
-
 
 class LoginView(View):
     """
@@ -140,8 +136,9 @@ class LoginView(View):
 
             return response
 
-        username = form['username'].value()
-        logger.debug(f"Login form validation failed for username: {remove_linebreaks(username)}")
+        else:
+            username = form['username'].value()
+            logger.debug(f"Login form validation failed for username: {remove_linebreaks(username)}")
 
         return render(request, self.template_name, {
             'form': form,
@@ -331,8 +328,7 @@ class UserTokenListView(LoginRequiredMixin, View):
 
     def get(self, request):
         tokens = UserToken.objects.filter(user=request.user)
-        table = TokenTable(tokens)
-        table.columns.hide('user')
+        table = tables.UserTokenTable(tokens)
         table.configure(request)
 
         return render(request, 'account/token_list.html', {
@@ -344,28 +340,14 @@ class UserTokenListView(LoginRequiredMixin, View):
 
 @register_model_view(UserToken)
 class UserTokenView(LoginRequiredMixin, View):
-    layout = layout.SimpleLayout(
-        left_panels=[
-            TokenPanel(),
-        ],
-        right_panels=[
-            TokenExamplePanel(),
-        ],
-    )
 
     def get(self, request, pk):
         token = get_object_or_404(UserToken.objects.filter(user=request.user), pk=pk)
-
-        # Pop a one-time plaintext value (set by UserTokenEditView.post_save when a token is first created) and
-        # assemble the full HTTP authorization string for display. The plaintext is never persisted; popping
-        # ensures the banner only renders once.
-        plaintext = request.session.pop(f'_token_plaintext_{token.pk}', None)
-        token_auth_string = f'{token.get_auth_header_prefix()}{plaintext}' if plaintext else None
+        key = token.key if settings.ALLOW_TOKEN_RETRIEVAL else None
 
         return render(request, 'account/token.html', {
             'object': token,
-            'layout': self.layout,
-            'token_auth_string': token_auth_string,
+            'key': key,
         })
 
 
@@ -373,14 +355,11 @@ class UserTokenView(LoginRequiredMixin, View):
 class UserTokenEditView(generic.ObjectEditView):
     queryset = UserToken.objects.all()
     form = forms.UserTokenForm
-    template_name = 'account/usertoken_edit.html'
     default_return_url = 'account:usertoken_list'
 
     def alter_object(self, obj, request, url_args, url_kwargs):
         if not obj.pk:
             obj.user = request.user
-        # Attach the request so that UserTokenForm.save() can stash the newly-generated plaintext on the session.
-        obj._request = request
         return obj
 
 

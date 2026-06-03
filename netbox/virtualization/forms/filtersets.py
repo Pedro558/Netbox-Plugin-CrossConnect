@@ -1,5 +1,4 @@
 from django import forms
-from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from dcim.choices import *
@@ -7,56 +6,46 @@ from dcim.models import Device, DeviceRole, Location, Platform, Region, Site, Si
 from extras.forms import LocalConfigContextFilterForm
 from extras.models import ConfigTemplate
 from ipam.models import VRF, VLANTranslationPolicy
-from netbox.forms import NetBoxModelFilterSetForm, OrganizationalModelFilterSetForm, PrimaryModelFilterSetForm
-from netbox.forms.mixins import OwnerFilterMixin
+from netbox.forms import NetBoxModelFilterSetForm
 from tenancy.forms import ContactModelFilterForm, TenancyFilterForm
 from utilities.forms import BOOLEAN_WITH_BLANK_CHOICES
 from utilities.forms.fields import DynamicModelMultipleChoiceField, TagFilterField
 from utilities.forms.rendering import FieldSet
-from utilities.forms.utils import get_capacity_unit_label
+from virtualization.choices import *
+from virtualization.models import *
 from vpn.models import L2VPN
-
-from ..choices import *
-from ..models import *
 
 __all__ = (
     'ClusterFilterForm',
     'ClusterGroupFilterForm',
     'ClusterTypeFilterForm',
-    'VMInterfaceFilterForm',
     'VirtualDiskFilterForm',
     'VirtualMachineFilterForm',
-    'VirtualMachineTypeFilterForm',
+    'VMInterfaceFilterForm',
 )
 
 
-class ClusterTypeFilterForm(OrganizationalModelFilterSetForm):
+class ClusterTypeFilterForm(NetBoxModelFilterSetForm):
     model = ClusterType
-    fieldsets = (
-        FieldSet('q', 'filter_id', 'tag'),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
-    )
     tag = TagFilterField(model)
 
 
-class ClusterGroupFilterForm(ContactModelFilterForm, OrganizationalModelFilterSetForm):
+class ClusterGroupFilterForm(ContactModelFilterForm, NetBoxModelFilterSetForm):
     model = ClusterGroup
     tag = TagFilterField(model)
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
         FieldSet('contact', 'contact_role', 'contact_group', name=_('Contacts')),
     )
 
 
-class ClusterFilterForm(TenancyFilterForm, ContactModelFilterForm, PrimaryModelFilterSetForm):
+class ClusterFilterForm(TenancyFilterForm, ContactModelFilterForm, NetBoxModelFilterSetForm):
     model = Cluster
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('group_id', 'type_id', 'status', name=_('Attributes')),
         FieldSet('region_id', 'site_group_id', 'site_id', 'location_id', name=_('Scope')),
         FieldSet('tenant_group_id', 'tenant_id', name=_('Tenant')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
         FieldSet('contact', 'contact_role', 'contact_group', name=_('Contacts')),
     )
     selector_fields = ('filter_id', 'q', 'group_id')
@@ -104,48 +93,11 @@ class ClusterFilterForm(TenancyFilterForm, ContactModelFilterForm, PrimaryModelF
     tag = TagFilterField(model)
 
 
-class VirtualMachineTypeFilterForm(PrimaryModelFilterSetForm):
-    model = VirtualMachineType
-
-    fieldsets = (
-        FieldSet('q', 'filter_id', 'tag'),
-        FieldSet(
-            'default_platform_id', 'default_vcpus', 'default_memory', 'virtual_machine_count',
-            name=_('Attributes'),
-        ),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
-    )
-
-    selector_fields = ('filter_id', 'q')
-
-    default_platform_id = DynamicModelMultipleChoiceField(
-        queryset=Platform.objects.all(),
-        required=False,
-        label=_('Default platform'),
-    )
-    default_vcpus = forms.DecimalField(
-        label=_('Default vCPUs'),
-        required=False,
-    )
-    default_memory = forms.IntegerField(
-        label=_('Default memory (MB)'),
-        required=False,
-        min_value=0,
-    )
-    virtual_machine_count = forms.IntegerField(
-        label=_('Virtual machine count'),
-        required=False,
-        min_value=0,
-    )
-
-    tag = TagFilterField(model)
-
-
 class VirtualMachineFilterForm(
     LocalConfigContextFilterForm,
     TenancyFilterForm,
     ContactModelFilterForm,
-    PrimaryModelFilterSetForm
+    NetBoxModelFilterSetForm
 ):
     model = VirtualMachine
     fieldsets = (
@@ -153,19 +105,11 @@ class VirtualMachineFilterForm(
         FieldSet('cluster_group_id', 'cluster_type_id', 'cluster_id', 'device_id', name=_('Cluster')),
         FieldSet('region_id', 'site_group_id', 'site_id', name=_('Location')),
         FieldSet(
-            'virtual_machine_type_id', 'status', 'start_on_boot', 'role_id', 'platform_id', 'mac_address',
-            'has_primary_ip', 'config_template_id', 'local_context_data', 'serial',
-            name=_('Attributes')
+            'status', 'role_id', 'platform_id', 'mac_address', 'has_primary_ip', 'config_template_id',
+            'local_context_data', 'serial', name=_('Attributes')
         ),
         FieldSet('tenant_group_id', 'tenant_id', name=_('Tenant')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
         FieldSet('contact', 'contact_role', 'contact_group', name=_('Contacts')),
-    )
-    virtual_machine_type_id = DynamicModelMultipleChoiceField(
-        queryset=VirtualMachineType.objects.all(),
-        required=False,
-        null_option='None',
-        label=_('Virtual machine type'),
     )
     cluster_group_id = DynamicModelMultipleChoiceField(
         queryset=ClusterGroup.objects.all(),
@@ -223,11 +167,6 @@ class VirtualMachineFilterForm(
         choices=VirtualMachineStatusChoices,
         required=False
     )
-    start_on_boot = forms.MultipleChoiceField(
-        label=_('Start on boot'),
-        choices=VirtualMachineStartOnBootChoices,
-        required=False
-    )
     platform_id = DynamicModelMultipleChoiceField(
         queryset=Platform.objects.all(),
         required=False,
@@ -257,7 +196,7 @@ class VirtualMachineFilterForm(
     tag = TagFilterField(model)
 
 
-class VMInterfaceFilterForm(OwnerFilterMixin, NetBoxModelFilterSetForm):
+class VMInterfaceFilterForm(NetBoxModelFilterSetForm):
     model = VMInterface
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
@@ -265,7 +204,6 @@ class VMInterfaceFilterForm(OwnerFilterMixin, NetBoxModelFilterSetForm):
         FieldSet('enabled', name=_('Attributes')),
         FieldSet('vrf_id', 'l2vpn_id', 'mac_address', name=_('Addressing')),
         FieldSet('mode', 'vlan_translation_policy_id', name=_('802.1Q Switching')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     selector_fields = ('filter_id', 'q', 'virtual_machine_id')
     cluster_id = DynamicModelMultipleChoiceField(
@@ -315,13 +253,12 @@ class VMInterfaceFilterForm(OwnerFilterMixin, NetBoxModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class VirtualDiskFilterForm(OwnerFilterMixin, NetBoxModelFilterSetForm):
+class VirtualDiskFilterForm(NetBoxModelFilterSetForm):
     model = VirtualDisk
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('virtual_machine_id', name=_('Virtual Machine')),
         FieldSet('size', name=_('Attributes')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     virtual_machine_id = DynamicModelMultipleChoiceField(
         queryset=VirtualMachine.objects.all(),
@@ -329,14 +266,8 @@ class VirtualDiskFilterForm(OwnerFilterMixin, NetBoxModelFilterSetForm):
         label=_('Virtual machine')
     )
     size = forms.IntegerField(
-        label=_('Size'),
+        label=_('Size (MB)'),
         required=False,
         min_value=1
     )
     tag = TagFilterField(model)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Set unit label based on configured DISK_BASE_UNIT (MB vs MiB)
-        self.fields['size'].label = _('Size ({unit})').format(unit=get_capacity_unit_label(settings.DISK_BASE_UNIT))

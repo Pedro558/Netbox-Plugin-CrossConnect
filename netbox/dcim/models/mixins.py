@@ -35,7 +35,6 @@ class RenderConfigMixin(models.Model):
             return self.role.config_template
         if self.platform and self.platform.config_template:
             return self.platform.config_template
-        return None
 
 
 class CachedScopeMixin(models.Model):

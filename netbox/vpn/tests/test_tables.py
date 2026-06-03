@@ -1,42 +1,23 @@
-from utilities.testing import TableTestCases
-from vpn.tables import *
+from django.test import RequestFactory, tag, TestCase
+
+from vpn.models import TunnelTermination
+from vpn.tables import TunnelTerminationTable
 
 
-class TunnelGroupTableTestCase(TableTestCases.StandardTableTestCase):
-    table = TunnelGroupTable
+@tag('regression')
+class TunnelTerminationTableTest(TestCase):
+    def test_every_orderable_field_does_not_throw_exception(self):
+        terminations = TunnelTermination.objects.all()
+        fake_request = RequestFactory().get("/")
+        disallowed = {'actions'}
 
+        orderable_columns = [
+            column.name for column in TunnelTerminationTable(terminations).columns
+            if column.orderable and column.name not in disallowed
+        ]
 
-class TunnelTableTestCase(TableTestCases.StandardTableTestCase):
-    table = TunnelTable
-
-
-class TunnelTerminationTableTestCase(TableTestCases.StandardTableTestCase):
-    table = TunnelTerminationTable
-
-
-class IKEProposalTableTestCase(TableTestCases.StandardTableTestCase):
-    table = IKEProposalTable
-
-
-class IKEPolicyTableTestCase(TableTestCases.StandardTableTestCase):
-    table = IKEPolicyTable
-
-
-class IPSecProposalTableTestCase(TableTestCases.StandardTableTestCase):
-    table = IPSecProposalTable
-
-
-class IPSecPolicyTableTestCase(TableTestCases.StandardTableTestCase):
-    table = IPSecPolicyTable
-
-
-class IPSecProfileTableTestCase(TableTestCases.StandardTableTestCase):
-    table = IPSecProfileTable
-
-
-class L2VPNTableTestCase(TableTestCases.StandardTableTestCase):
-    table = L2VPNTable
-
-
-class L2VPNTerminationTableTestCase(TableTestCases.StandardTableTestCase):
-    table = L2VPNTerminationTable
+        for col in orderable_columns:
+            for dir in ('-', ''):
+                table = TunnelTerminationTable(terminations)
+                table.order_by = f'{dir}{col}'
+                table.as_html(fake_request)

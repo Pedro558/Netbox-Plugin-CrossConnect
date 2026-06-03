@@ -1,17 +1,5 @@
 from netbox.search import SearchIndex, register_search
-
 from . import models
-
-
-@register_search
-class CableBundleIndex(SearchIndex):
-    model = models.CableBundle
-    fields = (
-        ('name', 100),
-        ('description', 500),
-        ('comments', 5000),
-    )
-    display_attrs = ('description',)
 
 
 @register_search
@@ -150,18 +138,6 @@ class InventoryItemIndex(SearchIndex):
 
 
 @register_search
-class InventoryItemRoleIndex(SearchIndex):
-    model = models.InventoryItemRole
-    fields = (
-        ('name', 100),
-        ('slug', 110),
-        ('description', 500),
-        ('comments', 5000),
-    )
-    display_attrs = ('description',)
-
-
-@register_search
 class LocationIndex(SearchIndex):
     model = models.Location
     fields = (
@@ -181,7 +157,6 @@ class ManufacturerIndex(SearchIndex):
         ('name', 100),
         ('slug', 110),
         ('description', 500),
-        ('comments', 5000),
     )
     display_attrs = ('description',)
 
@@ -327,25 +302,12 @@ class RackReservationIndex(SearchIndex):
 
 
 @register_search
-class RackGroupIndex(SearchIndex):
-    model = models.RackGroup
-    fields = (
-        ('name', 100),
-        ('slug', 110),
-        ('description', 500),
-        ('comments', 5000),
-    )
-    display_attrs = ('description',)
-
-
-@register_search
 class RackRoleIndex(SearchIndex):
     model = models.RackRole
     fields = (
         ('name', 100),
         ('slug', 110),
         ('description', 500),
-        ('comments', 5000),
     )
     display_attrs = ('description',)
 

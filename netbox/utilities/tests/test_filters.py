@@ -7,37 +7,23 @@ from taggit.managers import TaggableManager
 
 from dcim.choices import *
 from dcim.fields import MACAddressField
-from dcim.filtersets import DeviceFilterSet, InterfaceFilterSet, SiteFilterSet
+from dcim.filtersets import DeviceFilterSet, SiteFilterSet, InterfaceFilterSet
 from dcim.models import (
-    Device,
-    DeviceRole,
-    DeviceType,
-    Interface,
-    MACAddress,
-    Manufacturer,
-    Platform,
-    Rack,
-    Region,
-    Site,
+    Device, DeviceRole, DeviceType, Interface, MACAddress, Manufacturer, Platform, Rack, Region, Site
 )
 from extras.filters import TagFilter
 from extras.models import TaggedItem
 from ipam.filtersets import ASNFilterSet
-from ipam.models import ASN, RIR
+from ipam.models import RIR, ASN
 from netbox.filtersets import BaseFilterSet
-from utilities.filters import (
-    MultiValueCharFilter,
-    MultiValueDateFilter,
-    MultiValueDateTimeFilter,
-    MultiValueMACAddressFilter,
-    MultiValueNumberFilter,
-    MultiValueTimeFilter,
-    TreeNodeMultipleChoiceFilter,
-)
 from wireless.choices import WirelessRoleChoices
+from utilities.filters import (
+    MultiValueCharFilter, MultiValueDateFilter, MultiValueDateTimeFilter, MultiValueMACAddressFilter,
+    MultiValueNumberFilter, MultiValueTimeFilter, TreeNodeMultipleChoiceFilter,
+)
 
 
-class TreeNodeMultipleChoiceFilterTestCase(TestCase):
+class TreeNodeMultipleChoiceFilterTest(TestCase):
 
     class SiteFilterSet(django_filters.FilterSet):
         region = TreeNodeMultipleChoiceFilter(
@@ -121,7 +107,7 @@ class DummyModel(models.Model):
     tags = TaggableManager(through=TaggedItem)
 
 
-class BaseFilterSetTestCase(TestCase):
+class BaseFilterSetTest(TestCase):
     """
     Ensure that a BaseFilterSet automatically creates the expected set of filters for each filter type.
     """
@@ -387,7 +373,7 @@ class BaseFilterSetTestCase(TestCase):
         self.assertEqual(self.filters['treeforeignkeyfield__n'].exclude, True)
 
 
-class DynamicFilterLookupExpressionTestCase(TestCase):
+class DynamicFilterLookupExpressionTest(TestCase):
     """
     Validate function of automatically generated filters using the Device model as an example.
     """

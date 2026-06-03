@@ -134,7 +134,7 @@ class ConditionTestCase(TestCase):
         self.assertTrue(c.eval({'x': '123'}))
 
 
-class ConditionSetTestCase(TestCase):
+class ConditionSetTest(TestCase):
 
     def test_empty(self):
         with self.assertRaises(ValueError):
@@ -304,7 +304,7 @@ class ConditionSetTestCase(TestCase):
         Test Event Rule with incorrect condition (key "foo" is wrong). Must return false.
         """
 
-        ct = ContentType.objects.get_by_natural_key('extras', 'webhook')
+        ct = ContentType.objects.get(app_label='extras', model='webhook')
         site_ct = ContentType.objects.get_for_model(Site)
         webhook = Webhook.objects.create(name='Webhook 100', payload_url='http://example.com/?1', http_method='POST')
         form = EventRuleForm({

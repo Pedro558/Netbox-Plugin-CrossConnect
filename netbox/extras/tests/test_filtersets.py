@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
@@ -9,7 +9,8 @@ from core.choices import ManagedFileRootPathChoices, ObjectChangeActionChoices
 from core.events import *
 from core.models import ObjectChange, ObjectType
 from dcim.filtersets import SiteFilterSet
-from dcim.models import DeviceRole, DeviceType, Location, Manufacturer, Platform, Rack, Region, Site, SiteGroup
+from dcim.models import DeviceRole, DeviceType, Manufacturer, Platform, Rack, Region, Site, SiteGroup
+from dcim.models import Location
 from extras.choices import *
 from extras.filtersets import *
 from extras.models import *
@@ -22,7 +23,7 @@ from virtualization.models import Cluster, ClusterGroup, ClusterType
 class CustomFieldTestCase(TestCase, ChangeLoggedFilterSetTests):
     queryset = CustomField.objects.all()
     filterset = CustomFieldFilterSet
-    ignore_fields = ('default', 'related_object_filter', 'validation_schema')
+    ignore_fields = ('default', 'related_object_filter')
 
     @classmethod
     def setUpTestData(cls):
@@ -110,13 +111,13 @@ class CustomFieldTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'object_type_id': [ObjectType.objects.get_by_natural_key('dcim', 'site').pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
 
     def test_related_object_type(self):
-        params = {'related_object_type': ['dcim.site']}
+        params = {'related_object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'related_object_type_id': [ObjectType.objects.get_by_natural_key('dcim', 'site').pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
@@ -160,21 +161,8 @@ class CustomFieldChoiceSetTestCase(TestCase, ChangeLoggedFilterSetTests):
     @classmethod
     def setUpTestData(cls):
         choice_sets = (
-            CustomFieldChoiceSet(
-                name='Choice Set 1',
-                extra_choices=['A', 'B', 'C'],
-                choice_colors={'A': CustomFieldChoiceColorChoices.RED},
-                description='foobar1',
-            ),
-            CustomFieldChoiceSet(
-                name='Choice Set 2',
-                extra_choices=['D', 'E', 'F'],
-                choice_colors={
-                    'D': CustomFieldChoiceColorChoices.GREEN,
-                    'E': CustomFieldChoiceColorChoices.RED,
-                },
-                description='foobar2',
-            ),
+            CustomFieldChoiceSet(name='Choice Set 1', extra_choices=['A', 'B', 'C'], description='foobar1'),
+            CustomFieldChoiceSet(name='Choice Set 2', extra_choices=['D', 'E', 'F'], description='foobar2'),
             CustomFieldChoiceSet(name='Choice Set 3', extra_choices=['G', 'H', 'I'], description='foobar3'),
         )
         CustomFieldChoiceSet.objects.bulk_create(choice_sets)
@@ -190,16 +178,6 @@ class CustomFieldChoiceSetTestCase(TestCase, ChangeLoggedFilterSetTests):
     def test_choice(self):
         params = {'choice': ['A', 'D']}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
-
-    def test_choice_colors(self):
-        params = {'choice_colors': [CustomFieldChoiceColorChoices.RED]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
-
-        params = {'choice_colors': [CustomFieldChoiceColorChoices.GREEN]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
-
-        params = {'choice_colors': [CustomFieldChoiceColorChoices.YELLOW]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 0)
 
     def test_description(self):
         params = {'description': ['foobar1', 'foobar2']}
@@ -370,7 +348,7 @@ class EventRuleTestCase(TestCase, BaseFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.region']}
+        params = {'object_type': 'dcim.region'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'object_type_id': [ObjectType.objects.get_for_model(Region).pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
@@ -439,7 +417,7 @@ class CustomLinkTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'object_type_id': [ObjectType.objects.get_for_model(Site).pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
@@ -530,7 +508,7 @@ class SavedFilterTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'object_type_id': [ObjectType.objects.get_for_model(Site).pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
@@ -622,7 +600,7 @@ class BookmarkTestCase(TestCase, BaseFilterSetTests):
         Bookmark.objects.bulk_create(bookmarks)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
         params = {'object_type_id': [ContentType.objects.get_for_model(Site).pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
@@ -685,7 +663,7 @@ class ExportTemplateTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'object_type_id': [ObjectType.objects.get_for_model(Site).pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
@@ -719,8 +697,8 @@ class ImageAttachmentTestCase(TestCase, ChangeLoggedFilterSetTests):
     @classmethod
     def setUpTestData(cls):
 
-        site_ct = ContentType.objects.get_by_natural_key('dcim', 'site')
-        rack_ct = ContentType.objects.get_by_natural_key('dcim', 'rack')
+        site_ct = ContentType.objects.get(app_label='dcim', model='site')
+        rack_ct = ContentType.objects.get(app_label='dcim', model='rack')
 
         sites = (
             Site(name='Site 1', slug='site-1'),
@@ -779,12 +757,12 @@ class ImageAttachmentTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type(self):
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_object_type_id_and_object_id(self):
         params = {
-            'object_type_id': ContentType.objects.get_by_natural_key('dcim', 'site').pk,
+            'object_type_id': ContentType.objects.get(app_label='dcim', model='site').pk,
             'object_id': [Site.objects.first().pk],
         }
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
@@ -867,14 +845,14 @@ class JournalEntryTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
 
     def test_assigned_object_type(self):
-        params = {'assigned_object_type': ['dcim.site']}
+        params = {'assigned_object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
-        params = {'assigned_object_type_id': [ContentType.objects.get_by_natural_key('dcim', 'site').pk]}
+        params = {'assigned_object_type_id': [ContentType.objects.get(app_label='dcim', model='site').pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
 
     def test_assigned_object(self):
         params = {
-            'assigned_object_type': ['dcim.site'],
+            'assigned_object_type': 'dcim.site',
             'assigned_object_id': [Site.objects.first().pk],
         }
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
@@ -885,7 +863,7 @@ class JournalEntryTestCase(TestCase, ChangeLoggedFilterSetTests):
 
     def test_created(self):
         pk_list = self.queryset.values_list('pk', flat=True)[:2]
-        self.queryset.filter(pk__in=pk_list).update(created=datetime(2021, 1, 1, 0, 0, 0, tzinfo=UTC))
+        self.queryset.filter(pk__in=pk_list).update(created=datetime(2021, 1, 1, 0, 0, 0, tzinfo=timezone.utc))
         params = {
             'created_after': '2020-12-31T00:00:00',
             'created_before': '2021-01-02T00:00:00',
@@ -1246,7 +1224,6 @@ class TagTestCase(TestCase, ChangeLoggedFilterSetTests):
         'asn',
         'asnrange',
         'cable',
-        'cablebundle',
         'circuit',
         'circuitgroup',
         'circuitgroupassignment',
@@ -1303,7 +1280,6 @@ class TagTestCase(TestCase, ChangeLoggedFilterSetTests):
         'provideraccount',
         'providernetwork',
         'rack',
-        'rackgroup',
         'rackreservation',
         'rackrole',
         'racktype',
@@ -1328,7 +1304,6 @@ class TagTestCase(TestCase, ChangeLoggedFilterSetTests):
         'virtualdevicecontext',
         'virtualdisk',
         'virtualmachine',
-        'virtualmachinetype',
         'vlan',
         'vlangroup',
         'vlantranslationpolicy',
@@ -1451,15 +1426,15 @@ class TaggedItemFilterSetTestCase(TestCase):
 
     def test_object_type(self):
         object_type = ObjectType.objects.get_for_model(Site)
-        params = {'object_type': ['dcim.site']}
+        params = {'object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
         params = {'object_type_id': [object_type.pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
 
-    def test_object(self):
+    def test_object_id(self):
         site_ids = Site.objects.values_list('pk', flat=True)
         params = {
-            'object_type': ['dcim.site'],
+            'object_type': 'dcim.site',
             'object_id': site_ids[:2],
         }
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)

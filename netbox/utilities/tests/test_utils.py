@@ -6,7 +6,7 @@ from utilities.query import dict_to_filter_params
 from utilities.querydict import normalize_querydict
 
 
-class DictToFilterParamsTestCase(TestCase):
+class DictToFilterParamsTest(TestCase):
     """
     Validate the operation of dict_to_filter_params().
     """
@@ -39,7 +39,7 @@ class DictToFilterParamsTestCase(TestCase):
         self.assertNotEqual(dict_to_filter_params(input), output)
 
 
-class NormalizeQueryDictTestCase(TestCase):
+class NormalizeQueryDictTest(TestCase):
     """
     Validate normalize_querydict() utility function.
     """
@@ -50,7 +50,7 @@ class NormalizeQueryDictTestCase(TestCase):
         )
 
 
-class DeepMergeTestCase(TestCase):
+class DeepMergeTest(TestCase):
     """
     Validate the behavior of the deepmerge() utility.
     """

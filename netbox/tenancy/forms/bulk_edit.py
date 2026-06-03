@@ -1,18 +1,12 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from netbox.forms import (
-    NestedGroupModelBulkEditForm,
-    NetBoxModelBulkEditForm,
-    OrganizationalModelBulkEditForm,
-    PrimaryModelBulkEditForm,
-)
+from netbox.forms import NetBoxModelBulkEditForm
+from tenancy.choices import ContactPriorityChoices
+from tenancy.models import *
 from utilities.forms import add_blank_choice
-from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
+from utilities.forms.fields import CommentField, DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
-
-from ..choices import ContactPriorityChoices
-from ..models import *
 
 __all__ = (
     'ContactAssignmentBulkEditForm',
@@ -28,21 +22,32 @@ __all__ = (
 # Tenants
 #
 
-class TenantGroupBulkEditForm(NestedGroupModelBulkEditForm):
+class TenantGroupBulkEditForm(NetBoxModelBulkEditForm):
     parent = DynamicModelChoiceField(
         label=_('Parent'),
         queryset=TenantGroup.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = TenantGroup
     nullable_fields = ('parent', 'description', 'comments')
 
 
-class TenantBulkEditForm(PrimaryModelBulkEditForm):
+class TenantBulkEditForm(NetBoxModelBulkEditForm):
     group = DynamicModelChoiceField(
         label=_('Group'),
         queryset=TenantGroup.objects.all(),
+        required=False
+    )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
         required=False
     )
 
@@ -57,12 +62,18 @@ class TenantBulkEditForm(PrimaryModelBulkEditForm):
 # Contacts
 #
 
-class ContactGroupBulkEditForm(NestedGroupModelBulkEditForm):
+class ContactGroupBulkEditForm(NetBoxModelBulkEditForm):
     parent = DynamicModelChoiceField(
         label=_('Parent'),
         queryset=ContactGroup.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = ContactGroup
     fieldsets = (
@@ -71,15 +82,21 @@ class ContactGroupBulkEditForm(NestedGroupModelBulkEditForm):
     nullable_fields = ('parent', 'description', 'comments')
 
 
-class ContactRoleBulkEditForm(OrganizationalModelBulkEditForm):
+class ContactRoleBulkEditForm(NetBoxModelBulkEditForm):
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+
     model = ContactRole
     fieldsets = (
         FieldSet('description'),
     )
-    nullable_fields = ('description', 'comments')
+    nullable_fields = ('description',)
 
 
-class ContactBulkEditForm(PrimaryModelBulkEditForm):
+class ContactBulkEditForm(NetBoxModelBulkEditForm):
     add_groups = DynamicModelMultipleChoiceField(
         label=_('Add groups'),
         queryset=ContactGroup.objects.all(),
@@ -114,6 +131,12 @@ class ContactBulkEditForm(PrimaryModelBulkEditForm):
         assume_scheme='https',
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = Contact
     fieldsets = (

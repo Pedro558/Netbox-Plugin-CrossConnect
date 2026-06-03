@@ -1,35 +1,26 @@
 import json
 
-from django.conf import settings
-from django.test import tag
+from django.test import override_settings, tag
 from django.urls import reverse
 from django.utils.translation import gettext as _
 from rest_framework import status
 
-from core.models import ObjectType
 from dcim.choices import *
 from dcim.constants import *
 from dcim.models import *
-from extras.models import ConfigTemplate, Tag
+from extras.models import ConfigTemplate
 from ipam.choices import VLANQinQRoleChoices
 from ipam.models import ASN, RIR, VLAN, VRF
 from netbox.api.serializers import GenericObjectSerializer
 from tenancy.models import Tenant
-from users.constants import TOKEN_PREFIX
-from users.models import ObjectPermission, Token, User
-from utilities.testing import (
-    APITestCase,
-    APIViewTestCases,
-    create_test_device,
-    create_test_nat_ip_pair,
-    disable_logging,
-)
+from users.models import User
+from utilities.testing import APITestCase, APIViewTestCases, create_test_device, disable_logging
 from virtualization.models import Cluster, ClusterType
 from wireless.choices import WirelessChannelChoices
 from wireless.models import WirelessLAN
 
 
-class AppTestCase(APITestCase):
+class AppTest(APITestCase):
 
     def test_root(self):
 
@@ -76,7 +67,7 @@ class Mixins:
             self.assertEqual(segment1[2][0]['name'], peer_obj.name)
 
 
-class RegionTestCase(APIViewTestCases.APIViewTestCase):
+class RegionTest(APIViewTestCases.APIViewTestCase):
     model = Region
     brief_fields = ['_depth', 'description', 'display', 'id', 'name', 'site_count', 'slug', 'url']
     create_data = [
@@ -107,7 +98,7 @@ class RegionTestCase(APIViewTestCases.APIViewTestCase):
         Region.objects.create(name='Region 3', slug='region-3')
 
 
-class SiteGroupTestCase(APIViewTestCases.APIViewTestCase):
+class SiteGroupTest(APIViewTestCases.APIViewTestCase):
     model = SiteGroup
     brief_fields = ['_depth', 'description', 'display', 'id', 'name', 'site_count', 'slug', 'url']
     create_data = [
@@ -140,7 +131,7 @@ class SiteGroupTestCase(APIViewTestCases.APIViewTestCase):
         SiteGroup.objects.create(name='Site Group 3', slug='site-group-3', comments='Hi!')
 
 
-class SiteTestCase(APIViewTestCases.APIViewTestCase):
+class SiteTest(APIViewTestCases.APIViewTestCase):
     model = Site
     brief_fields = ['description', 'display', 'id', 'name', 'slug', 'url']
     bulk_update_data = {
@@ -203,224 +194,8 @@ class SiteTestCase(APIViewTestCases.APIViewTestCase):
             },
         ]
 
-    def test_add_tags(self):
-        """
-        Add tags to an existing object via the add_tags field.
-        """
-        site = Site.objects.first()
-        tags = Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-            Tag(name='Charlie', slug='charlie'),
-        ))
-        site.tags.set([tags[0], tags[1]])
 
-        # Grant change permission
-        obj_perm = ObjectPermission(name='Test permission', actions=['change'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        url = self._get_detail_url(site)
-        data = {
-            'add_tags': [{'name': 'Charlie'}],
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        # Verify all three tags are now assigned
-        tag_names = sorted(site.tags.values_list('name', flat=True))
-        self.assertEqual(tag_names, ['Alpha', 'Bravo', 'Charlie'])
-
-        # Verify add_tags and remove_tags are not in the response
-        self.assertNotIn('add_tags', response.data)
-        self.assertNotIn('remove_tags', response.data)
-        self.assertIn('tags', response.data)
-
-    def test_remove_tags(self):
-        """
-        Remove tags from an existing object via the remove_tags field.
-        """
-        site = Site.objects.first()
-        tags = Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-            Tag(name='Charlie', slug='charlie'),
-        ))
-        site.tags.set(tags)
-
-        # Grant change permission
-        obj_perm = ObjectPermission(name='Test permission', actions=['change'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        url = self._get_detail_url(site)
-        data = {
-            'remove_tags': [{'name': 'Charlie'}],
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        # Verify only Alpha and Bravo remain
-        tag_names = sorted(site.tags.values_list('name', flat=True))
-        self.assertEqual(tag_names, ['Alpha', 'Bravo'])
-
-    def test_remove_tags_not_assigned(self):
-        """
-        Removing a tag that is not assigned should not raise an error.
-        """
-        site = Site.objects.first()
-        tags = Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-            Tag(name='Charlie', slug='charlie'),
-        ))
-        site.tags.set([tags[0], tags[1]])
-
-        # Grant change permission
-        obj_perm = ObjectPermission(name='Test permission', actions=['change'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        url = self._get_detail_url(site)
-        data = {
-            'remove_tags': [{'name': 'Charlie'}],
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        # Tags should be unchanged
-        tag_names = sorted(site.tags.values_list('name', flat=True))
-        self.assertEqual(tag_names, ['Alpha', 'Bravo'])
-
-    def test_add_and_remove_tags(self):
-        """
-        Add and remove tags in the same request.
-        """
-        site = Site.objects.first()
-        tags = Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-            Tag(name='Charlie', slug='charlie'),
-        ))
-        site.tags.set([tags[0], tags[1]])
-
-        # Grant change permission
-        obj_perm = ObjectPermission(name='Test permission', actions=['change'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        url = self._get_detail_url(site)
-        data = {
-            'add_tags': [{'name': 'Charlie'}],
-            'remove_tags': [{'name': 'Alpha'}],
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        # Verify Bravo and Charlie remain
-        tag_names = sorted(site.tags.values_list('name', flat=True))
-        self.assertEqual(tag_names, ['Bravo', 'Charlie'])
-
-    def test_tags_with_add_tags_error(self):
-        """
-        Specifying tags together with add_tags or remove_tags should raise a validation error.
-        """
-        site = Site.objects.first()
-        Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-        ))
-
-        # Grant change permission
-        obj_perm = ObjectPermission(name='Test permission', actions=['change'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        url = self._get_detail_url(site)
-        data = {
-            'tags': [{'name': 'Alpha'}],
-            'add_tags': [{'name': 'Bravo'}],
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-    def test_create_with_add_tags(self):
-        """
-        Create a new object using add_tags.
-        """
-        Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-        ))
-
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        data = {
-            'name': 'Site 10',
-            'slug': 'site-10',
-            'add_tags': [{'name': 'Alpha'}, {'name': 'Bravo'}],
-        }
-        response = self.client.post(self._get_list_url(), data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)
-
-        site = Site.objects.get(pk=response.data['id'])
-        tag_names = sorted(site.tags.values_list('name', flat=True))
-        self.assertEqual(tag_names, ['Alpha', 'Bravo'])
-
-    def test_create_with_remove_tags_error(self):
-        """
-        Using remove_tags when creating a new object should raise a validation error.
-        """
-        Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-        ))
-
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        data = {
-            'name': 'Site 10',
-            'slug': 'site-10',
-            'remove_tags': [{'name': 'Alpha'}],
-        }
-        response = self.client.post(self._get_list_url(), data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-    def test_add_and_remove_same_tag_error(self):
-        """
-        Including the same tag in both add_tags and remove_tags should raise a validation error.
-        """
-        site = Site.objects.first()
-        Tag.objects.bulk_create((
-            Tag(name='Alpha', slug='alpha'),
-            Tag(name='Bravo', slug='bravo'),
-        ))
-
-        obj_perm = ObjectPermission(name='Test permission', actions=['change'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        url = self._get_detail_url(site)
-        data = {
-            'add_tags': [{'name': 'Alpha'}, {'name': 'Bravo'}],
-            'remove_tags': [{'name': 'Alpha'}],
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-
-class LocationTestCase(APIViewTestCases.APIViewTestCase):
+class LocationTest(APIViewTestCases.APIViewTestCase):
     model = Location
     brief_fields = ['_depth', 'description', 'display', 'id', 'name', 'rack_count', 'slug', 'url']
     bulk_update_data = {
@@ -504,39 +279,7 @@ class LocationTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class RackGroupTestCase(APIViewTestCases.APIViewTestCase):
-    model = RackGroup
-    brief_fields = ['description', 'display', 'id', 'name', 'rack_count', 'slug', 'url']
-    create_data = [
-        {
-            'name': 'Rack Group 4',
-            'slug': 'rack-group-4',
-        },
-        {
-            'name': 'Rack Group 5',
-            'slug': 'rack-group-5',
-        },
-        {
-            'name': 'Rack Group 6',
-            'slug': 'rack-group-6',
-        },
-    ]
-    bulk_update_data = {
-        'description': 'New description',
-    }
-
-    @classmethod
-    def setUpTestData(cls):
-
-        rack_groups = (
-            RackGroup(name='Rack Group 1', slug='rack-group-1'),
-            RackGroup(name='Rack Group 2', slug='rack-group-2'),
-            RackGroup(name='Rack Group 3', slug='rack-group-3'),
-        )
-        RackGroup.objects.bulk_create(rack_groups)
-
-
-class RackRoleTestCase(APIViewTestCases.APIViewTestCase):
+class RackRoleTest(APIViewTestCases.APIViewTestCase):
     model = RackRole
     brief_fields = ['description', 'display', 'id', 'name', 'rack_count', 'slug', 'url']
     create_data = [
@@ -571,9 +314,9 @@ class RackRoleTestCase(APIViewTestCases.APIViewTestCase):
         RackRole.objects.bulk_create(rack_roles)
 
 
-class RackTypeTestCase(APIViewTestCases.APIViewTestCase):
+class RackTypeTest(APIViewTestCases.APIViewTestCase):
     model = RackType
-    brief_fields = ['description', 'display', 'id', 'manufacturer', 'model', 'rack_count', 'slug', 'url']
+    brief_fields = ['description', 'display', 'id', 'manufacturer', 'model', 'slug', 'url']
     bulk_update_data = {
         'description': 'new description',
     }
@@ -631,7 +374,7 @@ class RackTypeTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class RackTestCase(APIViewTestCases.APIViewTestCase):
+class RackTest(APIViewTestCases.APIViewTestCase):
     model = Rack
     brief_fields = ['description', 'device_count', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -653,12 +396,6 @@ class RackTestCase(APIViewTestCases.APIViewTestCase):
             Location.objects.create(site=sites[1], name='Location 2', slug='location-2'),
         )
 
-        rack_groups = (
-            RackGroup(name='Rack Group 1', slug='rack-group-1'),
-            RackGroup(name='Rack Group 2', slug='rack-group-2'),
-        )
-        RackGroup.objects.bulk_create(rack_groups)
-
         rack_roles = (
             RackRole(name='Rack Role 1', slug='rack-role-1', color='ff0000'),
             RackRole(name='Rack Role 2', slug='rack-role-2', color='00ff00'),
@@ -666,9 +403,9 @@ class RackTestCase(APIViewTestCases.APIViewTestCase):
         RackRole.objects.bulk_create(rack_roles)
 
         racks = (
-            Rack(site=sites[0], location=locations[0], group=rack_groups[0], role=rack_roles[0], name='Rack 1'),
-            Rack(site=sites[0], location=locations[0], group=rack_groups[0], role=rack_roles[0], name='Rack 2'),
-            Rack(site=sites[0], location=locations[0], group=rack_groups[0], role=rack_roles[0], name='Rack 3'),
+            Rack(site=sites[0], location=locations[0], role=rack_roles[0], name='Rack 1'),
+            Rack(site=sites[0], location=locations[0], role=rack_roles[0], name='Rack 2'),
+            Rack(site=sites[0], location=locations[0], role=rack_roles[0], name='Rack 3'),
         )
         Rack.objects.bulk_create(racks)
 
@@ -677,21 +414,18 @@ class RackTestCase(APIViewTestCases.APIViewTestCase):
                 'name': 'Test Rack 4',
                 'site': sites[1].pk,
                 'location': locations[1].pk,
-                'group': rack_groups[1].pk,
                 'role': rack_roles[1].pk,
             },
             {
                 'name': 'Test Rack 5',
                 'site': sites[1].pk,
                 'location': locations[1].pk,
-                'group': rack_groups[1].pk,
                 'role': rack_roles[1].pk,
             },
             {
                 'name': 'Test Rack 6',
                 'site': sites[1].pk,
                 'location': locations[1].pk,
-                'group': rack_groups[1].pk,
                 'role': rack_roles[1].pk,
             },
         ]
@@ -716,34 +450,6 @@ class RackTestCase(APIViewTestCases.APIViewTestCase):
         response = self.client.get(f'{url}?q=U10', **self.header)
         self.assertEqual(response.data['count'], 2)
 
-    def test_get_rack_elevation_description_is_occupying_device_name(self):
-        """
-        Verify occupied rack units include the occupying device in their description.
-        """
-        rack = Rack.objects.first()
-        self.add_permissions('dcim.view_rack', 'dcim.view_device')
-        url = reverse('dcim-api:rack-elevation', kwargs={'pk': rack.pk})
-
-        device = create_test_device(
-            name='Device A',
-            site=rack.site,
-            rack=rack,
-            position=40,
-            face=DeviceFaceChoices.FACE_FRONT,
-        )
-
-        # Retrieve all units
-        response = self.client.get(url, **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        occupied_unit = next(unit for unit in response.data['results'] if unit['name'] == 'U40')
-        self.assertEqual(occupied_unit['device']['id'], device.pk)
-        self.assertEqual(occupied_unit['description'], f'{device}')
-
-        unoccupied_unit = next(unit for unit in response.data['results'] if unit['name'] == 'U39')
-        self.assertEqual(unoccupied_unit['device'], None)
-        self.assertEqual(unoccupied_unit['description'], None)
-
     def test_get_rack_elevation_svg(self):
         """
         GET a single rack elevation in SVG format.
@@ -757,7 +463,7 @@ class RackTestCase(APIViewTestCases.APIViewTestCase):
         self.assertEqual(response.get('Content-Type'), 'image/svg+xml')
 
 
-class RackReservationTestCase(APIViewTestCases.APIViewTestCase):
+class RackReservationTest(APIViewTestCases.APIViewTestCase):
     model = RackReservation
     brief_fields = ['description', 'display', 'id', 'status', 'units', 'url', 'user']
     bulk_update_data = {
@@ -822,19 +528,10 @@ class RackReservationTestCase(APIViewTestCases.APIViewTestCase):
             },
         ]
 
-    def test_unit_count(self):
-        """unit_count should reflect the number of units in the reservation."""
-        url = reverse('dcim-api:rackreservation-list')
-        self.add_permissions('dcim.view_rackreservation')
-        response = self.client.get(url, **self.header)
-        self.assertHttpStatus(response, 200)
-        for result in response.data['results']:
-            self.assertEqual(result['unit_count'], len(result['units']))
 
-
-class ManufacturerTestCase(APIViewTestCases.APIViewTestCase):
+class ManufacturerTest(APIViewTestCases.APIViewTestCase):
     model = Manufacturer
-    brief_fields = ['description', 'display', 'id', 'name', 'slug', 'url']
+    brief_fields = ['description', 'devicetype_count', 'display', 'id', 'name', 'slug', 'url']
     create_data = [
         {
             'name': 'Manufacturer 4',
@@ -864,7 +561,7 @@ class ManufacturerTestCase(APIViewTestCases.APIViewTestCase):
         Manufacturer.objects.bulk_create(manufacturers)
 
 
-class DeviceTypeTestCase(APIViewTestCases.APIViewTestCase):
+class DeviceTypeTest(APIViewTestCases.APIViewTestCase):
     model = DeviceType
     brief_fields = ['description', 'device_count', 'display', 'id', 'manufacturer', 'model', 'slug', 'url']
     bulk_update_data = {
@@ -910,9 +607,9 @@ class DeviceTypeTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class ModuleTypeTestCase(APIViewTestCases.APIViewTestCase):
+class ModuleTypeTest(APIViewTestCases.APIViewTestCase):
     model = ModuleType
-    brief_fields = ['description', 'display', 'id', 'manufacturer', 'model', 'module_count', 'profile', 'url']
+    brief_fields = ['description', 'display', 'id', 'manufacturer', 'model', 'profile', 'url']
     bulk_update_data = {
         'part_number': 'ABC123',
     }
@@ -950,7 +647,7 @@ class ModuleTypeTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class ModuleTypeProfileTestCase(APIViewTestCases.APIViewTestCase):
+class ModuleTypeProfileTest(APIViewTestCases.APIViewTestCase):
     model = ModuleTypeProfile
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     SCHEMAS = [
@@ -1014,7 +711,7 @@ class ModuleTypeProfileTestCase(APIViewTestCases.APIViewTestCase):
         ModuleTypeProfile.objects.bulk_create(module_type_profiles)
 
 
-class ConsolePortTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class ConsolePortTemplateTest(APIViewTestCases.APIViewTestCase):
     model = ConsolePortTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1058,7 +755,7 @@ class ConsolePortTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class ConsoleServerPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class ConsoleServerPortTemplateTest(APIViewTestCases.APIViewTestCase):
     model = ConsoleServerPortTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1102,7 +799,7 @@ class ConsoleServerPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class PowerPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class PowerPortTemplateTest(APIViewTestCases.APIViewTestCase):
     model = PowerPortTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1146,7 +843,7 @@ class PowerPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class PowerOutletTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class PowerOutletTemplateTest(APIViewTestCases.APIViewTestCase):
     model = PowerOutletTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1204,7 +901,7 @@ class PowerOutletTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class InterfaceTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class InterfaceTemplateTest(APIViewTestCases.APIViewTestCase):
     model = InterfaceTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1252,7 +949,7 @@ class InterfaceTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class FrontPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class FrontPortTemplateTest(APIViewTestCases.APIViewTestCase):
     model = FrontPortTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1275,101 +972,74 @@ class FrontPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 2', type=PortTypeChoices.TYPE_8P8C),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 3', type=PortTypeChoices.TYPE_8P8C),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 4', type=PortTypeChoices.TYPE_8P8C),
-            RearPortTemplate(device_type=devicetype, name='Rear Port Template 5', type=PortTypeChoices.TYPE_8P8C),
-            RearPortTemplate(device_type=devicetype, name='Rear Port Template 6', type=PortTypeChoices.TYPE_8P8C),
+            RearPortTemplate(module_type=moduletype, name='Rear Port Template 5', type=PortTypeChoices.TYPE_8P8C),
+            RearPortTemplate(module_type=moduletype, name='Rear Port Template 6', type=PortTypeChoices.TYPE_8P8C),
+            RearPortTemplate(module_type=moduletype, name='Rear Port Template 7', type=PortTypeChoices.TYPE_8P8C),
+            RearPortTemplate(module_type=moduletype, name='Rear Port Template 8', type=PortTypeChoices.TYPE_8P8C),
         )
         RearPortTemplate.objects.bulk_create(rear_port_templates)
+
         front_port_templates = (
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 1', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 2', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(module_type=moduletype, name='Front Port Template 3', type=PortTypeChoices.TYPE_8P8C),
+            FrontPortTemplate(
+                device_type=devicetype,
+                name='Front Port Template 1',
+                type=PortTypeChoices.TYPE_8P8C,
+                rear_port=rear_port_templates[0]
+            ),
+            FrontPortTemplate(
+                device_type=devicetype,
+                name='Front Port Template 2',
+                type=PortTypeChoices.TYPE_8P8C,
+                rear_port=rear_port_templates[1]
+            ),
+            FrontPortTemplate(
+                module_type=moduletype,
+                name='Front Port Template 5',
+                type=PortTypeChoices.TYPE_8P8C,
+                rear_port=rear_port_templates[4]
+            ),
+            FrontPortTemplate(
+                module_type=moduletype,
+                name='Front Port Template 6',
+                type=PortTypeChoices.TYPE_8P8C,
+                rear_port=rear_port_templates[5]
+            ),
         )
         FrontPortTemplate.objects.bulk_create(front_port_templates)
-        PortTemplateMapping.objects.bulk_create([
-            PortTemplateMapping(
-                device_type=devicetype,
-                front_port=front_port_templates[0],
-                rear_port=rear_port_templates[0],
-            ),
-            PortTemplateMapping(
-                device_type=devicetype,
-                front_port=front_port_templates[1],
-                rear_port=rear_port_templates[1],
-            ),
-            PortTemplateMapping(
-                module_type=moduletype,
-                front_port=front_port_templates[2],
-                rear_port=rear_port_templates[2],
-            ),
-        ])
 
         cls.create_data = [
             {
                 'device_type': devicetype.pk,
                 'name': 'Front Port Template 3',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'rear_ports': [
-                    {
-                        'position': 1,
-                        'rear_port': rear_port_templates[3].pk,
-                        'rear_port_position': 1,
-                    },
-                ],
+                'rear_port': rear_port_templates[2].pk,
+                'rear_port_position': 1,
             },
             {
                 'device_type': devicetype.pk,
                 'name': 'Front Port Template 4',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'rear_ports': [
-                    {
-                        'position': 1,
-                        'rear_port': rear_port_templates[4].pk,
-                        'rear_port_position': 1,
-                    },
-                ],
+                'rear_port': rear_port_templates[3].pk,
+                'rear_port_position': 1,
             },
             {
                 'module_type': moduletype.pk,
                 'name': 'Front Port Template 7',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'rear_ports': [
-                    {
-                        'position': 1,
-                        'rear_port': rear_port_templates[5].pk,
-                        'rear_port_position': 1,
-                    },
-                ],
+                'rear_port': rear_port_templates[6].pk,
+                'rear_port_position': 1,
+            },
+            {
+                'module_type': moduletype.pk,
+                'name': 'Front Port Template 8',
+                'type': PortTypeChoices.TYPE_8P8C,
+                'rear_port': rear_port_templates[7].pk,
+                'rear_port_position': 1,
             },
         ]
 
-        cls.update_data = {
-            'type': PortTypeChoices.TYPE_LC,
-            'rear_ports': [
-                {
-                    'position': 1,
-                    'rear_port': rear_port_templates[3].pk,
-                    'rear_port_position': 1,
-                },
-            ],
-        }
 
-    def test_update_object(self):
-        super().test_update_object()
-
-        # Check that the port mapping was updated after modifying the front port template
-        front_port_template = FrontPortTemplate.objects.get(name='Front Port Template 1')
-        rear_port_template = RearPortTemplate.objects.get(name='Rear Port Template 4')
-        self.assertTrue(
-            PortTemplateMapping.objects.filter(
-                front_port=front_port_template,
-                front_port_position=1,
-                rear_port=rear_port_template,
-                rear_port_position=1,
-            ).exists()
-        )
-
-
-class RearPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class RearPortTemplateTest(APIViewTestCases.APIViewTestCase):
     model = RearPortTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1386,108 +1056,40 @@ class RearPortTemplateTestCase(APIViewTestCases.APIViewTestCase):
             manufacturer=manufacturer, model='Module Type 1'
         )
 
-        front_port_templates = (
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 1', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 2', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(module_type=moduletype, name='Front Port Template 3', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(module_type=moduletype, name='Front Port Template 4', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(module_type=moduletype, name='Front Port Template 5', type=PortTypeChoices.TYPE_8P8C),
-            FrontPortTemplate(module_type=moduletype, name='Front Port Template 6', type=PortTypeChoices.TYPE_8P8C),
-        )
-        FrontPortTemplate.objects.bulk_create(front_port_templates)
         rear_port_templates = (
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 1', type=PortTypeChoices.TYPE_8P8C),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 2', type=PortTypeChoices.TYPE_8P8C),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 3', type=PortTypeChoices.TYPE_8P8C),
         )
         RearPortTemplate.objects.bulk_create(rear_port_templates)
-        PortTemplateMapping.objects.bulk_create([
-            PortTemplateMapping(
-                device_type=devicetype,
-                front_port=front_port_templates[0],
-                rear_port=rear_port_templates[0],
-            ),
-            PortTemplateMapping(
-                device_type=devicetype,
-                front_port=front_port_templates[1],
-                rear_port=rear_port_templates[1],
-            ),
-            PortTemplateMapping(
-                module_type=moduletype,
-                front_port=front_port_templates[2],
-                rear_port=rear_port_templates[2],
-            ),
-        ])
 
         cls.create_data = [
             {
                 'device_type': devicetype.pk,
                 'name': 'Rear Port Template 4',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'front_ports': [
-                    {
-                        'position': 1,
-                        'front_port': front_port_templates[3].pk,
-                        'front_port_position': 1,
-                    },
-                ],
             },
             {
                 'device_type': devicetype.pk,
                 'name': 'Rear Port Template 5',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'front_ports': [
-                    {
-                        'position': 1,
-                        'front_port': front_port_templates[4].pk,
-                        'front_port_position': 1,
-                    },
-                ],
             },
             {
                 'module_type': moduletype.pk,
                 'name': 'Rear Port Template 6',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'front_ports': [
-                    {
-                        'position': 1,
-                        'front_port': front_port_templates[5].pk,
-                        'front_port_position': 1,
-                    },
-                ],
+            },
+            {
+                'module_type': moduletype.pk,
+                'name': 'Rear Port Template 7',
+                'type': PortTypeChoices.TYPE_8P8C,
             },
         ]
 
-        cls.update_data = {
-            'type': PortTypeChoices.TYPE_LC,
-            'front_ports': [
-                {
-                    'position': 1,
-                    'front_port': front_port_templates[3].pk,
-                    'front_port_position': 1,
-                },
-            ],
-        }
 
-    def test_update_object(self):
-        super().test_update_object()
-
-        # Check that the port mapping was updated after modifying the rear port template
-        front_port_template = FrontPortTemplate.objects.get(name='Front Port Template 4')
-        rear_port_template = RearPortTemplate.objects.get(name='Rear Port Template 1')
-        self.assertTrue(
-            PortTemplateMapping.objects.filter(
-                front_port=front_port_template,
-                front_port_position=1,
-                rear_port=rear_port_template,
-                rear_port_position=1,
-            ).exists()
-        )
-
-
-class ModuleBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class ModuleBayTemplateTest(APIViewTestCases.APIViewTestCase):
     model = ModuleBayTemplate
-    brief_fields = ['description', 'display', 'enabled', 'id', 'name', 'url']
+    brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
         'description': 'New description',
     }
@@ -1504,9 +1106,9 @@ class ModuleBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
         )
 
         module_bay_templates = (
-            ModuleBayTemplate(device_type=devicetype, name='Module Bay Template 1', enabled=True),
-            ModuleBayTemplate(device_type=devicetype, name='Module Bay Template 2', enabled=False),
-            ModuleBayTemplate(device_type=devicetype, name='Module Bay Template 3', enabled=True),
+            ModuleBayTemplate(device_type=devicetype, name='Module Bay Template 1'),
+            ModuleBayTemplate(device_type=devicetype, name='Module Bay Template 2'),
+            ModuleBayTemplate(device_type=devicetype, name='Module Bay Template 3'),
         )
         ModuleBayTemplate.objects.bulk_create(module_bay_templates)
 
@@ -1514,7 +1116,6 @@ class ModuleBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
             {
                 'device_type': devicetype.pk,
                 'name': 'Module Bay Template 4',
-                'enabled': False,
             },
             {
                 'device_type': devicetype.pk,
@@ -1527,9 +1128,9 @@ class ModuleBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class DeviceBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class DeviceBayTemplateTest(APIViewTestCases.APIViewTestCase):
     model = DeviceBayTemplate
-    brief_fields = ['description', 'display', 'enabled', 'id', 'name', 'url']
+    brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
         'description': 'New description',
     }
@@ -1546,9 +1147,9 @@ class DeviceBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
         )
 
         device_bay_templates = (
-            DeviceBayTemplate(device_type=devicetype, name='Device Bay Template 1', enabled=True),
-            DeviceBayTemplate(device_type=devicetype, name='Device Bay Template 2', enabled=False),
-            DeviceBayTemplate(device_type=devicetype, name='Device Bay Template 3', enabled=True),
+            DeviceBayTemplate(device_type=devicetype, name='Device Bay Template 1'),
+            DeviceBayTemplate(device_type=devicetype, name='Device Bay Template 2'),
+            DeviceBayTemplate(device_type=devicetype, name='Device Bay Template 3'),
         )
         DeviceBayTemplate.objects.bulk_create(device_bay_templates)
 
@@ -1556,7 +1157,6 @@ class DeviceBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
             {
                 'device_type': devicetype.pk,
                 'name': 'Device Bay Template 4',
-                'enabled': False,
             },
             {
                 'device_type': devicetype.pk,
@@ -1569,7 +1169,7 @@ class DeviceBayTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class InventoryItemTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class InventoryItemTemplateTest(APIViewTestCases.APIViewTestCase):
     model = InventoryItemTemplate
     brief_fields = ['_depth', 'description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1629,7 +1229,7 @@ class InventoryItemTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class DeviceRoleTestCase(APIViewTestCases.APIViewTestCase):
+class DeviceRoleTest(APIViewTestCases.APIViewTestCase):
     model = DeviceRole
     brief_fields = [
         '_depth', 'description', 'device_count', 'display', 'id', 'name', 'slug', 'url', 'virtualmachine_count'
@@ -1663,7 +1263,7 @@ class DeviceRoleTestCase(APIViewTestCases.APIViewTestCase):
         DeviceRole.objects.create(name='Device Role 3', slug='device-role-3', color='0000ff')
 
 
-class PlatformTestCase(APIViewTestCases.APIViewTestCase):
+class PlatformTest(APIViewTestCases.APIViewTestCase):
     model = Platform
     brief_fields = [
         '_depth', 'description', 'device_count', 'display', 'id', 'name', 'slug', 'url', 'virtualmachine_count',
@@ -1698,7 +1298,7 @@ class PlatformTestCase(APIViewTestCases.APIViewTestCase):
             platform.save()
 
 
-class DeviceTestCase(APIViewTestCases.APIViewTestCase):
+class DeviceTest(APIViewTestCases.APIViewTestCase):
     model = Device
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -1706,6 +1306,7 @@ class DeviceTestCase(APIViewTestCases.APIViewTestCase):
     }
     user_permissions = (
         'dcim.view_site', 'dcim.view_rack', 'dcim.view_location', 'dcim.view_devicerole', 'dcim.view_devicetype',
+        'extras.view_configtemplate',
     )
 
     @classmethod
@@ -1885,192 +1486,29 @@ class DeviceTestCase(APIViewTestCases.APIViewTestCase):
         device.config_template = configtemplate
         device.save()
 
-        self.add_permissions('dcim.render_config_device', 'dcim.view_device')
-        url = reverse('dcim-api:device-render-config', kwargs={'pk': device.pk})
+        self.add_permissions('dcim.add_device')
+        url = reverse('dcim-api:device-detail', kwargs={'pk': device.pk}) + 'render-config/'
         response = self.client.post(url, {}, format='json', **self.header)
         self.assertHttpStatus(response, status.HTTP_200_OK)
         self.assertEqual(response.data['content'], f'Config for device {device.name}')
 
-    def test_render_config_without_permission(self):
-        configtemplate = ConfigTemplate.objects.create(
-            name='Config Template 1',
-            template_code='Config for device {{ device.name }}'
-        )
 
-        device = Device.objects.first()
-        device.config_template = configtemplate
-        device.save()
-
-        # No permissions added - user has no render_config permission
-        url = reverse('dcim-api:device-render-config', kwargs={'pk': device.pk})
-        response = self.client.post(url, {}, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_404_NOT_FOUND)
-
-    def test_render_config_token_write_enabled(self):
-        configtemplate = ConfigTemplate.objects.create(
-            name='Config Template 1',
-            template_code='Config for device {{ device.name }}'
-        )
-
-        device = Device.objects.first()
-        device.config_template = configtemplate
-        device.save()
-
-        self.add_permissions('dcim.render_config_device', 'dcim.view_device')
-        url = reverse('dcim-api:device-render-config', kwargs={'pk': device.pk})
-
-        # Request without token auth should fail with PermissionDenied
-        response = self.client.post(url, {}, format='json')
-        self.assertHttpStatus(response, status.HTTP_403_FORBIDDEN)
-
-        # Create token with write_enabled=False
-        token = Token.objects.create(version=2, user=self.user, write_enabled=False)
-        token_header = f'Bearer {TOKEN_PREFIX}{token.key}.{token.token}'
-
-        # Request with write-disabled token should fail
-        response = self.client.post(url, {}, format='json', HTTP_AUTHORIZATION=token_header)
-        self.assertHttpStatus(response, status.HTTP_403_FORBIDDEN)
-
-        # Enable write and retry
-        token.write_enabled = True
-        token.save()
-        response = self.client.post(url, {}, format='json', HTTP_AUTHORIZATION=token_header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-    def test_list_object_includes_nat_inside_on_primary_ip(self):
-        device = create_test_device('natted-device')
-        interface = Interface.objects.create(device=device, name='eth0', type='other')
-
-        real_ip, nat_ip = create_test_nat_ip_pair(
-            real_address='10.0.0.10/32',
-            nat_address='198.51.100.10/32',
-            inside_interface=interface,
-        )
-
-        device.primary_ip4 = nat_ip
-        device.save()
-
-        self.add_permissions('dcim.view_device', 'ipam.view_ipaddress')
-        response = self.client.get(f'{self._get_list_url()}?id={device.pk}', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        result = response.data['results'][0]
-        for field in ('primary_ip', 'primary_ip4'):
-            self.assertEqual(result[field]['address'], str(nat_ip.address))
-            self.assertEqual(result[field]['nat_inside']['address'], str(real_ip.address))
-            self.assertEqual(result[field]['nat_outside'], [])
-
-    def test_get_object_includes_nat_outside_on_primary_ip(self):
-        device = create_test_device('real-ip-device')
-        interface = Interface.objects.create(device=device, name='eth0', type='other')
-
-        real_ip, nat_ip = create_test_nat_ip_pair(
-            real_address='10.0.0.11/32',
-            nat_address='198.51.100.11/32',
-            inside_interface=interface,
-        )
-
-        device.primary_ip4 = real_ip
-        device.save()
-
-        self.add_permissions('dcim.view_device', 'ipam.view_ipaddress')
-        response = self.client.get(
-            f'{self._get_detail_url(device)}?exclude=config_context',
-            **self.header,
-        )
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        for field in ('primary_ip', 'primary_ip4'):
-            self.assertEqual(response.data[field]['address'], str(real_ip.address))
-            self.assertIsNone(response.data[field]['nat_inside'])
-            self.assertCountEqual(
-                [ip['address'] for ip in response.data[field]['nat_outside']],
-                [str(nat_ip.address)],
-            )
-
-    def test_get_object_includes_nat_on_oob_ip(self):
-        device = create_test_device('oob-nat-device')
-        interface = Interface.objects.create(device=device, name='oob0', type='other')
-
-        real_ip, nat_ip = create_test_nat_ip_pair(
-            real_address='10.0.0.12/32',
-            nat_address='198.51.100.12/32',
-            inside_interface=interface,
-        )
-
-        device.oob_ip = nat_ip
-        device.save()
-
-        self.add_permissions('dcim.view_device', 'ipam.view_ipaddress')
-        response = self.client.get(
-            f'{self._get_detail_url(device)}?exclude=config_context',
-            **self.header,
-        )
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        self.assertEqual(response.data['oob_ip']['address'], str(nat_ip.address))
-        self.assertEqual(response.data['oob_ip']['nat_inside']['address'], str(real_ip.address))
-        self.assertEqual(response.data['oob_ip']['nat_outside'], [])
-
-    def test_render_config_with_config_template_id(self):
-        default_template = ConfigTemplate.objects.create(
-            name='Default Template',
-            template_code='Default config for {{ device.name }}'
-        )
-        override_template = ConfigTemplate.objects.create(
-            name='Override Template',
-            template_code='Override config for {{ device.name }}'
-        )
-
-        device = Device.objects.first()
-        device.config_template = default_template
-        device.save()
-
-        self.add_permissions('dcim.render_config_device', 'dcim.view_device', 'extras.view_configtemplate')
-        url = reverse('dcim-api:device-render-config', kwargs={'pk': device.pk})
-
-        # Render with override template
-        response = self.client.post(url, {'config_template_id': override_template.pk}, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(response.data['content'], f'Override config for {device.name}')
-
-        # Render with nonexistent config_template_id
-        response = self.client.post(url, {'config_template_id': 999999}, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-        # Render with non-integer config_template_id
-        response = self.client.post(url, {'config_template_id': 'abc'}, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-        # Without view_configtemplate permission, override template should not be accessible
-        self.remove_permissions('extras.view_configtemplate')
-        response = self.client.post(url, {'config_template_id': override_template.pk}, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-
-class ModuleTestCase(APIViewTestCases.APIViewTestCase):
+class ModuleTest(APIViewTestCases.APIViewTestCase):
     model = Module
     brief_fields = ['description', 'device', 'display', 'id', 'module_bay', 'module_type', 'url']
     bulk_update_data = {
         'serial': '1234ABCD',
     }
-    user_permissions = (
-        'dcim.view_modulebay', 'dcim.view_moduletype', 'dcim.view_moduletypeprofile', 'dcim.view_device'
-    )
+    user_permissions = ('dcim.view_modulebay', 'dcim.view_moduletype', 'dcim.view_device')
 
     @classmethod
     def setUpTestData(cls):
         manufacturer = Manufacturer.objects.create(name='Generic', slug='generic')
-        profiles = (
-            ModuleTypeProfile(name='Test CPU'),
-            ModuleTypeProfile(name='Test Hard disk'),
-        )
-        ModuleTypeProfile.objects.bulk_create(profiles)
         device = create_test_device('Test Device 1')
 
         module_types = (
-            ModuleType(manufacturer=manufacturer, model='Module Type 1', profile=profiles[0]),
-            ModuleType(manufacturer=manufacturer, model='Module Type 2', profile=profiles[1]),
+            ModuleType(manufacturer=manufacturer, model='Module Type 1'),
+            ModuleType(manufacturer=manufacturer, model='Module Type 2'),
             ModuleType(manufacturer=manufacturer, model='Module Type 3'),
         )
         ModuleType.objects.bulk_create(module_types)
@@ -2120,270 +1558,8 @@ class ModuleTestCase(APIViewTestCases.APIViewTestCase):
             },
         ]
 
-    def test_replicate_components(self):
-        """
-        Installing a module with replicate_components=True (the default) should create
-        components from the module type's templates on the parent device.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Replication Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Replication Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        module_bay = ModuleBay.objects.create(device=device, name='Replication Bay')
 
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-            'replicate_components': True,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        self.assertTrue(device.interfaces.filter(name='eth0').exists())
-
-    def test_no_replicate_components(self):
-        """
-        Installing a module with replicate_components=False should NOT create components
-        from the module type's templates.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for No Replication Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='No Replication Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        module_bay = ModuleBay.objects.create(device=device, name='No Replication Bay')
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-            'replicate_components': False,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        self.assertFalse(device.interfaces.filter(name='eth0').exists())
-
-    def test_adopt_components(self):
-        """
-        Installing a module with adopt_components=True should assign existing unattached
-        device components to the new module.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Adopt Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Adopt Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        module_bay = ModuleBay.objects.create(device=device, name='Adopt Bay')
-        existing_iface = Interface.objects.create(device=device, name='eth0', type='1000base-t')
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-            'adopt_components': True,
-            'replicate_components': False,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        existing_iface.refresh_from_db()
-        self.assertIsNotNone(existing_iface.module)
-
-    def test_replicate_components_conflict(self):
-        """
-        Installing a module with replicate_components=True when a component with the same name
-        already exists should return a validation error.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Conflict Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Conflict Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        module_bay = ModuleBay.objects.create(device=device, name='Conflict Bay')
-        Interface.objects.create(device=device, name='eth0', type='1000base-t')
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-            'replicate_components': True,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-    def test_adopt_components_already_owned(self):
-        """
-        Installing a module with adopt_components=True when an existing component already
-        belongs to another module should return a validation error.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Adopt Owned Test')
-        owner_module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Owner Module Type')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Adopt Owned Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        owner_bay = ModuleBay.objects.create(device=device, name='Owner Bay')
-        target_bay = ModuleBay.objects.create(device=device, name='Adopt Owned Bay')
-
-        # Install a module that owns the interface
-        owner_module = Module.objects.create(device=device, module_bay=owner_bay, module_type=owner_module_type)
-        Interface.objects.create(device=device, name='eth0', type='1000base-t', module=owner_module)
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': target_bay.pk,
-            'module_type': module_type.pk,
-            'adopt_components': True,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-    def test_patch_ignores_replicate_and_adopt(self):
-        """
-        PATCH requests that include replicate_components or adopt_components should not
-        trigger component replication or adoption (these fields are create-only).
-        """
-        self.add_permissions('dcim.change_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for PATCH Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='PATCH Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        module_bay = ModuleBay.objects.create(device=device, name='PATCH Bay')
-        # Create the module without replication so we can verify PATCH doesn't trigger it
-        module = Module(device=device, module_bay=module_bay, module_type=module_type)
-        module._disable_replication = True
-        module.save()
-
-        url = reverse('dcim-api:module-detail', kwargs={'pk': module.pk})
-        data = {
-            'replicate_components': True,
-            'adopt_components': True,
-            'serial': 'PATCHED',
-        }
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(response.data['serial'], 'PATCHED')
-        # No interfaces should have been created by the PATCH
-        self.assertFalse(device.interfaces.exists())
-
-    def test_adopt_and_replicate_components(self):
-        """
-        Installing a module with both adopt_components=True and replicate_components=True
-        should adopt existing unowned components and create new components for templates
-        that have no matching existing component.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Adopt+Replicate Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Adopt+Replicate Test Module Type')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth0', type='1000base-t')
-        InterfaceTemplate.objects.create(module_type=module_type, name='eth1', type='1000base-t')
-        module_bay = ModuleBay.objects.create(device=device, name='Adopt+Replicate Bay')
-        # eth0 already exists (unowned); eth1 does not
-        existing_iface = Interface.objects.create(device=device, name='eth0', type='1000base-t')
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-            'adopt_components': True,
-            'replicate_components': True,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        # eth0 should have been adopted (now owned by the new module)
-        existing_iface.refresh_from_db()
-        self.assertIsNotNone(existing_iface.module)
-        # eth1 should have been created
-        self.assertTrue(device.interfaces.filter(name='eth1').exists())
-
-    def test_module_token_no_position(self):
-        """
-        Installing a module whose type has a template with a MODULE_TOKEN placeholder into a
-        module bay with no position defined should return a validation error.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Token No-Position Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Token No-Position Module Type')
-        # Template name contains the MODULE_TOKEN placeholder
-        InterfaceTemplate.objects.create(
-            module_type=module_type, name=f'{MODULE_TOKEN}-eth0', type='1000base-t'
-        )
-        # Module bay has no position
-        module_bay = ModuleBay.objects.create(device=device, name='No-Position Bay')
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-    def test_module_token_depth_mismatch(self):
-        """
-        Installing a module whose template name has more MODULE_TOKEN placeholders than the
-        depth of the module bay tree should return a validation error.
-        """
-        self.add_permissions('dcim.add_module')
-        manufacturer = Manufacturer.objects.get(name='Generic')
-        device = create_test_device('Device for Token Depth Mismatch Test')
-        module_type = ModuleType.objects.create(manufacturer=manufacturer, model='Token Depth Mismatch Module Type')
-        # Template name has two placeholders but the bay is at depth 1
-        InterfaceTemplate.objects.create(
-            module_type=module_type, name=f'{MODULE_TOKEN}-{MODULE_TOKEN}-eth0', type='1000base-t'
-        )
-        module_bay = ModuleBay.objects.create(device=device, name='Depth 1 Bay', position='1')
-
-        url = reverse('dcim-api:module-list')
-        data = {
-            'device': device.pk,
-            'module_bay': module_bay.pk,
-            'module_type': module_type.pk,
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-    def test_list_objects_by_profile_id(self):
-        profiles = ModuleTypeProfile.objects.filter(name__startswith='Test').order_by('name')
-        self.add_permissions('dcim.view_module')
-        response = self.client.get(self._get_list_url(), {'profile_id': [profiles[0].pk]}, **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-
-        response = self.client.get(self._get_list_url(), {'profile_id': [profiles[1].pk]}, **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-
-        response = self.client.get(
-            self._get_list_url(),
-            {'profile_id': [settings.FILTERS_NULL_CHOICE_VALUE]},
-            **self.header,
-        )
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-
-    def test_list_objects_by_profile(self):
-        profiles = ModuleTypeProfile.objects.filter(name__startswith='Test').order_by('name')
-        self.add_permissions('dcim.view_module')
-        response = self.client.get(self._get_list_url(), {'profile': [profiles[0].name]}, **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-
-        response = self.client.get(self._get_list_url(), {'profile': [profiles[1].name]}, **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(len(response.data['results']), 1)
-
-
-class ConsolePortTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
+class ConsolePortTest(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
     model = ConsolePort
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2426,7 +1602,7 @@ class ConsolePortTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTe
         ]
 
 
-class ConsoleServerPortTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
+class ConsoleServerPortTest(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
     model = ConsoleServerPort
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2469,7 +1645,7 @@ class ConsoleServerPortTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.API
         ]
 
 
-class PowerPortTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
+class PowerPortTest(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
     model = PowerPort
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2509,7 +1685,7 @@ class PowerPortTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTest
         ]
 
 
-class PowerOutletTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
+class PowerOutletTest(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
     model = PowerOutlet
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2558,7 +1734,7 @@ class PowerOutletTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTe
         ]
 
 
-class InterfaceTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
+class InterfaceTest(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTestCase):
     model = Interface
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2613,9 +1789,9 @@ class InterfaceTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTest
             {
                 'device': device.pk,
                 'name': 'Interface 4',
-                'type': 'other',
+                'type': '1000base-t',
                 'mode': InterfaceModeChoices.MODE_TAGGED,
-                'speed': 16_000_000_000,
+                'speed': 1000000,
                 'duplex': 'full',
                 'vrf': vrfs[0].pk,
                 'poe_mode': InterfacePoEModeChoices.MODE_PD,
@@ -2767,7 +1943,7 @@ class InterfaceTestCase(Mixins.ComponentTraceMixin, APIViewTestCases.APIViewTest
         self._perform_interface_test_with_invalid_data(InterfaceModeChoices.MODE_TAGGED_ALL, invalid_data)
 
 
-class FrontPortTestCase(APIViewTestCases.APIViewTestCase):
+class FrontPortTest(APIViewTestCases.APIViewTestCase):
     model = FrontPort
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2793,90 +1969,51 @@ class FrontPortTestCase(APIViewTestCases.APIViewTestCase):
             RearPort(device=device, name='Rear Port 6', type=PortTypeChoices.TYPE_8P8C),
         )
         RearPort.objects.bulk_create(rear_ports)
+
         front_ports = (
-            FrontPort(device=device, name='Front Port 1', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 2', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 3', type=PortTypeChoices.TYPE_8P8C),
+            FrontPort(device=device, name='Front Port 1', type=PortTypeChoices.TYPE_8P8C, rear_port=rear_ports[0]),
+            FrontPort(device=device, name='Front Port 2', type=PortTypeChoices.TYPE_8P8C, rear_port=rear_ports[1]),
+            FrontPort(device=device, name='Front Port 3', type=PortTypeChoices.TYPE_8P8C, rear_port=rear_ports[2]),
         )
         FrontPort.objects.bulk_create(front_ports)
-        PortMapping.objects.bulk_create([
-            PortMapping(device=device, front_port=front_ports[0], rear_port=rear_ports[0]),
-            PortMapping(device=device, front_port=front_ports[1], rear_port=rear_ports[1]),
-            PortMapping(device=device, front_port=front_ports[2], rear_port=rear_ports[2]),
-        ])
 
         cls.create_data = [
             {
                 'device': device.pk,
                 'name': 'Front Port 4',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'rear_ports': [
-                    {
-                        'position': 1,
-                        'rear_port': rear_ports[3].pk,
-                        'rear_port_position': 1,
-                    },
-                ],
+                'rear_port': rear_ports[3].pk,
+                'rear_port_position': 1,
             },
             {
                 'device': device.pk,
                 'name': 'Front Port 5',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'rear_ports': [
-                    {
-                        'position': 1,
-                        'rear_port': rear_ports[4].pk,
-                        'rear_port_position': 1,
-                    },
-                ],
+                'rear_port': rear_ports[4].pk,
+                'rear_port_position': 1,
             },
             {
                 'device': device.pk,
                 'name': 'Front Port 6',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'rear_ports': [
-                    {
-                        'position': 1,
-                        'rear_port': rear_ports[5].pk,
-                        'rear_port_position': 1,
-                    },
-                ],
+                'rear_port': rear_ports[5].pk,
+                'rear_port_position': 1,
             },
         ]
-
-        cls.update_data = {
-            'type': PortTypeChoices.TYPE_LC,
-            'rear_ports': [
-                {
-                    'position': 1,
-                    'rear_port': rear_ports[3].pk,
-                    'rear_port_position': 1,
-                },
-            ],
-        }
-
-    def test_update_object(self):
-        super().test_update_object()
-
-        # Check that the port mapping was updated after modifying the front port
-        front_port = FrontPort.objects.get(name='Front Port 1')
-        rear_port = RearPort.objects.get(name='Rear Port 4')
-        self.assertTrue(
-            PortMapping.objects.filter(
-                front_port=front_port,
-                front_port_position=1,
-                rear_port=rear_port,
-                rear_port_position=1,
-            ).exists()
-        )
 
     @tag('regression')  # Issue #18991
     def test_front_port_paths(self):
         device = Device.objects.first()
+        rear_port = RearPort.objects.create(
+            device=device, name='Rear Port 10', type=PortTypeChoices.TYPE_8P8C
+        )
         interface1 = Interface.objects.create(device=device, name='Interface 1')
-        rear_port = RearPort.objects.create(device=device, name='Rear Port 10', type=PortTypeChoices.TYPE_8P8C)
-        front_port = FrontPort.objects.create(device=device, name='Front Port 10', type=PortTypeChoices.TYPE_8P8C)
-        PortMapping.objects.create(device=device, front_port=front_port, rear_port=rear_port)
+        front_port = FrontPort.objects.create(
+            device=device,
+            name='Rear Port 10',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port,
+        )
         Cable.objects.create(a_terminations=[interface1], b_terminations=[front_port])
 
         self.add_permissions(f'dcim.view_{self.model._meta.model_name}')
@@ -2886,7 +2023,7 @@ class FrontPortTestCase(APIViewTestCases.APIViewTestCase):
         self.assertHttpStatus(response, status.HTTP_200_OK)
 
 
-class RearPortTestCase(APIViewTestCases.APIViewTestCase):
+class RearPortTest(APIViewTestCases.APIViewTestCase):
     model = RearPort
     brief_fields = ['_occupied', 'cable', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -2903,15 +2040,6 @@ class RearPortTestCase(APIViewTestCases.APIViewTestCase):
         role = DeviceRole.objects.create(name='Test Device Role 1', slug='test-device-role-1', color='ff0000')
         device = Device.objects.create(device_type=devicetype, role=role, name='Device 1', site=site)
 
-        front_ports = (
-            FrontPort(device=device, name='Front Port 1', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 2', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 3', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 4', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 5', type=PortTypeChoices.TYPE_8P8C),
-            FrontPort(device=device, name='Front Port 6', type=PortTypeChoices.TYPE_8P8C),
-        )
-        FrontPort.objects.bulk_create(front_ports)
         rear_ports = (
             RearPort(device=device, name='Rear Port 1', type=PortTypeChoices.TYPE_8P8C),
             RearPort(device=device, name='Rear Port 2', type=PortTypeChoices.TYPE_8P8C),
@@ -2924,65 +2052,18 @@ class RearPortTestCase(APIViewTestCases.APIViewTestCase):
                 'device': device.pk,
                 'name': 'Rear Port 4',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'front_ports': [
-                    {
-                        'position': 1,
-                        'front_port': front_ports[3].pk,
-                        'front_port_position': 1,
-                    },
-                ],
             },
             {
                 'device': device.pk,
                 'name': 'Rear Port 5',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'front_ports': [
-                    {
-                        'position': 1,
-                        'front_port': front_ports[4].pk,
-                        'front_port_position': 1,
-                    },
-                ],
             },
             {
                 'device': device.pk,
                 'name': 'Rear Port 6',
                 'type': PortTypeChoices.TYPE_8P8C,
-                'front_ports': [
-                    {
-                        'position': 1,
-                        'front_port': front_ports[5].pk,
-                        'front_port_position': 1,
-                    },
-                ],
             },
         ]
-
-        cls.update_data = {
-            'type': PortTypeChoices.TYPE_LC,
-            'front_ports': [
-                {
-                    'position': 1,
-                    'front_port': front_ports[3].pk,
-                    'front_port_position': 1,
-                },
-            ],
-        }
-
-    def test_update_object(self):
-        super().test_update_object()
-
-        # Check that the port mapping was updated after modifying the rear port
-        front_port = FrontPort.objects.get(name='Front Port 4')
-        rear_port = RearPort.objects.get(name='Rear Port 1')
-        self.assertTrue(
-            PortMapping.objects.filter(
-                front_port=front_port,
-                front_port_position=1,
-                rear_port=rear_port,
-                rear_port_position=1,
-            ).exists()
-        )
 
     @tag('regression')  # Issue #18991
     def test_rear_port_paths(self):
@@ -3002,9 +2083,9 @@ class RearPortTestCase(APIViewTestCases.APIViewTestCase):
         self.assertHttpStatus(response, status.HTTP_200_OK)
 
 
-class ModuleBayTestCase(APIViewTestCases.APIViewTestCase):
+class ModuleBayTest(APIViewTestCases.APIViewTestCase):
     model = ModuleBay
-    brief_fields = ['_occupied', 'description', 'display', 'enabled', 'id', 'installed_module', 'name', 'url']
+    brief_fields = ['description', 'display', 'id', 'installed_module', 'name', 'url']
     bulk_update_data = {
         'description': 'New description',
     }
@@ -3020,9 +2101,9 @@ class ModuleBayTestCase(APIViewTestCases.APIViewTestCase):
         device = Device.objects.create(device_type=device_type, role=role, name='Device 1', site=site)
 
         module_bays = (
-            ModuleBay(device=device, name='Device Bay 1', enabled=True),
-            ModuleBay(device=device, name='Device Bay 2', enabled=False),
-            ModuleBay(device=device, name='Device Bay 3', enabled=True),
+            ModuleBay(device=device, name='Device Bay 1'),
+            ModuleBay(device=device, name='Device Bay 2'),
+            ModuleBay(device=device, name='Device Bay 3'),
         )
         for module_bay in module_bays:
             module_bay.save()
@@ -3031,7 +2112,6 @@ class ModuleBayTestCase(APIViewTestCases.APIViewTestCase):
             {
                 'device': device.pk,
                 'name': 'Device Bay 4',
-                'enabled': False,
             },
             {
                 'device': device.pk,
@@ -3044,9 +2124,9 @@ class ModuleBayTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class DeviceBayTestCase(APIViewTestCases.APIViewTestCase):
+class DeviceBayTest(APIViewTestCases.APIViewTestCase):
     model = DeviceBay
-    brief_fields = ['_occupied', 'description', 'device', 'display', 'enabled', 'id', 'name', 'url']
+    brief_fields = ['description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
         'description': 'New description',
     }
@@ -3083,9 +2163,9 @@ class DeviceBayTestCase(APIViewTestCases.APIViewTestCase):
         Device.objects.bulk_create(devices)
 
         device_bays = (
-            DeviceBay(device=devices[0], name='Device Bay 1', enabled=True),
-            DeviceBay(device=devices[0], name='Device Bay 2', enabled=False),
-            DeviceBay(device=devices[0], name='Device Bay 3', enabled=True),
+            DeviceBay(device=devices[0], name='Device Bay 1'),
+            DeviceBay(device=devices[0], name='Device Bay 2'),
+            DeviceBay(device=devices[0], name='Device Bay 3'),
         )
         DeviceBay.objects.bulk_create(device_bays)
 
@@ -3108,7 +2188,7 @@ class DeviceBayTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class InventoryItemTestCase(APIViewTestCases.APIViewTestCase):
+class InventoryItemTest(APIViewTestCases.APIViewTestCase):
     model = InventoryItem
     brief_fields = ['_depth', 'description', 'device', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -3175,7 +2255,7 @@ class InventoryItemTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class InventoryItemRoleTestCase(APIViewTestCases.APIViewTestCase):
+class InventoryItemRoleTest(APIViewTestCases.APIViewTestCase):
     model = InventoryItemRole
     brief_fields = ['description', 'display', 'id', 'inventoryitem_count', 'name', 'slug', 'url']
     create_data = [
@@ -3210,61 +2290,7 @@ class InventoryItemRoleTestCase(APIViewTestCases.APIViewTestCase):
         InventoryItemRole.objects.bulk_create(roles)
 
 
-class CableBundleTestCase(APIViewTestCases.APIViewTestCase):
-    model = CableBundle
-    brief_fields = ['description', 'display', 'id', 'name', 'url']
-    create_data = [
-        {'name': 'Cable Bundle 4'},
-        {'name': 'Cable Bundle 5'},
-        {'name': 'Cable Bundle 6'},
-    ]
-    bulk_update_data = {
-        'description': 'New description',
-    }
-
-    @classmethod
-    def setUpTestData(cls):
-        cable_bundles = (
-            CableBundle(name='Cable Bundle 1'),
-            CableBundle(name='Cable Bundle 2'),
-            CableBundle(name='Cable Bundle 3'),
-        )
-        CableBundle.objects.bulk_create(cable_bundles)
-
-    def test_cable_count(self):
-        """cable_count annotation is returned correctly in the API response."""
-        self.add_permissions('dcim.view_cablebundle')
-        bundle = CableBundle.objects.first()
-
-        site = Site.objects.create(name='CB Test Site', slug='cb-test-site')
-        manufacturer = Manufacturer.objects.create(name='CB Manufacturer', slug='cb-manufacturer')
-        device_type = DeviceType.objects.create(
-            manufacturer=manufacturer, model='CB Device Type', slug='cb-device-type'
-        )
-        role = DeviceRole.objects.create(name='CB Role', slug='cb-role', color='ff0000')
-        devices = (
-            Device(device_type=device_type, role=role, name='CB Device 1', site=site),
-            Device(device_type=device_type, role=role, name='CB Device 2', site=site),
-        )
-        Device.objects.bulk_create(devices)
-        interfaces = (
-            Interface(device=devices[0], name='eth0', type=InterfaceTypeChoices.TYPE_1GE_FIXED),
-            Interface(device=devices[0], name='eth1', type=InterfaceTypeChoices.TYPE_1GE_FIXED),
-            Interface(device=devices[1], name='eth0', type=InterfaceTypeChoices.TYPE_1GE_FIXED),
-            Interface(device=devices[1], name='eth1', type=InterfaceTypeChoices.TYPE_1GE_FIXED),
-        )
-        Interface.objects.bulk_create(interfaces)
-        for a, b in [(interfaces[0], interfaces[2]), (interfaces[1], interfaces[3])]:
-            cable = Cable(a_terminations=[a], b_terminations=[b], bundle=bundle)
-            cable.save()
-
-        url = reverse('dcim-api:cablebundle-detail', kwargs={'pk': bundle.pk})
-        response = self.client.get(url, **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-        self.assertEqual(response.data['cable_count'], 2)
-
-
-class CableTestCase(APIViewTestCases.APIViewTestCase):
+class CableTest(APIViewTestCases.APIViewTestCase):
     model = Cable
     brief_fields = ['description', 'display', 'id', 'label', 'url']
     bulk_update_data = {
@@ -3323,8 +2349,7 @@ class CableTestCase(APIViewTestCases.APIViewTestCase):
                     'object_type': 'dcim.interface',
                     'object_id': interfaces[14].pk,
                 }],
-                'label': 'ID-CBL4-00004',
-                'profile': CableProfileChoices.SINGLE_1C1P,
+                'label': 'Cable 4',
             },
             {
                 'a_terminations': [{
@@ -3335,8 +2360,7 @@ class CableTestCase(APIViewTestCases.APIViewTestCase):
                     'object_type': 'dcim.interface',
                     'object_id': interfaces[15].pk,
                 }],
-                'label': 'ID-CBL5-00005',
-                'profile': CableProfileChoices.SINGLE_1C1P,
+                'label': 'Cable 5',
             },
             {
                 'a_terminations': [{
@@ -3347,162 +2371,12 @@ class CableTestCase(APIViewTestCases.APIViewTestCase):
                     'object_type': 'dcim.interface',
                     'object_id': interfaces[16].pk,
                 }],
-                'label': 'ID-CBL6-00006',
-                # No profile (legacy behavior)
+                'label': 'Cable 6',
             },
         ]
 
-    def test_graphql_cable_termination_cached_filters(self):
-        """
-        Validate filtering cables by cached CableTermination relations via GraphQL:
 
-          cable_list(filters: { terminations: { <relation>: {...}, DISTINCT: true } })
-
-        Also asserts deduplication when both ends match (cable between two interfaces
-        on the same device/rack/location/site).
-        """
-        self.add_permissions(
-            'dcim.view_cable',
-            'dcim.view_device',
-            'dcim.view_interface',
-            'dcim.view_rack',
-            'dcim.view_location',
-            'dcim.view_site',
-        )
-
-        # Reuse existing fixtures from setUpTestData()
-        devicetype = DeviceType.objects.get(slug='device-type-1')
-        role = DeviceRole.objects.get(slug='device-role-1')
-
-        # Create an isolated topology for this test
-        site_a = Site.objects.create(name='GQL Site A', slug='gql-site-a')
-        site_b = Site.objects.create(name='GQL Site B', slug='gql-site-b')
-
-        location_a = Location.objects.create(
-            site=site_a,
-            name='GQL Location A',
-            slug='gql-location-a',
-            status=LocationStatusChoices.STATUS_ACTIVE,
-        )
-        location_b = Location.objects.create(
-            site=site_b,
-            name='GQL Location B',
-            slug='gql-location-b',
-            status=LocationStatusChoices.STATUS_ACTIVE,
-        )
-
-        rack_a = Rack.objects.create(site=site_a, location=location_a, name='GQL Rack A', u_height=42)
-        rack_b = Rack.objects.create(site=site_b, location=location_b, name='GQL Rack B', u_height=42)
-
-        device_a = Device.objects.create(
-            device_type=devicetype,
-            role=role,
-            name='GQL Device A',
-            site=site_a,
-            location=location_a,
-            rack=rack_a,
-        )
-        device_b = Device.objects.create(
-            device_type=devicetype,
-            role=role,
-            name='GQL Device B',
-            site=site_b,
-            location=location_b,
-            rack=rack_b,
-        )
-
-        a0 = Interface.objects.create(device=device_a, type=InterfaceTypeChoices.TYPE_1GE_FIXED, name='eth0')
-        a1 = Interface.objects.create(device=device_a, type=InterfaceTypeChoices.TYPE_1GE_FIXED, name='eth1')
-        a2 = Interface.objects.create(device=device_a, type=InterfaceTypeChoices.TYPE_1GE_FIXED, name='eth2')
-        b0 = Interface.objects.create(device=device_b, type=InterfaceTypeChoices.TYPE_1GE_FIXED, name='eth0')
-
-        # Both ends on Device A (duplication risk without DISTINCT)
-        cable_same_device = Cable(a_terminations=[a0], b_terminations=[a1], label='GQL Cable Same Device')
-        cable_same_device.save()
-
-        # Cross to Device B
-        cable_cross = Cable(a_terminations=[a2], b_terminations=[b0], label='GQL Cable Cross')
-        cable_cross.save()
-
-        expected_a = {str(cable_same_device.pk), str(cable_cross.pk)}
-        expected_b = {str(cable_cross.pk)}
-
-        url = reverse('graphql')
-
-        test_cases = (
-            # Device (ID + name)
-            (f'device: {{ id: {{ exact: "{device_a.pk}" }} }}', expected_a),
-            (f'device: {{ name: {{ exact: "{device_a.name}" }} }}', expected_a),
-            (f'device: {{ id: {{ exact: "{device_b.pk}" }} }}', expected_b),
-            (f'device: {{ name: {{ exact: "{device_b.name}" }} }}', expected_b),
-            # Rack (ID + name)
-            (f'rack: {{ id: {{ exact: "{rack_a.pk}" }} }}', expected_a),
-            (f'rack: {{ name: {{ exact: "{rack_a.name}" }} }}', expected_a),
-            (f'rack: {{ id: {{ exact: "{rack_b.pk}" }} }}', expected_b),
-            (f'rack: {{ name: {{ exact: "{rack_b.name}" }} }}', expected_b),
-            # Location (ID + name)
-            (f'location: {{ id: {{ exact: "{location_a.pk}" }} }}', expected_a),
-            (f'location: {{ name: {{ exact: "{location_a.name}" }} }}', expected_a),
-            (f'location: {{ id: {{ exact: "{location_b.pk}" }} }}', expected_b),
-            (f'location: {{ name: {{ exact: "{location_b.name}" }} }}', expected_b),
-            # Site (ID + slug)
-            (f'site: {{ id: {{ exact: "{site_a.pk}" }} }}', expected_a),
-            (f'site: {{ slug: {{ exact: "{site_a.slug}" }} }}', expected_a),
-            (f'site: {{ id: {{ exact: "{site_b.pk}" }} }}', expected_b),
-            (f'site: {{ slug: {{ exact: "{site_b.slug}" }} }}', expected_b),
-        )
-
-        for inner_filter, expected in test_cases:
-            with self.subTest(filter=inner_filter):
-                query = f"""{{
-                  cable_list(filters: {{ terminations: {{ {inner_filter} DISTINCT: true }} }})
-                  {{ id }}
-                }}"""
-
-                response = self.client.post(url, data={'query': query}, format='json', **self.header)
-                self.assertHttpStatus(response, status.HTTP_200_OK)
-                data = response.json()
-                self.assertNotIn('errors', data)
-
-                rows = data['data']['cable_list']
-                ids = [row['id'] for row in rows]
-
-                # Ensure DISTINCT is actually effective (no duplicate cables when both ends match)
-                self.assertEqual(len(ids), len(set(ids)), f'Duplicate cables returned for: {inner_filter}')
-
-                self.assertSetEqual(set(ids), expected)
-
-
-class CableTerminationTestCase(
-    APIViewTestCases.GetObjectViewTestCase,
-    APIViewTestCases.ListObjectsViewTestCase,
-):
-    model = CableTermination
-    brief_fields = [
-        'cable', 'cable_end', 'connector', 'display', 'id', 'positions', 'termination_id', 'termination_type', 'url',
-    ]
-
-    @classmethod
-    def setUpTestData(cls):
-        device1 = create_test_device('Device 1')
-        device2 = create_test_device('Device 2')
-
-        interfaces = []
-        for device in (device1, device2):
-            for i in range(0, 10):
-                interfaces.append(Interface(device=device, type=InterfaceTypeChoices.TYPE_1GE_FIXED, name=f'eth{i}'))
-        Interface.objects.bulk_create(interfaces)
-
-        cables = (
-            Cable(a_terminations=[interfaces[0]], b_terminations=[interfaces[10]], label='Cable 1'),
-            Cable(a_terminations=[interfaces[1]], b_terminations=[interfaces[11]], label='Cable 2'),
-            Cable(a_terminations=[interfaces[2]], b_terminations=[interfaces[12]], label='Cable 3'),
-        )
-        for cable in cables:
-            cable.save()
-
-
-class ConnectedDeviceTestCase(APITestCase):
+class ConnectedDeviceTest(APITestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -3525,8 +2399,8 @@ class ConnectedDeviceTestCase(APITestCase):
         cable = Cable(a_terminations=[interfaces[0]], b_terminations=[interfaces[1]])
         cable.save()
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_get_connected_device(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_interface')
         url = reverse('dcim-api:connected-device-list')
 
         url_params = '?peer_device=TestDevice1&peer_interface=eth0'
@@ -3539,7 +2413,7 @@ class ConnectedDeviceTestCase(APITestCase):
         self.assertHttpStatus(response, status.HTTP_404_NOT_FOUND)
 
 
-class VirtualChassisTestCase(APIViewTestCases.APIViewTestCase):
+class VirtualChassisTest(APIViewTestCases.APIViewTestCase):
     model = VirtualChassis
     brief_fields = ['description', 'display', 'id', 'master', 'member_count', 'name', 'url']
 
@@ -3620,7 +2494,7 @@ class VirtualChassisTestCase(APIViewTestCases.APIViewTestCase):
         }
 
 
-class PowerPanelTestCase(APIViewTestCases.APIViewTestCase):
+class PowerPanelTest(APIViewTestCases.APIViewTestCase):
     model = PowerPanel
     brief_fields = ['description', 'display', 'id', 'name', 'powerfeed_count', 'url']
     user_permissions = ('dcim.view_site', )
@@ -3670,7 +2544,7 @@ class PowerPanelTestCase(APIViewTestCases.APIViewTestCase):
         }
 
 
-class PowerFeedTestCase(APIViewTestCases.APIViewTestCase):
+class PowerFeedTest(APIViewTestCases.APIViewTestCase):
     model = PowerFeed
     brief_fields = ['_occupied', 'cable', 'description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -3726,7 +2600,7 @@ class PowerFeedTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class VirtualDeviceContextTestCase(APIViewTestCases.APIViewTestCase):
+class VirtualDeviceContextTest(APIViewTestCases.APIViewTestCase):
     model = VirtualDeviceContext
     brief_fields = ['description', 'device', 'display', 'id', 'identifier', 'name', 'url']
     bulk_update_data = {
@@ -3780,7 +2654,7 @@ class VirtualDeviceContextTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class MACAddressTestCase(APIViewTestCases.APIViewTestCase):
+class MACAddressTest(APIViewTestCases.APIViewTestCase):
     model = MACAddress
     brief_fields = ['description', 'display', 'id', 'mac_address', 'url']
     bulk_update_data = {

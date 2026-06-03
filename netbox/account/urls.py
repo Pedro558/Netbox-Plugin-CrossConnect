@@ -1,7 +1,6 @@
 from django.urls import include, path
 
 from utilities.urls import get_model_urls
-
 from . import views
 
 app_name = 'account'

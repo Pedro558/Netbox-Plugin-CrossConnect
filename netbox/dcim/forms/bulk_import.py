@@ -12,29 +12,17 @@ from extras.models import ConfigTemplate
 from ipam.choices import VLANQinQRoleChoices
 from ipam.models import VLAN, VRF, IPAddress, VLANGroup
 from netbox.choices import *
-from netbox.forms import (
-    NestedGroupModelImportForm,
-    NetBoxModelImportForm,
-    OrganizationalModelImportForm,
-    OwnerCSVMixin,
-    PrimaryModelImportForm,
-)
+from netbox.forms import NetBoxModelImportForm
 from tenancy.models import Tenant
 from utilities.forms.fields import (
-    CSVChoiceField,
-    CSVContentTypeField,
-    CSVModelChoiceField,
-    CSVModelMultipleChoiceField,
-    CSVTypedChoiceField,
+    CSVChoiceField, CSVContentTypeField, CSVModelChoiceField, CSVModelMultipleChoiceField, CSVTypedChoiceField,
     SlugField,
 )
 from virtualization.models import Cluster, VirtualMachine, VMInterface
 from wireless.choices import WirelessRoleChoices
-
 from .common import ModuleCommonForm
 
 __all__ = (
-    'CableBundleImportForm',
     'CableImportForm',
     'ConsolePortImportForm',
     'ConsoleServerPortImportForm',
@@ -49,8 +37,8 @@ __all__ = (
     'LocationImportForm',
     'MACAddressImportForm',
     'ManufacturerImportForm',
-    'ModuleBayImportForm',
     'ModuleImportForm',
+    'ModuleBayImportForm',
     'ModuleTypeImportForm',
     'ModuleTypeProfileImportForm',
     'PlatformImportForm',
@@ -58,21 +46,20 @@ __all__ = (
     'PowerOutletImportForm',
     'PowerPanelImportForm',
     'PowerPortImportForm',
-    'RackGroupImportForm',
     'RackImportForm',
     'RackReservationImportForm',
     'RackRoleImportForm',
     'RackTypeImportForm',
     'RearPortImportForm',
     'RegionImportForm',
-    'SiteGroupImportForm',
     'SiteImportForm',
+    'SiteGroupImportForm',
     'VirtualChassisImportForm',
     'VirtualDeviceContextImportForm'
 )
 
 
-class RegionImportForm(NestedGroupModelImportForm):
+class RegionImportForm(NetBoxModelImportForm):
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=Region.objects.all(),
@@ -83,10 +70,10 @@ class RegionImportForm(NestedGroupModelImportForm):
 
     class Meta:
         model = Region
-        fields = ('name', 'slug', 'parent', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'parent', 'description', 'tags', 'comments')
 
 
-class SiteGroupImportForm(NestedGroupModelImportForm):
+class SiteGroupImportForm(NetBoxModelImportForm):
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=SiteGroup.objects.all(),
@@ -97,10 +84,10 @@ class SiteGroupImportForm(NestedGroupModelImportForm):
 
     class Meta:
         model = SiteGroup
-        fields = ('name', 'slug', 'parent', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'parent', 'description', 'comments', 'tags')
 
 
-class SiteImportForm(PrimaryModelImportForm):
+class SiteImportForm(NetBoxModelImportForm):
     status = CSVChoiceField(
         label=_('Status'),
         choices=SiteStatusChoices,
@@ -132,7 +119,7 @@ class SiteImportForm(PrimaryModelImportForm):
         model = Site
         fields = (
             'name', 'slug', 'status', 'region', 'group', 'tenant', 'facility', 'time_zone', 'description',
-            'physical_address', 'shipping_address', 'latitude', 'longitude', 'owner', 'comments', 'tags'
+            'physical_address', 'shipping_address', 'latitude', 'longitude', 'comments', 'tags'
         )
         help_texts = {
             'time_zone': mark_safe(
@@ -143,7 +130,7 @@ class SiteImportForm(PrimaryModelImportForm):
         }
 
 
-class LocationImportForm(NestedGroupModelImportForm):
+class LocationImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(
         label=_('Site'),
         queryset=Site.objects.all(),
@@ -176,8 +163,8 @@ class LocationImportForm(NestedGroupModelImportForm):
     class Meta:
         model = Location
         fields = (
-            'site', 'parent', 'name', 'slug', 'status', 'tenant', 'facility', 'description', 'owner', 'comments',
-            'tags',
+            'site', 'parent', 'name', 'slug', 'status', 'tenant', 'facility', 'description',
+            'tags', 'comments',
         )
 
     def __init__(self, data=None, *args, **kwargs):
@@ -189,21 +176,15 @@ class LocationImportForm(NestedGroupModelImportForm):
             self.fields['parent'].queryset = self.fields['parent'].queryset.filter(**params)
 
 
-class RackGroupImportForm(OrganizationalModelImportForm):
-
-    class Meta:
-        model = RackGroup
-        fields = ('name', 'slug', 'description', 'owner', 'comments', 'tags')
-
-
-class RackRoleImportForm(OrganizationalModelImportForm):
+class RackRoleImportForm(NetBoxModelImportForm):
+    slug = SlugField()
 
     class Meta:
         model = RackRole
-        fields = ('name', 'slug', 'color', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'color', 'description', 'tags')
 
 
-class RackTypeImportForm(PrimaryModelImportForm):
+class RackTypeImportForm(NetBoxModelImportForm):
     manufacturer = forms.ModelChoiceField(
         label=_('Manufacturer'),
         queryset=Manufacturer.objects.all(),
@@ -244,14 +225,14 @@ class RackTypeImportForm(PrimaryModelImportForm):
         fields = (
             'manufacturer', 'model', 'slug', 'form_factor', 'width', 'u_height', 'starting_unit', 'desc_units',
             'outer_width', 'outer_height', 'outer_depth', 'outer_unit', 'mounting_depth', 'weight', 'max_weight',
-            'weight_unit', 'description', 'owner', 'comments', 'tags',
+            'weight_unit', 'description', 'comments', 'tags',
         )
 
     def __init__(self, data=None, *args, **kwargs):
         super().__init__(data, *args, **kwargs)
 
 
-class RackImportForm(PrimaryModelImportForm):
+class RackImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(
         label=_('Site'),
         queryset=Site.objects.all(),
@@ -269,13 +250,6 @@ class RackImportForm(PrimaryModelImportForm):
         required=False,
         to_field_name='name',
         help_text=_('Name of assigned tenant')
-    )
-    group = CSVModelChoiceField(
-        label=_('Rack group'),
-        queryset=RackGroup.objects.all(),
-        required=False,
-        to_field_name='name',
-        help_text=_('Name of assigned group')
     )
     status = CSVChoiceField(
         label=_('Status'),
@@ -334,10 +308,9 @@ class RackImportForm(PrimaryModelImportForm):
     class Meta:
         model = Rack
         fields = (
-            'site', 'location', 'group', 'name', 'facility_id', 'tenant', 'status', 'role', 'rack_type', 'form_factor',
-            'serial', 'asset_tag', 'width', 'u_height', 'desc_units', 'outer_width', 'outer_height', 'outer_depth',
-            'outer_unit', 'mounting_depth', 'airflow', 'weight', 'max_weight', 'weight_unit', 'description', 'owner',
-            'comments', 'tags',
+            'site', 'location', 'name', 'facility_id', 'tenant', 'status', 'role', 'rack_type', 'form_factor', 'serial',
+            'asset_tag', 'width', 'u_height', 'desc_units', 'outer_width', 'outer_height', 'outer_depth', 'outer_unit',
+            'mounting_depth', 'airflow', 'weight', 'max_weight', 'weight_unit', 'description', 'comments', 'tags',
         )
 
     def __init__(self, data=None, *args, **kwargs):
@@ -360,7 +333,7 @@ class RackImportForm(PrimaryModelImportForm):
                 raise forms.ValidationError(_("U height must be set if not specifying a rack type."))
 
 
-class RackReservationImportForm(PrimaryModelImportForm):
+class RackReservationImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(
         label=_('Site'),
         queryset=Site.objects.all(),
@@ -401,7 +374,7 @@ class RackReservationImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = RackReservation
-        fields = ('site', 'location', 'rack', 'units', 'status', 'tenant', 'description', 'owner', 'comments', 'tags')
+        fields = ('site', 'location', 'rack', 'units', 'status', 'tenant', 'description', 'comments', 'tags')
 
     def __init__(self, data=None, *args, **kwargs):
         super().__init__(data, *args, **kwargs)
@@ -420,14 +393,14 @@ class RackReservationImportForm(PrimaryModelImportForm):
             self.fields['rack'].queryset = self.fields['rack'].queryset.filter(**params)
 
 
-class ManufacturerImportForm(OrganizationalModelImportForm):
+class ManufacturerImportForm(NetBoxModelImportForm):
 
     class Meta:
         model = Manufacturer
-        fields = ('name', 'slug', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'description', 'tags')
 
 
-class DeviceTypeImportForm(PrimaryModelImportForm):
+class DeviceTypeImportForm(NetBoxModelImportForm):
     manufacturer = CSVModelChoiceField(
         label=_('Manufacturer'),
         queryset=Manufacturer.objects.all(),
@@ -457,21 +430,20 @@ class DeviceTypeImportForm(PrimaryModelImportForm):
         model = DeviceType
         fields = [
             'manufacturer', 'default_platform', 'model', 'slug', 'part_number', 'u_height', 'exclude_from_utilization',
-            'is_full_depth', 'subdevice_role', 'airflow', 'description', 'weight', 'weight_unit', 'owner', 'comments',
-            'tags',
+            'is_full_depth', 'subdevice_role', 'airflow', 'description', 'weight', 'weight_unit', 'comments', 'tags',
         ]
 
 
-class ModuleTypeProfileImportForm(PrimaryModelImportForm):
+class ModuleTypeProfileImportForm(NetBoxModelImportForm):
 
     class Meta:
         model = ModuleTypeProfile
         fields = [
-            'name', 'description', 'schema', 'owner', 'comments', 'tags',
+            'name', 'description', 'schema', 'comments', 'tags',
         ]
 
 
-class ModuleTypeImportForm(PrimaryModelImportForm):
+class ModuleTypeImportForm(NetBoxModelImportForm):
     profile = forms.ModelChoiceField(
         label=_('Profile'),
         queryset=ModuleTypeProfile.objects.all(),
@@ -510,7 +482,7 @@ class ModuleTypeImportForm(PrimaryModelImportForm):
         model = ModuleType
         fields = [
             'manufacturer', 'model', 'part_number', 'description', 'airflow', 'weight', 'weight_unit', 'profile',
-            'attribute_data', 'owner', 'comments', 'tags',
+            'attribute_data', 'comments', 'tags',
         ]
 
     def clean(self):
@@ -525,7 +497,7 @@ class ModuleTypeImportForm(PrimaryModelImportForm):
             self.cleaned_data['attribute_data'] = {}
 
 
-class DeviceRoleImportForm(NestedGroupModelImportForm):
+class DeviceRoleImportForm(NetBoxModelImportForm):
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=DeviceRole.objects.all(),
@@ -543,15 +515,17 @@ class DeviceRoleImportForm(NestedGroupModelImportForm):
         required=False,
         help_text=_('Config template')
     )
+    slug = SlugField()
 
     class Meta:
         model = DeviceRole
         fields = (
-            'name', 'slug', 'parent', 'color', 'vm_role', 'config_template', 'description', 'owner', 'comments', 'tags'
+            'name', 'slug', 'parent', 'color', 'vm_role', 'config_template', 'description', 'comments', 'tags'
         )
 
 
-class PlatformImportForm(NestedGroupModelImportForm):
+class PlatformImportForm(NetBoxModelImportForm):
+    slug = SlugField()
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=Platform.objects.all(),
@@ -580,11 +554,11 @@ class PlatformImportForm(NestedGroupModelImportForm):
     class Meta:
         model = Platform
         fields = (
-            'name', 'slug', 'parent', 'manufacturer', 'config_template', 'description', 'owner', 'comments', 'tags',
+            'name', 'slug', 'parent', 'manufacturer', 'config_template', 'description', 'tags',
         )
 
 
-class BaseDeviceImportForm(PrimaryModelImportForm):
+class BaseDeviceImportForm(NetBoxModelImportForm):
     role = CSVModelChoiceField(
         label=_('Device role'),
         queryset=DeviceRole.objects.all(),
@@ -710,8 +684,8 @@ class DeviceImportForm(BaseDeviceImportForm):
         fields = [
             'name', 'role', 'tenant', 'manufacturer', 'device_type', 'platform', 'serial', 'asset_tag', 'status',
             'site', 'location', 'rack', 'position', 'face', 'latitude', 'longitude', 'parent', 'device_bay', 'airflow',
-            'virtual_chassis', 'vc_position', 'vc_priority', 'cluster', 'description', 'config_template', 'owner',
-            'comments', 'tags',
+            'virtual_chassis', 'vc_position', 'vc_priority', 'cluster', 'description', 'config_template', 'comments',
+            'tags',
         ]
 
     def __init__(self, data=None, *args, **kwargs):
@@ -758,7 +732,7 @@ class DeviceImportForm(BaseDeviceImportForm):
             self.instance.parent_bay = device_bay
 
 
-class ModuleImportForm(ModuleCommonForm, PrimaryModelImportForm):
+class ModuleImportForm(ModuleCommonForm, NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -796,7 +770,7 @@ class ModuleImportForm(ModuleCommonForm, PrimaryModelImportForm):
     class Meta:
         model = Module
         fields = (
-            'device', 'module_bay', 'module_type', 'serial', 'asset_tag', 'status', 'description', 'owner', 'comments',
+            'device', 'module_bay', 'module_type', 'serial', 'asset_tag', 'status', 'description', 'comments',
             'replicate_components', 'adopt_components', 'tags',
         )
 
@@ -812,14 +786,15 @@ class ModuleImportForm(ModuleCommonForm, PrimaryModelImportForm):
         # Make sure replicate_components is True when it's not included in the uploaded data
         if 'replicate_components' not in self.data:
             return True
-        return self.cleaned_data['replicate_components']
+        else:
+            return self.cleaned_data['replicate_components']
 
 
 #
 # Device components
 #
 
-class ConsolePortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class ConsolePortImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -842,10 +817,10 @@ class ConsolePortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
 
     class Meta:
         model = ConsolePort
-        fields = ('device', 'name', 'label', 'type', 'speed', 'mark_connected', 'description', 'owner', 'tags')
+        fields = ('device', 'name', 'label', 'type', 'speed', 'mark_connected', 'description', 'tags')
 
 
-class ConsoleServerPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class ConsoleServerPortImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -868,10 +843,10 @@ class ConsoleServerPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
 
     class Meta:
         model = ConsoleServerPort
-        fields = ('device', 'name', 'label', 'type', 'speed', 'mark_connected', 'description', 'owner', 'tags')
+        fields = ('device', 'name', 'label', 'type', 'speed', 'mark_connected', 'description', 'tags')
 
 
-class PowerPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class PowerPortImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -887,12 +862,11 @@ class PowerPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
     class Meta:
         model = PowerPort
         fields = (
-            'device', 'name', 'label', 'type', 'mark_connected', 'maximum_draw', 'allocated_draw', 'description',
-            'owner', 'tags',
+            'device', 'name', 'label', 'type', 'mark_connected', 'maximum_draw', 'allocated_draw', 'description', 'tags'
         )
 
 
-class PowerOutletImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class PowerOutletImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -922,7 +896,7 @@ class PowerOutletImportForm(OwnerCSVMixin, NetBoxModelImportForm):
         model = PowerOutlet
         fields = (
             'device', 'name', 'label', 'type', 'color', 'mark_connected', 'power_port', 'feed_leg', 'description',
-            'owner', 'tags',
+            'tags',
         )
 
     def __init__(self, *args, **kwargs):
@@ -948,7 +922,7 @@ class PowerOutletImportForm(OwnerCSVMixin, NetBoxModelImportForm):
             self.fields['power_port'].queryset = PowerPort.objects.none()
 
 
-class InterfaceImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class InterfaceImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1066,7 +1040,7 @@ class InterfaceImportForm(OwnerCSVMixin, NetBoxModelImportForm):
             'device', 'name', 'label', 'parent', 'bridge', 'lag', 'type', 'speed', 'duplex', 'enabled',
             'mark_connected', 'wwn', 'vdcs', 'mtu', 'mgmt_only', 'description', 'poe_mode', 'poe_type', 'mode',
             'vlan_group', 'untagged_vlan', 'tagged_vlans', 'qinq_svlan', 'vrf', 'rf_role', 'rf_channel',
-            'rf_channel_frequency', 'rf_channel_width', 'tx_power', 'owner', 'tags'
+            'rf_channel_frequency', 'rf_channel_width', 'tx_power', 'tags'
         )
 
     def __init__(self, data=None, *args, **kwargs):
@@ -1094,7 +1068,8 @@ class InterfaceImportForm(OwnerCSVMixin, NetBoxModelImportForm):
         # Make sure enabled is True when it's not included in the uploaded data
         if 'enabled' not in self.data:
             return True
-        return self.cleaned_data['enabled']
+        else:
+            return self.cleaned_data['enabled']
 
     def clean_vdcs(self):
         for vdc in self.cleaned_data['vdcs']:
@@ -1107,11 +1082,17 @@ class InterfaceImportForm(OwnerCSVMixin, NetBoxModelImportForm):
         return self.cleaned_data['vdcs']
 
 
-class FrontPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class FrontPortImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
         to_field_name='name'
+    )
+    rear_port = CSVModelChoiceField(
+        label=_('Rear port'),
+        queryset=RearPort.objects.all(),
+        to_field_name='name',
+        help_text=_('Corresponding rear port')
     )
     type = CSVChoiceField(
         label=_('Type'),
@@ -1122,11 +1103,34 @@ class FrontPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
     class Meta:
         model = FrontPort
         fields = (
-            'device', 'name', 'label', 'type', 'color', 'mark_connected', 'positions', 'description', 'owner', 'tags'
+            'device', 'name', 'label', 'type', 'color', 'mark_connected', 'rear_port', 'rear_port_position',
+            'description', 'tags'
         )
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-class RearPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+        # Limit RearPort choices to those belonging to this device (or VC master)
+        if self.is_bound and 'device' in self.data:
+            try:
+                device = self.fields['device'].to_python(self.data['device'])
+            except forms.ValidationError:
+                device = None
+        else:
+            try:
+                device = self.instance.device
+            except Device.DoesNotExist:
+                device = None
+
+        if device:
+            self.fields['rear_port'].queryset = RearPort.objects.filter(
+                device__in=[device, device.get_vc_master()]
+            )
+        else:
+            self.fields['rear_port'].queryset = RearPort.objects.none()
+
+
+class RearPortImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1140,12 +1144,10 @@ class RearPortImportForm(OwnerCSVMixin, NetBoxModelImportForm):
 
     class Meta:
         model = RearPort
-        fields = (
-            'device', 'name', 'label', 'type', 'color', 'mark_connected', 'positions', 'description', 'owner', 'tags',
-        )
+        fields = ('device', 'name', 'label', 'type', 'color', 'mark_connected', 'positions', 'description', 'tags')
 
 
-class ModuleBayImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class ModuleBayImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1154,16 +1156,10 @@ class ModuleBayImportForm(OwnerCSVMixin, NetBoxModelImportForm):
 
     class Meta:
         model = ModuleBay
-        fields = ('device', 'name', 'label', 'position', 'enabled', 'description', 'owner', 'tags')
-
-    def clean_enabled(self):
-        # Make sure enabled is True when it's not included in the uploaded data
-        if 'enabled' not in self.data:
-            return True
-        return self.cleaned_data['enabled']
+        fields = ('device', 'name', 'label', 'position', 'description', 'tags')
 
 
-class DeviceBayImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class DeviceBayImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1182,7 +1178,7 @@ class DeviceBayImportForm(OwnerCSVMixin, NetBoxModelImportForm):
 
     class Meta:
         model = DeviceBay
-        fields = ('device', 'name', 'label', 'enabled', 'installed_device', 'description', 'owner', 'tags')
+        fields = ('device', 'name', 'label', 'installed_device', 'description', 'tags')
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1210,14 +1206,8 @@ class DeviceBayImportForm(OwnerCSVMixin, NetBoxModelImportForm):
         else:
             self.fields['installed_device'].queryset = Device.objects.none()
 
-    def clean_enabled(self):
-        # Make sure enabled is True when it's not included in the uploaded data
-        if 'enabled' not in self.data:
-            return True
-        return self.cleaned_data['enabled']
 
-
-class InventoryItemImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class InventoryItemImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1264,7 +1254,7 @@ class InventoryItemImportForm(OwnerCSVMixin, NetBoxModelImportForm):
         model = InventoryItem
         fields = (
             'device', 'name', 'label', 'status', 'role', 'manufacturer', 'parent', 'part_id', 'serial', 'asset_tag',
-            'discovered', 'description', 'owner', 'tags', 'component_type', 'component_name',
+            'discovered', 'description', 'tags', 'component_type', 'component_name',
         )
 
     def __init__(self, *args, **kwargs):
@@ -1327,19 +1317,19 @@ class InventoryItemImportForm(OwnerCSVMixin, NetBoxModelImportForm):
 # Device component roles
 #
 
-class InventoryItemRoleImportForm(OrganizationalModelImportForm):
+class InventoryItemRoleImportForm(NetBoxModelImportForm):
     slug = SlugField()
 
     class Meta:
         model = InventoryItemRole
-        fields = ('name', 'slug', 'color', 'description', 'owner', 'comments')
+        fields = ('name', 'slug', 'color', 'description')
 
 
 #
 # Addressing
 #
 
-class MACAddressImportForm(PrimaryModelImportForm):
+class MACAddressImportForm(NetBoxModelImportForm):
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1370,8 +1360,7 @@ class MACAddressImportForm(PrimaryModelImportForm):
     class Meta:
         model = MACAddress
         fields = [
-            'mac_address', 'device', 'virtual_machine', 'interface', 'is_primary', 'description', 'owner', 'comments',
-            'tags',
+            'mac_address', 'device', 'virtual_machine', 'interface', 'is_primary', 'description', 'comments', 'tags',
         ]
 
     def __init__(self, data=None, *args, **kwargs):
@@ -1414,7 +1403,6 @@ class MACAddressImportForm(PrimaryModelImportForm):
 
         # Assign the MAC address as primary for its interface, if designated as such
         if interface and self.cleaned_data['is_primary'] and self.instance.pk:
-            interface.snapshot()
             interface.primary_mac_address = self.instance
             interface.save()
 
@@ -1425,13 +1413,7 @@ class MACAddressImportForm(PrimaryModelImportForm):
 # Cables
 #
 
-class CableBundleImportForm(PrimaryModelImportForm):
-    class Meta:
-        model = CableBundle
-        fields = ('name', 'description', 'owner', 'comments', 'tags')
-
-
-class CableImportForm(PrimaryModelImportForm):
+class CableImportForm(NetBoxModelImportForm):
     # Termination A
     side_a_site = CSVModelChoiceField(
         label=_('Side A site'),
@@ -1443,16 +1425,8 @@ class CableImportForm(PrimaryModelImportForm):
     side_a_device = CSVModelChoiceField(
         label=_('Side A device'),
         queryset=Device.objects.all(),
-        required=False,
         to_field_name='name',
-        help_text=_('Device name (for device component terminations)')
-    )
-    side_a_power_panel = CSVModelChoiceField(
-        label=_('Side A power panel'),
-        queryset=PowerPanel.objects.all(),
-        required=False,
-        to_field_name='name',
-        help_text=_('Power panel name (for power feed terminations)')
+        help_text=_('Device name')
     )
     side_a_type = CSVContentTypeField(
         label=_('Side A type'),
@@ -1476,16 +1450,8 @@ class CableImportForm(PrimaryModelImportForm):
     side_b_device = CSVModelChoiceField(
         label=_('Side B device'),
         queryset=Device.objects.all(),
-        required=False,
         to_field_name='name',
-        help_text=_('Device name (for device component terminations)')
-    )
-    side_b_power_panel = CSVModelChoiceField(
-        label=_('Side B power panel'),
-        queryset=PowerPanel.objects.all(),
-        required=False,
-        to_field_name='name',
-        help_text=_('Power panel name (for power feed terminations)')
+        help_text=_('Device name')
     )
     side_b_type = CSVContentTypeField(
         label=_('Side B type'),
@@ -1505,12 +1471,6 @@ class CableImportForm(PrimaryModelImportForm):
         required=False,
         help_text=_('Connection status')
     )
-    profile = CSVChoiceField(
-        label=_('Profile'),
-        choices=CableProfileChoices,
-        required=False,
-        help_text=_('Cable connection profile')
-    )
     type = CSVChoiceField(
         label=_('Type'),
         choices=CableTypeChoices,
@@ -1523,13 +1483,6 @@ class CableImportForm(PrimaryModelImportForm):
         required=False,
         to_field_name='name',
         help_text=_('Assigned tenant')
-    )
-    bundle = CSVModelChoiceField(
-        label=_('Bundle'),
-        queryset=CableBundle.objects.all(),
-        required=False,
-        to_field_name='name',
-        help_text=_('Cable bundle name'),
     )
     length_unit = CSVChoiceField(
         label=_('Length unit'),
@@ -1547,10 +1500,9 @@ class CableImportForm(PrimaryModelImportForm):
     class Meta:
         model = Cable
         fields = [
-            'side_a_site', 'side_a_device', 'side_a_power_panel', 'side_a_type', 'side_a_name',
-            'side_b_site', 'side_b_device', 'side_b_power_panel', 'side_b_type', 'side_b_name',
-            'type', 'status', 'profile', 'tenant', 'bundle', 'label', 'color', 'length', 'length_unit',
-            'description', 'owner', 'comments', 'tags',
+            'side_a_site', 'side_a_device', 'side_a_type', 'side_a_name', 'side_b_site', 'side_b_device', 'side_b_type',
+            'side_b_name', 'type', 'status', 'tenant', 'label', 'color', 'length', 'length_unit', 'description',
+            'comments', 'tags',
         ]
 
     def __init__(self, data=None, *args, **kwargs):
@@ -1559,22 +1511,16 @@ class CableImportForm(PrimaryModelImportForm):
         if data:
             # Limit choices for side_a_device to the assigned side_a_site
             if side_a_site := data.get('side_a_site'):
-                side_a_parent_params = {f'site__{self.fields['side_a_site'].to_field_name}': side_a_site}
+                side_a_device_params = {f'site__{self.fields["side_a_site"].to_field_name}': side_a_site}
                 self.fields['side_a_device'].queryset = self.fields['side_a_device'].queryset.filter(
-                    **side_a_parent_params
-                )
-                self.fields['side_a_power_panel'].queryset = self.fields['side_a_power_panel'].queryset.filter(
-                    **side_a_parent_params
+                    **side_a_device_params
                 )
 
             # Limit choices for side_b_device to the assigned side_b_site
             if side_b_site := data.get('side_b_site'):
-                side_b_parent_params = {f'site__{self.fields['side_b_site'].to_field_name}': side_b_site}
+                side_b_device_params = {f'site__{self.fields["side_b_site"].to_field_name}': side_b_site}
                 self.fields['side_b_device'].queryset = self.fields['side_b_device'].queryset.filter(
-                    **side_b_parent_params
-                )
-                self.fields['side_b_power_panel'].queryset = self.fields['side_b_power_panel'].queryset.filter(
-                    **side_b_parent_params
+                    **side_b_device_params
                 )
 
     def _clean_side(self, side):
@@ -1586,57 +1532,30 @@ class CableImportForm(PrimaryModelImportForm):
         assert side in 'ab', f"Invalid side designation: {side}"
 
         device = self.cleaned_data.get(f'side_{side}_device')
-        power_panel = self.cleaned_data.get(f'side_{side}_power_panel')
         content_type = self.cleaned_data.get(f'side_{side}_type')
         name = self.cleaned_data.get(f'side_{side}_name')
-        if not content_type or not name:
+        if not device or not content_type or not name:
             return None
 
         model = content_type.model_class()
-
-        # PowerFeed terminations reference a PowerPanel, not a Device
-        if content_type.model == 'powerfeed':
-            if not power_panel:
-                return None
-            try:
-                termination_object = model.objects.get(power_panel=power_panel, name=name)
-                if termination_object.cable is not None and termination_object.cable != self.instance:
-                    raise forms.ValidationError(
-                        _("Side {side_upper}: {power_panel} {termination_object} is already connected").format(
-                            side_upper=side.upper(), power_panel=power_panel, termination_object=termination_object
-                        )
-                    )
-            except ObjectDoesNotExist:
+        try:
+            if device.virtual_chassis and device.virtual_chassis.master == device and \
+                    model.objects.filter(device=device, name=name).count() == 0:
+                termination_object = model.objects.get(device__in=device.virtual_chassis.members.all(), name=name)
+            else:
+                termination_object = model.objects.get(device=device, name=name)
+            if termination_object.cable is not None and termination_object.cable != self.instance:
                 raise forms.ValidationError(
-                    _("{side_upper} side termination not found: {power_panel} {name}").format(
-                        side_upper=side.upper(), power_panel=power_panel, name=name
+                    _("Side {side_upper}: {device} {termination_object} is already connected").format(
+                        side_upper=side.upper(), device=device, termination_object=termination_object
                     )
                 )
-        else:
-            if not device:
-                return None
-            try:
-                if (
-                    device.virtual_chassis and
-                    device.virtual_chassis.master == device and
-                    not model.objects.filter(device=device, name=name).exists()
-                ):
-                    termination_object = model.objects.get(device__in=device.virtual_chassis.members.all(), name=name)
-                else:
-                    termination_object = model.objects.get(device=device, name=name)
-                if termination_object.cable is not None and termination_object.cable != self.instance:
-                    raise forms.ValidationError(
-                        _("Side {side_upper}: {device} {termination_object} is already connected").format(
-                            side_upper=side.upper(), device=device, termination_object=termination_object
-                        )
-                    )
-            except ObjectDoesNotExist:
-                raise forms.ValidationError(
-                    _("{side_upper} side termination not found: {device} {name}").format(
-                        side_upper=side.upper(), device=device, name=name
-                    )
+        except ObjectDoesNotExist:
+            raise forms.ValidationError(
+                _("{side_upper} side termination not found: {device} {name}").format(
+                    side_upper=side.upper(), device=device, name=name
                 )
-
+            )
         setattr(self.instance, f'{side}_terminations', [termination_object])
         return termination_object
 
@@ -1677,7 +1596,7 @@ class CableImportForm(PrimaryModelImportForm):
 #
 
 
-class VirtualChassisImportForm(PrimaryModelImportForm):
+class VirtualChassisImportForm(NetBoxModelImportForm):
     master = CSVModelChoiceField(
         label=_('Master'),
         queryset=Device.objects.all(),
@@ -1688,14 +1607,14 @@ class VirtualChassisImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = VirtualChassis
-        fields = ('name', 'domain', 'master', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'domain', 'master', 'description', 'comments', 'tags')
 
 
 #
 # Power
 #
 
-class PowerPanelImportForm(PrimaryModelImportForm):
+class PowerPanelImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(
         label=_('Site'),
         queryset=Site.objects.all(),
@@ -1711,7 +1630,7 @@ class PowerPanelImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = PowerPanel
-        fields = ('site', 'location', 'name', 'description', 'owner', 'comments', 'tags')
+        fields = ('site', 'location', 'name', 'description', 'comments', 'tags')
 
     def __init__(self, data=None, *args, **kwargs):
         super().__init__(data, *args, **kwargs)
@@ -1723,7 +1642,7 @@ class PowerPanelImportForm(PrimaryModelImportForm):
             self.fields['location'].queryset = self.fields['location'].queryset.filter(**params)
 
 
-class PowerFeedImportForm(PrimaryModelImportForm):
+class PowerFeedImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(
         label=_('Site'),
         queryset=Site.objects.all(),
@@ -1781,7 +1700,7 @@ class PowerFeedImportForm(PrimaryModelImportForm):
         model = PowerFeed
         fields = (
             'site', 'power_panel', 'location', 'rack', 'name', 'status', 'type', 'mark_connected', 'supply', 'phase',
-            'voltage', 'amperage', 'max_utilization', 'tenant', 'description', 'owner', 'comments', 'tags',
+            'voltage', 'amperage', 'max_utilization', 'tenant', 'description', 'comments', 'tags',
         )
 
     def __init__(self, data=None, *args, **kwargs):
@@ -1805,7 +1724,8 @@ class PowerFeedImportForm(PrimaryModelImportForm):
             self.fields['rack'].queryset = self.fields['rack'].queryset.filter(**params)
 
 
-class VirtualDeviceContextImportForm(PrimaryModelImportForm):
+class VirtualDeviceContextImportForm(NetBoxModelImportForm):
+
     device = CSVModelChoiceField(
         label=_('Device'),
         queryset=Device.objects.all(),
@@ -1840,7 +1760,7 @@ class VirtualDeviceContextImportForm(PrimaryModelImportForm):
 
     class Meta:
         fields = [
-            'name', 'device', 'status', 'tenant', 'identifier', 'owner', 'comments', 'primary_ip4', 'primary_ip6',
+            'name', 'device', 'status', 'tenant', 'identifier', 'comments', 'primary_ip4', 'primary_ip6',
         ]
         model = VirtualDeviceContext
 

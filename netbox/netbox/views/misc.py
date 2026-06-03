@@ -1,4 +1,3 @@
-import logging
 import re
 from collections import namedtuple
 
@@ -29,8 +28,6 @@ __all__ = (
     'SearchView',
 )
 
-logger = logging.getLogger(f'netbox.{__name__}')
-
 Link = namedtuple('Link', ('label', 'viewname', 'permission', 'count'))
 
 
@@ -50,17 +47,10 @@ class HomeView(ConditionalLoginRequiredMixin, View):
             ))
             dashboard = get_default_dashboard(config=DEFAULT_DASHBOARD).get_layout()
 
-        # Check whether a new release is available. (Only for superusers.)
+        # Check whether a new release is available. (Only for staff/superusers.)
         new_release = None
-        if request.user.is_superuser:
-            # cache.get() can raise an exception if the cached value can't be unpickled after dependency upgrades
-            try:
-                latest_release = cache.get('latest_release')
-            except Exception:
-                logger.debug("Failed to read 'latest_release' from cache; deleting key", exc_info=True)
-                cache.delete('latest_release')
-                latest_release = None
-
+        if request.user.is_staff or request.user.is_superuser:
+            latest_release = cache.get('latest_release')
             if latest_release:
                 release_version, release_url = latest_release
                 if release_version > version.parse(settings.RELEASE.version):

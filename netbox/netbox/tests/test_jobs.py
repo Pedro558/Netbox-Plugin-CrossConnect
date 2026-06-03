@@ -4,13 +4,11 @@ from django.test import TestCase
 from django.utils import timezone
 from django_rq import get_queue
 
+from ..jobs import *
+from core.models import DataSource, Job
 from core.choices import JobStatusChoices
 from core.exceptions import JobFailed
-from core.models import DataSource, Job
 from utilities.testing import disable_warnings
-
-from ..jobs import *
-from ..jobs import _INSTALL_ROOT
 
 
 class TestJobRunner(JobRunner):
@@ -39,7 +37,7 @@ class JobRunnerTestCase(TestCase):
         return timezone.now() + timedelta(weeks=offset)
 
 
-class JobRunnerTestCase(JobRunnerTestCase):
+class JobRunnerTest(JobRunnerTestCase):
     """
     Test internal logic of `JobRunner`.
     """
@@ -84,15 +82,9 @@ class JobRunnerTestCase(JobRunnerTestCase):
 
         self.assertEqual(job.status, JobStatusChoices.STATUS_ERRORED)
         self.assertEqual(job.error, repr(ErroredJobRunner.EXP))
-        self.assertEqual(len(job.log_entries), 1)
-        self.assertEqual(job.log_entries[0]['level'], 'error')
-        tb_message = job.log_entries[0]['message']
-        self.assertIn('Traceback', tb_message)
-        self.assertIn('Test error', tb_message)
-        self.assertNotIn(_INSTALL_ROOT, tb_message)
 
 
-class EnqueueTestCase(JobRunnerTestCase):
+class EnqueueTest(JobRunnerTestCase):
     """
     Test enqueuing of `JobRunner`.
     """
@@ -168,7 +160,7 @@ class EnqueueTestCase(JobRunnerTestCase):
         self.assertEqual(TestJobRunner.get_jobs(instance).count(), 1)
 
 
-class SystemJobTestCase(JobRunnerTestCase):
+class SystemJobTest(JobRunnerTestCase):
     """
     Test that system jobs can be scheduled.
 

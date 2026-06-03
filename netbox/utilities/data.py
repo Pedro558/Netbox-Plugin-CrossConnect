@@ -7,14 +7,11 @@ __all__ = (
     'array_to_ranges',
     'array_to_string',
     'check_ranges_overlap',
-    'deep_compare_dict',
     'deepmerge',
     'drange',
     'flatten_dict',
-    'get_config_value_ci',
     'ranges_to_string',
     'ranges_to_string_list',
-    'resolve_attr_path',
     'shallow_compare_dict',
     'string_to_ranges',
 )
@@ -23,19 +20,6 @@ __all__ = (
 #
 # Dictionary utilities
 #
-
-def get_config_value_ci(config_dict, key, default=None):
-    """
-    Retrieve a value from a dictionary using case-insensitive key matching.
-    """
-    if key in config_dict:
-        return config_dict[key]
-    key_lower = key.lower()
-    for config_key, value in config_dict.items():
-        if config_key.lower() == key_lower:
-            return value
-    return default
-
 
 def deepmerge(original, new):
     """
@@ -82,35 +66,6 @@ def shallow_compare_dict(source_dict, destination_dict, exclude=tuple()):
             difference[key] = value
 
     return difference
-
-
-def deep_compare_dict(source_dict, destination_dict, exclude=tuple()):
-    """
-    Return a two-tuple of dictionaries (added, removed) representing the differences between source_dict and
-    destination_dict. For values which are themselves dicts, the comparison is performed recursively such that only
-    the changed keys within the nested dict are included. `exclude` is a list or tuple of keys to be ignored.
-    """
-    added = {}
-    removed = {}
-
-    all_keys = set(source_dict) | set(destination_dict)
-    for key in all_keys:
-        if key in exclude:
-            continue
-        src_val = source_dict.get(key)
-        dst_val = destination_dict.get(key)
-        if src_val == dst_val:
-            continue
-        if isinstance(src_val, dict) and isinstance(dst_val, dict):
-            sub_added, sub_removed = deep_compare_dict(src_val, dst_val)
-            if sub_added or sub_removed:
-                added[key] = sub_added
-                removed[key] = sub_removed
-        else:
-            added[key] = dst_val
-            removed[key] = src_val
-
-    return added, removed
 
 
 #
@@ -258,26 +213,3 @@ def string_to_ranges(value):
             return None
         values.append(NumericRange(int(lower), int(upper) + 1, bounds='[)'))
     return values
-
-
-#
-# Attribute resolution
-#
-
-def resolve_attr_path(obj, path):
-    """
-    Follow a dotted path across attributes and/or dictionary keys and return the final value.
-
-    Parameters:
-        obj: The starting object
-        path: The dotted path to follow (e.g. "foo.bar.baz")
-    """
-    cur = obj
-    for part in path.split('.'):
-        if cur is None:
-            return None
-        try:
-            cur = getattr(cur, part) if hasattr(cur, part) else cur.get(part)
-        except AttributeError:
-            cur = None
-    return cur

@@ -23,15 +23,8 @@ from netbox.config import get_config
 from netbox.events import get_event_type_choices
 from netbox.models import ChangeLoggedModel
 from netbox.models.features import (
-    CloningMixin,
-    CustomFieldsMixin,
-    CustomLinksMixin,
-    ExportTemplatesMixin,
-    SyncedDataMixin,
-    TagsMixin,
-    has_feature,
+    CloningMixin, CustomFieldsMixin, CustomLinksMixin, ExportTemplatesMixin, SyncedDataMixin, TagsMixin, has_feature
 )
-from netbox.models.mixins import OwnerMixin
 from utilities.html import clean_html
 from utilities.jinja2 import render_jinja2
 from utilities.querydict import dict_to_querydict
@@ -51,7 +44,7 @@ __all__ = (
 )
 
 
-class EventRule(CustomFieldsMixin, ExportTemplatesMixin, OwnerMixin, TagsMixin, ChangeLoggedModel):
+class EventRule(CustomFieldsMixin, ExportTemplatesMixin, TagsMixin, ChangeLoggedModel):
     """
     An EventRule defines an action to be taken automatically in response to a specific set of events, such as when a
     specific type of object is created, modified, or deleted. The action to be taken might entail transmitting a
@@ -143,10 +136,6 @@ class EventRule(CustomFieldsMixin, ExportTemplatesMixin, OwnerMixin, TagsMixin, 
             except ValueError as e:
                 raise ValidationError({'conditions': e})
 
-        # action_data must be a JSON object (or null)
-        if self.action_data is not None and not isinstance(self.action_data, dict):
-            raise ValidationError({'action_data': _('Action data must be a JSON object or null.')})
-
     def eval_conditions(self, data):
         """
         Test whether the given data meets the conditions of the event rule (if any). Return True
@@ -166,7 +155,7 @@ class EventRule(CustomFieldsMixin, ExportTemplatesMixin, OwnerMixin, TagsMixin, 
             return False
 
 
-class Webhook(CustomFieldsMixin, ExportTemplatesMixin, TagsMixin, OwnerMixin, ChangeLoggedModel):
+class Webhook(CustomFieldsMixin, ExportTemplatesMixin, TagsMixin, ChangeLoggedModel):
     """
     A Webhook defines a request that will be sent to a remote application when an object is created, updated, and/or
     delete in NetBox. The request will contain a representation of the object, which the remote application can act on.
@@ -295,7 +284,8 @@ class Webhook(CustomFieldsMixin, ExportTemplatesMixin, TagsMixin, OwnerMixin, Ch
         """
         if self.body_template:
             return render_jinja2(self.body_template, context)
-        return json.dumps(context, cls=JSONEncoder)
+        else:
+            return json.dumps(context, cls=JSONEncoder)
 
     def render_payload_url(self, context):
         """
@@ -304,7 +294,7 @@ class Webhook(CustomFieldsMixin, ExportTemplatesMixin, TagsMixin, OwnerMixin, Ch
         return render_jinja2(self.payload_url, context)
 
 
-class CustomLink(CloningMixin, ExportTemplatesMixin, OwnerMixin, ChangeLoggedModel):
+class CustomLink(CloningMixin, ExportTemplatesMixin, ChangeLoggedModel):
     """
     A custom link to an external representation of a NetBox object. The link text and URL fields accept Jinja2 template
     code to be rendered with an object as context.
@@ -360,9 +350,6 @@ class CustomLink(CloningMixin, ExportTemplatesMixin, OwnerMixin, ChangeLoggedMod
 
     class Meta:
         ordering = ['group_name', 'weight', 'name']
-        indexes = (
-            models.Index(fields=('group_name', 'weight', 'name')),  # Default ordering
-        )
         verbose_name = _('custom link')
         verbose_name_plural = _('custom links')
 
@@ -407,14 +394,7 @@ class CustomLink(CloningMixin, ExportTemplatesMixin, OwnerMixin, ChangeLoggedMod
         }
 
 
-class ExportTemplate(
-    SyncedDataMixin,
-    CloningMixin,
-    ExportTemplatesMixin,
-    OwnerMixin,
-    ChangeLoggedModel,
-    RenderTemplateMixin,
-):
+class ExportTemplate(SyncedDataMixin, CloningMixin, ExportTemplatesMixin, ChangeLoggedModel, RenderTemplateMixin):
     object_types = models.ManyToManyField(
         to='contenttypes.ContentType',
         related_name='export_templates',
@@ -436,9 +416,6 @@ class ExportTemplate(
 
     class Meta:
         ordering = ('name',)
-        indexes = (
-            models.Index(fields=('name',)),  # Default ordering
-        )
         verbose_name = _('export template')
         verbose_name_plural = _('export templates')
 
@@ -468,12 +445,18 @@ class ExportTemplate(
     sync_data.alters_data = True
 
     def get_context(self, context=None, queryset=None):
-        _context = super().get_context(context=context, queryset=queryset)
-        _context['queryset'] = queryset
+        _context = {
+            'queryset': queryset,
+        }
+
+        # Apply the provided context data, if any
+        if context is not None:
+            _context.update(context)
+
         return _context
 
 
-class SavedFilter(CloningMixin, ExportTemplatesMixin, OwnerMixin, ChangeLoggedModel):
+class SavedFilter(CloningMixin, ExportTemplatesMixin, ChangeLoggedModel):
     """
     A set of predefined keyword parameters that can be reused to filter for specific objects.
     """
@@ -525,9 +508,6 @@ class SavedFilter(CloningMixin, ExportTemplatesMixin, OwnerMixin, ChangeLoggedMo
 
     class Meta:
         ordering = ('weight', 'name')
-        indexes = (
-            models.Index(fields=('weight', 'name')),  # Default ordering
-        )
         verbose_name = _('saved filter')
         verbose_name_plural = _('saved filters')
 
@@ -610,9 +590,6 @@ class TableConfig(CloningMixin, ChangeLoggedModel):
 
     class Meta:
         ordering = ('weight', 'name')
-        indexes = (
-            models.Index(fields=('weight', 'name')),  # Default ordering
-        )
         verbose_name = _('table config')
         verbose_name_plural = _('table configs')
 
@@ -658,7 +635,7 @@ class TableConfig(CloningMixin, ChangeLoggedModel):
         table = self.table_class([])
 
         # Validate ordering columns
-        for name in self.ordering or []:
+        for name in self.ordering:
             if name.startswith('-'):
                 name = name[1:]  # Strip leading hyphen
             if name not in table.columns:
@@ -716,7 +693,6 @@ class ImageAttachment(ChangeLoggedModel):
     class Meta:
         ordering = ('name', 'pk')  # name may be non-unique
         indexes = (
-            models.Index(fields=('name', 'id')),  # Default ordering
             models.Index(fields=('object_type', 'object_id')),
         )
         verbose_name = _('image attachment')
@@ -827,7 +803,6 @@ class JournalEntry(CustomFieldsMixin, CustomLinksMixin, TagsMixin, ExportTemplat
     class Meta:
         ordering = ('-created',)
         indexes = (
-            models.Index(fields=('-created',)),  # Default ordering
             models.Index(fields=('assigned_object_type', 'assigned_object_id')),
         )
         verbose_name = _('journal entry')
@@ -883,7 +858,6 @@ class Bookmark(models.Model):
     class Meta:
         ordering = ('created', 'pk')
         indexes = (
-            models.Index(fields=('created', 'id')),  # Default ordering
             models.Index(fields=('object_type', 'object_id')),
         )
         constraints = (

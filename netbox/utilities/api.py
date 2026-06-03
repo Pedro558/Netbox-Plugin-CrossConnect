@@ -1,28 +1,21 @@
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.exceptions import (
-    FieldDoesNotExist,
-    FieldError,
-    MultipleObjectsReturned,
-    ObjectDoesNotExist,
-    ValidationError,
+    FieldDoesNotExist, FieldError, MultipleObjectsReturned, ObjectDoesNotExist, ValidationError,
 )
 from django.db.models.fields.related import ManyToOneRel, RelatedField
 from django.urls import reverse
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
-from rest_framework.permissions import BasePermission
-from rest_framework.serializers import ListSerializer, Serializer
+from rest_framework.serializers import Serializer
 from rest_framework.views import get_view_name as drf_get_view_name
 
 from extras.constants import HTTP_CONTENT_TYPE_JSON
 from netbox.api.exceptions import GraphQLTypeNotFound, SerializerNotFound
 from netbox.api.fields import RelatedObjectCountField
-
 from .query import count_related, dict_to_filter_params
 from .string import title
 
 __all__ = (
-    'IsSuperuser',
     'get_annotations_for_serializer',
     'get_graphql_type_for_model',
     'get_prefetches_for_serializer',
@@ -32,14 +25,6 @@ __all__ = (
     'is_api_request',
     'is_graphql_request',
 )
-
-
-class IsSuperuser(BasePermission):
-    """
-    Allows access only to superusers.
-    """
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_superuser)
 
 
 def get_serializer_for_model(model, prefix=''):
@@ -98,52 +83,23 @@ def get_view_name(view):
     return drf_get_view_name(view)
 
 
-def _get_nested_serializer(serializer_field):
-    """
-    Return the nested serializer instance for a declared serializer field.
-    """
-    if isinstance(serializer_field, ListSerializer):
-        serializer_field = serializer_field.child
-
-    if isinstance(serializer_field, Serializer) and hasattr(serializer_field, 'nested'):
-        return serializer_field
-
-    return None
-
-
-def _get_serializer_fields(serializer: Serializer):
-    """
-    Return the effective field names for a serializer instance, honoring any
-    field-level fields=/omit= overrides.
-    """
-    fields = getattr(serializer, '_include_fields', None) or serializer.Meta.fields
-    omit = getattr(serializer, '_omit_fields', []) or []
-
-    return [field_name for field_name in fields if field_name not in omit]
-
-
-def get_prefetches_for_serializer(serializer_class, fields=None, omit=None):
+def get_prefetches_for_serializer(serializer_class, fields_to_include=None):
     """
     Compile and return a list of fields which should be prefetched on the queryset for a serializer.
     """
-    if fields is not None and omit is not None:
-        raise TypeError("Cannot specify both 'fields' and 'omit' parameters.")
-
     model = serializer_class.Meta.model
 
     # If fields are not specified, default to all
-    fields_to_include = fields or serializer_class.Meta.fields
-    fields_to_omit = omit or []
+    if not fields_to_include:
+        fields_to_include = serializer_class.Meta.fields
 
     prefetch_fields = []
     for field_name in fields_to_include:
-        if field_name in fields_to_omit:
-            continue
         serializer_field = serializer_class._declared_fields.get(field_name)
 
         # Determine the name of the model field referenced by the serializer field
         model_field_name = field_name
-        if serializer_field and getattr(serializer_field, 'source', None):
+        if serializer_field and serializer_field.source:
             model_field_name = serializer_field.source
 
         # If the serializer field does not map to a discrete model field, skip it.
@@ -154,34 +110,31 @@ def get_prefetches_for_serializer(serializer_class, fields=None, omit=None):
         except FieldDoesNotExist:
             continue
 
-        # If this field is represented by a nested serializer, recurse to resolve
-        # prefetches for the related object, honoring any field-level fields=/omit=
-        # constraints set on that serializer field instance.
-        if nested_serializer := _get_nested_serializer(serializer_field):
-            subfields = _get_serializer_fields(nested_serializer)
-            for subfield in get_prefetches_for_serializer(type(nested_serializer), fields=subfields):
-                prefetch_fields.append(f'{field.name}__{subfield}')
+        # If this field is represented by a nested serializer, recurse to resolve prefetches
+        # for the related object.
+        if serializer_field:
+            if issubclass(type(serializer_field), Serializer):
+                # Determine which fields to prefetch for the nested object
+                subfields = serializer_field.Meta.brief_fields if serializer_field.nested else None
+                for subfield in get_prefetches_for_serializer(type(serializer_field), subfields):
+                    prefetch_fields.append(f'{field_name}__{subfield}')
 
     return prefetch_fields
 
 
-def get_annotations_for_serializer(serializer_class, fields=None, omit=None):
+def get_annotations_for_serializer(serializer_class, fields_to_include=None):
     """
     Return a mapping of field names to annotations to be applied to the queryset for a serializer.
     """
-    if fields is not None and omit is not None:
-        raise TypeError("Cannot specify both 'fields' and 'omit' parameters.")
+    annotations = {}
+
+    # If specific fields are not specified, default to all
+    if not fields_to_include:
+        fields_to_include = serializer_class.Meta.fields
 
     model = serializer_class.Meta.model
 
-    # If fields are not specified, default to all
-    fields_to_include = fields or serializer_class.Meta.fields
-    fields_to_omit = omit or []
-
-    annotations = {}
     for field_name, field in serializer_class._declared_fields.items():
-        if field_name in fields_to_omit:
-            continue
         if field_name in fields_to_include and type(field) is RelatedObjectCountField:
             related_field = getattr(model, field.relation).field
             annotations[field_name] = count_related(related_field.model, related_field.name)

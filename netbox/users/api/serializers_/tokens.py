@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.contrib.auth import authenticate
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
@@ -5,7 +6,6 @@ from rest_framework.exceptions import AuthenticationFailed, PermissionDenied
 from netbox.api.fields import IPNetworkSerializer
 from netbox.api.serializers import ValidatedModelSerializer
 from users.models import Token
-
 from .users import *
 
 __all__ = (
@@ -15,13 +15,14 @@ __all__ = (
 
 
 class TokenSerializer(ValidatedModelSerializer):
-    token = serializers.CharField(
+    key = serializers.CharField(
+        min_length=40,
+        max_length=40,
+        allow_blank=True,
         required=False,
-        default=Token.generate,
+        write_only=not settings.ALLOW_TOKEN_RETRIEVAL
     )
-    user = UserSerializer(
-        nested=True
-    )
+    user = UserSerializer(nested=True)
     allowed_ips = serializers.ListField(
         child=IPNetworkSerializer(),
         required=False,
@@ -32,20 +33,15 @@ class TokenSerializer(ValidatedModelSerializer):
     class Meta:
         model = Token
         fields = (
-            'id', 'url', 'display_url', 'display', 'version', 'key', 'user', 'description', 'created', 'expires',
-            'last_used', 'enabled', 'write_enabled', 'pepper_id', 'allowed_ips', 'token',
+            'id', 'url', 'display_url', 'display', 'user', 'created', 'expires', 'last_used', 'key', 'write_enabled',
+            'description', 'allowed_ips',
         )
-        read_only_fields = ('key',)
-        brief_fields = ('id', 'url', 'display', 'version', 'key', 'enabled', 'write_enabled', 'description')
+        brief_fields = ('id', 'url', 'display', 'key', 'write_enabled', 'description')
 
-    def get_fields(self):
-        fields = super().get_fields()
-
-        # Make user field read-only if updating an existing Token.
-        if self.instance is not None:
-            fields['user'].read_only = True
-
-        return fields
+    def to_internal_value(self, data):
+        if not getattr(self.instance, 'key', None) and 'key' not in data:
+            data['key'] = Token.generate_key()
+        return super().to_internal_value(data)
 
     def validate(self, data):
 
@@ -56,24 +52,6 @@ class TokenSerializer(ValidatedModelSerializer):
             raise PermissionDenied("This user does not have permission to create tokens for other users.")
 
         return super().validate(data)
-
-    def create(self, validated_data):
-        instance = super().create(validated_data)
-        # The plaintext token is only available in memory after save(); v2 tokens persist only an
-        # HMAC digest, so it can't be recovered later. Stash it on the request so to_representation()
-        # can return it even after the viewset re-fetches the instance from the database.
-        if request := self.context.get('request'):
-            if not hasattr(request, '_token_plaintexts'):
-                request._token_plaintexts = {}
-            request._token_plaintexts[instance.pk] = instance.token
-        return instance
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        if not data.get('token') and (request := self.context.get('request')):
-            if plaintext := getattr(request, '_token_plaintexts', {}).get(instance.pk):
-                data['token'] = plaintext
-        return data
 
 
 class TokenProvisionSerializer(TokenSerializer):
@@ -97,8 +75,8 @@ class TokenProvisionSerializer(TokenSerializer):
     class Meta:
         model = Token
         fields = (
-            'id', 'url', 'display_url', 'display', 'version', 'user', 'key', 'created', 'expires', 'last_used', 'key',
-            'enabled', 'write_enabled', 'description', 'allowed_ips', 'username', 'password', 'token',
+            'id', 'url', 'display_url', 'display', 'user', 'created', 'expires', 'last_used', 'key', 'write_enabled',
+            'description', 'allowed_ips', 'username', 'password',
         )
 
     def validate(self, data):

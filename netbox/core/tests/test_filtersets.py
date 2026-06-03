@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from django.contrib.contenttypes.models import ContentType
 from django.test import TestCase
@@ -8,7 +8,6 @@ from dcim.models import Site
 from ipam.models import IPAddress
 from users.models import User
 from utilities.testing import BaseFilterSetTests, ChangeLoggedFilterSetTests
-
 from ..choices import *
 from ..filtersets import *
 from ..models import *
@@ -100,21 +99,21 @@ class DataFileTestCase(TestCase, ChangeLoggedFilterSetTests):
             DataFile(
                 source=data_sources[0],
                 path='dir1/file1.txt',
-                last_updated=datetime(2023, 1, 1, 0, 0, 0, tzinfo=UTC),
+                last_updated=datetime(2023, 1, 1, 0, 0, 0, tzinfo=timezone.utc),
                 size=1000,
                 hash='442da078f0111cbdf42f21903724f6597c692535f55bdfbbea758a1ae99ad9e1'
             ),
             DataFile(
                 source=data_sources[1],
                 path='dir1/file2.txt',
-                last_updated=datetime(2023, 1, 2, 0, 0, 0, tzinfo=UTC),
+                last_updated=datetime(2023, 1, 2, 0, 0, 0, tzinfo=timezone.utc),
                 size=2000,
                 hash='a78168c7c97115bafd96450ed03ea43acec495094c5caa28f0d02e20e3a76cc2'
             ),
             DataFile(
                 source=data_sources[2],
                 path='dir1/file3.txt',
-                last_updated=datetime(2023, 1, 3, 0, 0, 0, tzinfo=UTC),
+                last_updated=datetime(2023, 1, 3, 0, 0, 0, tzinfo=timezone.utc),
                 size=3000,
                 hash='12b8827a14c4d5a2f30b6c6e2b7983063988612391c6cbe8ee7493b59054827a'
             ),
@@ -238,59 +237,9 @@ class ObjectChangeTestCase(TestCase, BaseFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
 
     def test_changed_object_type(self):
-        params = {'changed_object_type': ['dcim.site']}
+        params = {'changed_object_type': 'dcim.site'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
-        params = {'changed_object_type_id': [ContentType.objects.get_by_natural_key('dcim', 'site').pk]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
-
-
-class JobTestCase(TestCase, BaseFilterSetTests):
-    queryset = Job.objects.all()
-    filterset = JobFilterSet
-    ignore_fields = ('data', 'error', 'log_entries')
-
-    @classmethod
-    def setUpTestData(cls):
-        users = (
-            User(username='user1'),
-            User(username='user2'),
-            User(username='user3'),
-        )
-        User.objects.bulk_create(users)
-
-        jobs = (
-            Job(
-                name='Job 1', job_id=uuid.uuid4(), user=users[0],
-                notifications=JobNotificationChoices.NOTIFICATION_ALWAYS,
-            ),
-            Job(
-                name='Job 2', job_id=uuid.uuid4(), user=users[0],
-                notifications=JobNotificationChoices.NOTIFICATION_ALWAYS,
-            ),
-            Job(
-                name='Job 3', job_id=uuid.uuid4(), user=users[1],
-                notifications=JobNotificationChoices.NOTIFICATION_ON_FAILURE,
-            ),
-            Job(
-                name='Job 4', job_id=uuid.uuid4(), user=users[2],
-                notifications=JobNotificationChoices.NOTIFICATION_NEVER,
-            ),
-        )
-        Job.objects.bulk_create(jobs)
-
-    def test_user(self):
-        """Filter Jobs by user (ID and username)."""
-        params = {'user_id': User.objects.filter(username__in=['user1', 'user2']).values_list('pk', flat=True)}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
-        params = {'user': ['user1', 'user2']}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
-
-    def test_notifications(self):
-        """Filter Jobs by notification policy."""
-        params = {'notifications': [
-            JobNotificationChoices.NOTIFICATION_ALWAYS,
-            JobNotificationChoices.NOTIFICATION_ON_FAILURE,
-        ]}
+        params = {'changed_object_type_id': [ContentType.objects.get(app_label='dcim', model='site').pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
 
 

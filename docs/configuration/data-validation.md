@@ -8,7 +8,7 @@ This is a mapping of models to [custom validators](../customization/custom-valid
 
 ```python
 CUSTOM_VALIDATORS = {
-    "dcim.Site": [
+    "dcim.site": [
         {
             "name": {
                 "min_length": 5,
@@ -17,14 +17,11 @@ CUSTOM_VALIDATORS = {
         },
         "my_plugin.validators.Validator1"
     ],
-    "dcim.Device": [
+    "dcim.device": [
         "my_plugin.validators.Validator1"
     ]
 }
 ```
-
-!!! info "Case-Insensitive Model Names"
-    Model identifiers are case-insensitive. Both `dcim.site` and `dcim.Site` are valid and equivalent.
 
 ---
 
@@ -55,9 +52,6 @@ FIELD_CHOICES = {
     )
 }
 ```
-
-!!! info "Case-Insensitive Field Identifiers"
-    Field identifiers are case-insensitive. Both `dcim.Site.status` and `dcim.site.status` are valid and equivalent.
 
 The following model fields support configurable choices:
 
@@ -104,7 +98,7 @@ This is a mapping of models to [custom validators](../customization/custom-valid
 
 ```python
 PROTECTION_RULES = {
-    "dcim.Site": [
+    "dcim.site": [
         {
             "status": {
                 "eq": "decommissioning"
@@ -114,6 +108,3 @@ PROTECTION_RULES = {
     ]
 }
 ```
-
-!!! info "Case-Insensitive Model Names"
-    Model identifiers are case-insensitive. Both `dcim.site` and `dcim.Site` are valid and equivalent.

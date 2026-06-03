@@ -20,11 +20,6 @@ export function getPlugins(element: HTMLSelectElement): object {
     };
   }
 
-  // Enable drag-and-drop reordering of items on multi-select fields
-  if (element.hasAttribute('multiple')) {
-    plugins.drag_drop = {};
-  }
-
   return {
     plugins: plugins,
   };

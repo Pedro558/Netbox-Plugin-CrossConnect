@@ -1,24 +1,24 @@
 import django_tables2 as tables
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
+from django_tables2.utils import Accessor
 
 from dcim.models import Interface
-from dcim.tables.template_code import INTERFACE_LINKTERMINATION, LINKTERMINATION
 from ipam.models import *
-from netbox.tables import NetBoxTable, OrganizationalModelTable, PrimaryModelTable, columns
-from tenancy.tables import TenancyColumnsMixin
+from netbox.tables import NetBoxTable, columns
+from tenancy.tables import TenancyColumnsMixin, TenantColumn
 from virtualization.models import VMInterface
-
 from .template_code import *
 
 __all__ = (
+    'InterfaceVLANTable',
     'VLANDevicesTable',
     'VLANGroupTable',
     'VLANMembersTable',
     'VLANTable',
+    'VLANVirtualMachinesTable',
     'VLANTranslationPolicyTable',
     'VLANTranslationRuleTable',
-    'VLANVirtualMachinesTable',
 )
 
 AVAILABLE_LABEL = mark_safe('<span class="badge text-bg-success">Available</span>')
@@ -28,7 +28,7 @@ AVAILABLE_LABEL = mark_safe('<span class="badge text-bg-success">Available</span
 # VLAN groups
 #
 
-class VLANGroupTable(TenancyColumnsMixin, OrganizationalModelTable):
+class VLANGroupTable(TenancyColumnsMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -51,9 +51,6 @@ class VLANGroupTable(TenancyColumnsMixin, OrganizationalModelTable):
         url_params={'group_id': 'pk'},
         verbose_name=_('VLANs')
     )
-    total_vlan_ids = tables.Column(
-        verbose_name=_('Total VLAN IDs'),
-    )
     utilization = columns.UtilizationColumn(
         orderable=False,
         verbose_name=_('Utilization')
@@ -65,12 +62,11 @@ class VLANGroupTable(TenancyColumnsMixin, OrganizationalModelTable):
         extra_buttons=VLANGROUP_BUTTONS
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = VLANGroup
         fields = (
-            'pk', 'id', 'name', 'slug', 'description', 'scope_type', 'scope', 'vid_ranges_list', 'vlan_count',
-            'total_vlan_ids', 'tenant', 'tenant_group', 'comments', 'tags', 'created', 'last_updated', 'actions',
-            'utilization',
+            'pk', 'id', 'name', 'scope_type', 'scope', 'vid_ranges_list', 'vlan_count', 'slug', 'description',
+            'tenant', 'tenant_group', 'tags', 'created', 'last_updated', 'actions', 'utilization',
         )
         default_columns = (
             'pk', 'name', 'scope_type', 'scope', 'vlan_count', 'utilization', 'tenant', 'description'
@@ -81,7 +77,7 @@ class VLANGroupTable(TenancyColumnsMixin, OrganizationalModelTable):
 # VLANs
 #
 
-class VLANTable(TenancyColumnsMixin, PrimaryModelTable):
+class VLANTable(TenancyColumnsMixin, NetBoxTable):
     vid = tables.TemplateColumn(
         template_code=VLAN_LINK,
         verbose_name=_('VID')
@@ -124,11 +120,14 @@ class VLANTable(TenancyColumnsMixin, PrimaryModelTable):
         orderable=False,
         verbose_name=_('Prefixes')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='ipam:vlan_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = VLAN
         fields = (
             'pk', 'id', 'vid', 'name', 'site', 'group', 'prefixes', 'tenant', 'tenant_group', 'status', 'role',
@@ -163,26 +162,11 @@ class VLANDevicesTable(VLANMembersTable):
     actions = columns.ActionsColumn(
         actions=('edit',)
     )
-    link_peer = columns.TemplateColumn(
-        accessor='link_peers',
-        template_code=LINKTERMINATION,
-        orderable=False,
-        verbose_name=_('Link Peers'),
-    )
-
-    # Override PathEndpointTable.connection to accommodate virtual circuits
-    connection = columns.TemplateColumn(
-        accessor='_path__destinations',
-        template_code=INTERFACE_LINKTERMINATION,
-        orderable=False,
-        verbose_name=_('Connection'),
-    )
 
     class Meta(NetBoxTable.Meta):
         model = Interface
-        fields = ('device', 'name', 'link_peer', 'connection', 'tagged', 'actions')
-        default_columns = ('device', 'name', 'connection', 'tagged', 'actions')
-        exclude = ('id',)
+        fields = ('device', 'name', 'tagged', 'actions')
+        exclude = ('id', )
 
 
 class VLANVirtualMachinesTable(VLANMembersTable):
@@ -200,11 +184,52 @@ class VLANVirtualMachinesTable(VLANMembersTable):
         exclude = ('id', )
 
 
+class InterfaceVLANTable(NetBoxTable):
+    """
+    List VLANs assigned to a specific Interface.
+    """
+    vid = tables.Column(
+        linkify=True,
+        verbose_name=_('VID')
+    )
+    tagged = columns.BooleanColumn(
+        verbose_name=_('Tagged'),
+        false_mark=None
+    )
+    site = tables.Column(
+        verbose_name=_('Site'),
+        linkify=True
+    )
+    group = tables.Column(
+        accessor=Accessor('group__name'),
+        verbose_name=_('Group')
+    )
+    tenant = TenantColumn(
+        verbose_name=_('Tenant'),
+    )
+    status = columns.ChoiceFieldColumn(
+        verbose_name=_('Status'),
+    )
+    role = tables.Column(
+        verbose_name=_('Role'),
+        linkify=True
+    )
+
+    class Meta(NetBoxTable.Meta):
+        model = VLAN
+        fields = ('vid', 'tagged', 'site', 'group', 'name', 'tenant', 'status', 'role', 'description')
+        exclude = ('id', )
+
+    def __init__(self, interface, *args, **kwargs):
+        self.interface = interface
+        super().__init__(*args, **kwargs)
+
+
 #
 # VLAN Translation
 #
 
-class VLANTranslationPolicyTable(PrimaryModelTable):
+class VLANTranslationPolicyTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -221,7 +246,7 @@ class VLANTranslationPolicyTable(PrimaryModelTable):
         url_name='ipam:vlantranslationpolicy_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = VLANTranslationPolicy
         fields = (
             'pk', 'id', 'name', 'rule_count', 'description', 'tags', 'created', 'last_updated',
@@ -251,6 +276,6 @@ class VLANTranslationRuleTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = VLANTranslationRule
         fields = (
-            'pk', 'id', 'policy', 'local_vid', 'remote_vid', 'description', 'tags', 'created', 'last_updated',
+            'pk', 'id', 'name', 'policy', 'local_vid', 'remote_vid', 'description', 'tags', 'created', 'last_updated',
         )
         default_columns = ('pk', 'policy', 'local_vid', 'remote_vid', 'description')

@@ -1,78 +1,17 @@
-import logging
-
-from django.core.files.storage import storages
-from django.db import IntegrityError
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext as _
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
 from core.api.serializers_.jobs import JobSerializer
-from core.choices import JobNotificationChoices, ManagedFileRootPathChoices
-from extras.models import Script, ScriptModule
-from extras.utils import validate_script_content
+from extras.models import Script
 from netbox.api.serializers import ValidatedModelSerializer
 from utilities.datetime import local_now
-
-logger = logging.getLogger(__name__)
 
 __all__ = (
     'ScriptDetailSerializer',
     'ScriptInputSerializer',
-    'ScriptModuleSerializer',
     'ScriptSerializer',
 )
-
-
-class ScriptModuleSerializer(ValidatedModelSerializer):
-    file = serializers.FileField(write_only=True)
-    file_path = serializers.CharField(read_only=True)
-
-    class Meta:
-        model = ScriptModule
-        fields = ['id', 'display', 'file_path', 'file', 'created', 'last_updated']
-        brief_fields = ('id', 'display')
-
-    def validate(self, data):
-        # ScriptModule.save() sets file_root; inject it here so full_clean() succeeds.
-        # Pop 'file' before model instantiation — ScriptModule has no such field.
-        file = data.pop('file', None)
-        data['file_root'] = ManagedFileRootPathChoices.SCRIPTS
-        data = super().validate(data)
-        data.pop('file_root', None)
-        if file is not None:
-            # Validate that the uploaded script can be loaded as a Python module
-            content = file.read()
-            file.seek(0)
-            try:
-                validate_script_content(content, file.name)
-            except Exception as e:
-                raise serializers.ValidationError(
-                    _("Error loading script: {error}").format(error=e)
-                )
-            data['file'] = file
-        return data
-
-    def create(self, validated_data):
-        file = validated_data.pop('file')
-        storage = storages.create_storage(storages.backends["scripts"])
-        validated_data['file_path'] = storage.save(file.name, file)
-        created = False
-        try:
-            instance = super().create(validated_data)
-            created = True
-            return instance
-        except IntegrityError as e:
-            if 'file_path' in str(e):
-                raise serializers.ValidationError(
-                    _("A script module with this file name already exists.")
-                )
-            raise
-        finally:
-            if not created and (file_path := validated_data.get('file_path')):
-                try:
-                    storage.delete(file_path)
-                except Exception:
-                    logger.warning(f"Failed to delete orphaned script file '{file_path}' from storage.")
 
 
 class ScriptSerializer(ValidatedModelSerializer):
@@ -93,7 +32,8 @@ class ScriptSerializer(ValidatedModelSerializer):
             return {
                 k: v.__class__.__name__ for k, v in obj.python_class()._get_vars().items()
             }
-        return {}
+        else:
+            return {}
 
     @extend_schema_field(serializers.CharField())
     def get_display(self, obj):
@@ -103,7 +43,8 @@ class ScriptSerializer(ValidatedModelSerializer):
     def get_description(self, obj):
         if obj.python_class:
             return obj.python_class().description
-        return None
+        else:
+            return None
 
 
 class ScriptDetailSerializer(ScriptSerializer):
@@ -124,19 +65,6 @@ class ScriptInputSerializer(serializers.Serializer):
     commit = serializers.BooleanField()
     schedule_at = serializers.DateTimeField(required=False, allow_null=True)
     interval = serializers.IntegerField(required=False, allow_null=True)
-    notifications = serializers.ChoiceField(
-        choices=JobNotificationChoices,
-        required=False,
-        default=JobNotificationChoices.NOTIFICATION_ALWAYS,
-    )
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # Default to script's Meta.notifications_default if set
-        script = self.context.get('script')
-        if script and script.python_class:
-            self.fields['notifications'].default = script.python_class.notifications_default
 
     def validate_schedule_at(self, value):
         """

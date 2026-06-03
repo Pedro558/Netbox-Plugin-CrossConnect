@@ -2,7 +2,7 @@ import json
 from collections import defaultdict
 from functools import cached_property
 
-from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
+from django.contrib.contenttypes.fields import GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.core.validators import ValidationError
 from django.db import models
@@ -15,7 +15,6 @@ from core.choices import JobStatusChoices, ObjectChangeActionChoices
 from core.models import ObjectType
 from extras.choices import *
 from extras.constants import CUSTOMFIELD_EMPTY_VALUES
-from extras.managers import NetBoxTaggableManager
 from extras.utils import is_taggable
 from netbox.config import get_config
 from netbox.constants import CORE_APPS
@@ -25,7 +24,6 @@ from netbox.registry import registry
 from netbox.signals import post_clean
 from netbox.utils import register_model_feature
 from utilities.json import CustomFieldJSONEncoder
-from utilities.permissions import ModelAction, register_model_actions
 from utilities.serialization import serialize_object
 
 __all__ = (
@@ -123,11 +121,9 @@ class ChangeLoggingMixin(DeleteMixin, models.Model):
         if hasattr(self, '_prechange_snapshot'):
             objectchange.prechange_data = self._prechange_snapshot
         if action in (ObjectChangeActionChoices.ACTION_CREATE, ObjectChangeActionChoices.ACTION_UPDATE):
-            self._postchange_snapshot = self.serialize_object(exclude=exclude)
-            objectchange.postchange_data = self._postchange_snapshot
+            objectchange.postchange_data = self.serialize_object(exclude=exclude)
 
         return objectchange
-    to_objectchange.alters_data = True
 
 
 class CloningMixin(models.Model):
@@ -162,13 +158,6 @@ class CloningMixin(models.Model):
                 attrs[field_name] = json.dumps(field_value)
             elif field_value not in (None, ''):
                 attrs[field_name] = field_value
-
-        # Handle GenericForeignKeys. If the CT and ID fields are being cloned, also
-        # include the name of the GFK attribute itself, as this is what forms expect.
-        for field in self._meta.private_fields:
-            if isinstance(field, GenericForeignKey):
-                if field.ct_field in attrs and field.fk_field in attrs:
-                    attrs[field.name] = attrs[field.fk_field]
 
         # Include tags (if applicable)
         if is_taggable(self):
@@ -248,7 +237,7 @@ class CustomFieldsMixin(models.Model):
             # Skip hidden fields if 'omit_hidden' is True
             if omit_hidden and field.ui_visible == CustomFieldUIVisibleChoices.HIDDEN:
                 continue
-            if omit_hidden and field.ui_visible == CustomFieldUIVisibleChoices.IF_SET and not value:
+            elif omit_hidden and field.ui_visible == CustomFieldUIVisibleChoices.IF_SET and not value:
                 continue
 
             data[field] = field.deserialize(value)
@@ -299,13 +288,12 @@ class CustomFieldsMixin(models.Model):
             cf.name: cf for cf in CustomField.objects.get_for_model(self)
         }
 
-        # Remove any stale custom field data
-        self.custom_field_data = {
-            k: v for k, v in self.custom_field_data.items() if k in custom_fields.keys()
-        }
-
         # Validate all field values
         for field_name, value in self.custom_field_data.items():
+            if field_name not in custom_fields:
+                raise ValidationError(_("Unknown field name '{name}' in custom field data.").format(
+                    name=field_name
+                ))
             try:
                 custom_fields[field_name].validate(value)
             except ValidationError as e:
@@ -328,11 +316,9 @@ class CustomFieldsMixin(models.Model):
                 raise ValidationError(_("Missing required custom field '{name}'.").format(name=cf.name))
 
     def save(self, *args, **kwargs):
-        from extras.models import CustomField
-
-        # Populate default values for custom fields not already present in the object data
-        for cf in CustomField.objects.get_for_model(self):
-            if cf.name not in self.custom_field_data and cf.default is not None:
+        # Populate default values if omitted
+        for cf in self.custom_fields.filter(default__isnull=False):
+            if cf.name not in self.custom_field_data:
                 self.custom_field_data[cf.name] = cf.default
 
         super().save(*args, **kwargs)
@@ -407,7 +393,6 @@ class ContactsMixin(models.Model):
             inherited: If `True`, inherited contacts from parent objects are included.
         """
         from tenancy.models import ContactAssignment
-
         from . import NestedGroupModel
 
         filter = Q(
@@ -468,7 +453,7 @@ class JobsMixin(models.Model):
         """
         Return a list of the most recent jobs for this instance.
         """
-        return self.jobs.filter(status__in=JobStatusChoices.TERMINAL_STATE_CHOICES).order_by('-started').defer('data')
+        return self.jobs.filter(status__in=JobStatusChoices.TERMINAL_STATE_CHOICES).order_by('-created').defer('data')
 
 
 class JournalingMixin(models.Model):
@@ -489,12 +474,11 @@ class JournalingMixin(models.Model):
 class TagsMixin(models.Model):
     """
     Enables support for tag assignment. Assigned tags can be managed via the `tags` attribute,
-    which is a `NetBoxTaggableManager` instance.
+    which is a `TaggableManager` instance.
     """
     tags = TaggableManager(
         through='extras.TaggedItem',
         ordering=('weight', 'name'),
-        manager=NetBoxTaggableManager,
     )
 
     class Meta:
@@ -584,6 +568,7 @@ class SyncedDataMixin(models.Model):
             )
         else:
             AutoSyncRecord.objects.filter(
+                datafile=self.data_file,
                 object_type=object_type,
                 object_id=self.pk
             ).delete()
@@ -596,6 +581,7 @@ class SyncedDataMixin(models.Model):
         # Delete AutoSyncRecord
         object_type = ObjectType.objects.get_for_model(self)
         AutoSyncRecord.objects.filter(
+            datafile=self.data_file,
             object_type=object_type,
             object_id=self.pk
         ).delete()
@@ -614,7 +600,6 @@ class SyncedDataMixin(models.Model):
                 return DataFile.objects.get(source=self.data_source, path=self.data_path)
             except DataFile.DoesNotExist:
                 pass
-        return None
 
     def sync(self, save=False):
         """
@@ -723,10 +708,10 @@ def register_models(*models):
     for model in models:
         app_label, model_name = model._meta.label_lower.split('.')
 
-        # TODO: Remove in NetBox v4.7
-        # Register public models (access the underlying dict directly to avoid triggering the deprecation warning)
+        # TODO: Remove in NetBox v4.5
+        # Register public models
         if not getattr(model, '_netbox_private', False):
-            dict.__getitem__(registry, 'models')[app_label].add(model_name)
+            registry['models'][app_label].add(model_name)
 
         # Register applicable feature views for the model
         if issubclass(model, ContactsMixin):
@@ -753,12 +738,3 @@ def register_models(*models):
             register_model_view(model, 'sync', kwargs={'model': model})(
                 'netbox.views.generic.ObjectSyncDataView'
             )
-
-        # Auto-register custom permission actions declared in Meta.permissions
-        if meta_permissions := getattr(model._meta, 'permissions', None):
-            actions = [
-                ModelAction(codename, help_text=_(name))
-                for codename, name in meta_permissions
-            ]
-            if actions:
-                register_model_actions(model, actions)

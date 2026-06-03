@@ -1,12 +1,10 @@
 from django.utils.translation import gettext_lazy as _
-
 from utilities.forms.fields import ExpandableNameField
-
 from .model_forms import VirtualDiskForm, VMInterfaceForm
 
 __all__ = (
-    'VMInterfaceCreateForm',
     'VirtualDiskCreateForm',
+    'VMInterfaceCreateForm',
 )
 
 

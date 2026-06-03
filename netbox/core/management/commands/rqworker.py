@@ -4,6 +4,7 @@ from django_rq.management.commands.rqworker import Command as _Command
 
 from netbox.registry import registry
 
+
 DEFAULT_QUEUES = ('high', 'default', 'low')
 
 logger = logging.getLogger('netbox.rqworker')

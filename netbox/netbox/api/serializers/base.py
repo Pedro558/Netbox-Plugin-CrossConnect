@@ -1,11 +1,11 @@
 from functools import cached_property
 
-from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
+from rest_framework.utils.serializer_helpers import BindingDict
+from drf_spectacular.utils import extend_schema_field
+from drf_spectacular.types import OpenApiTypes
 
 from utilities.api import get_related_object_by_attrs
-
 from .fields import NetBoxAPIHyperlinkedIdentityField, NetBoxURLHyperlinkedIdentityField
 
 __all__ = (
@@ -19,18 +19,16 @@ class BaseModelSerializer(serializers.ModelSerializer):
     display_url = NetBoxURLHyperlinkedIdentityField()
     display = serializers.SerializerMethodField(read_only=True)
 
-    def __init__(self, *args, nested=False, fields=None, omit=None, **kwargs):
+    def __init__(self, *args, nested=False, fields=None, **kwargs):
         """
         Extends the base __init__() method to support dynamic fields.
 
         :param nested: Set to True if this serializer is being employed within a parent serializer
         :param fields: An iterable of fields to include when rendering the serialized object, If nested is
             True but no fields are specified, Meta.brief_fields will be used.
-        :param omit: An iterable of fields to omit from the serialized object
         """
         self.nested = nested
-        self._include_fields = fields or []
-        self._omit_fields = omit or []
+        self._requested_fields = fields
 
         # Disable validators for nested objects (which already exist)
         if self.nested:
@@ -38,8 +36,8 @@ class BaseModelSerializer(serializers.ModelSerializer):
 
         # If this serializer is nested but no fields have been specified,
         # default to using Meta.brief_fields (if set)
-        if self.nested and not fields and not omit:
-            self._include_fields = getattr(self.Meta, 'brief_fields', None)
+        if self.nested and not fields:
+            self._requested_fields = getattr(self.Meta, 'brief_fields', None)
 
         super().__init__(*args, **kwargs)
 
@@ -56,19 +54,16 @@ class BaseModelSerializer(serializers.ModelSerializer):
     @cached_property
     def fields(self):
         """
-        Override the fields property to return only specifically requested fields if needed.
+        Override the fields property to check for requested fields. If defined,
+        return only the applicable fields.
         """
-        fields = super().fields
+        if not self._requested_fields:
+            return super().fields
 
-        # Include only requested fields
-        if self._include_fields:
-            for field_name in set(fields) - set(self._include_fields):
-                fields.pop(field_name, None)
-
-        # Remove omitted fields
-        for field_name in set(self._omit_fields):
-            fields.pop(field_name, None)
-
+        fields = BindingDict(self)
+        for key, value in self.get_fields().items():
+            if key in self._requested_fields:
+                fields[key] = value
         return fields
 
     @extend_schema_field(OpenApiTypes.STR)
@@ -95,6 +90,9 @@ class ValidatedModelSerializer(BaseModelSerializer):
 
         attrs = data.copy()
 
+        # Remove custom field data (if any) prior to model validation
+        attrs.pop('custom_fields', None)
+
         # Skip ManyToManyFields
         opts = self.Meta.model._meta
         m2m_values = {}
@@ -110,11 +108,6 @@ class ValidatedModelSerializer(BaseModelSerializer):
             for k, v in attrs.items():
                 setattr(instance, k, v)
         instance._m2m_values = m2m_values
-        # Skip uniqueness validation of individual fields inside `full_clean()` (this is handled by the serializer)
-        instance.full_clean(validate_unique=False)
-
-        # Preserve any normalization performed by model.clean() (e.g. stale custom field pruning)
-        if 'custom_field_data' in attrs:
-            data['custom_field_data'] = instance.custom_field_data
+        instance.full_clean()
 
         return data

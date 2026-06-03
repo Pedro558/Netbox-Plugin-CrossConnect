@@ -1,6 +1,6 @@
 from netbox.api.routers import NetBoxRouter
-
 from . import views
+
 
 router = NetBoxRouter()
 router.APIRootView = views.VirtualizationRootView
@@ -9,9 +9,6 @@ router.APIRootView = views.VirtualizationRootView
 router.register('cluster-types', views.ClusterTypeViewSet)
 router.register('cluster-groups', views.ClusterGroupViewSet)
 router.register('clusters', views.ClusterViewSet)
-
-# Virtual machine types
-router.register('virtual-machine-types', views.VirtualMachineTypeViewSet)
 
 # VirtualMachines
 router.register('virtual-machines', views.VirtualMachineViewSet)

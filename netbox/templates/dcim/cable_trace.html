@@ -11,13 +11,8 @@
         Cable Trace for {{ object_type }} {{ object }}
       {% endblocktrans %}
     </h2>
-    {% if cross_connect %}
-      <p class="text-muted mb-3">
-        {% trans "Cross Connect" %}: {{ cross_connect }}
-      </p>
-    {% endif %}
 
-    <div class="row" style="gap: 1px;">
+    <div class="row">
 
         {# Cable trace SVG & options #}
         <div class="col col-md-5">

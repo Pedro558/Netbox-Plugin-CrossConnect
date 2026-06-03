@@ -5,10 +5,10 @@ from django.utils.translation import gettext_lazy as _
 from netbox.choices import ButtonColorChoices
 from utilities.choices import ChoiceSet
 
+
 #
 # CustomFields
 #
-
 
 class CustomFieldTypeChoices(ChoiceSet):
 
@@ -92,39 +92,6 @@ class CustomFieldChoiceSetBaseChoices(ChoiceSet):
         (IATA, 'IATA (Airport codes)'),
         (ISO_3166, 'ISO 3166 (Country codes)'),
         (UN_LOCODE, 'UN/LOCODE (Location codes)'),
-    )
-
-
-class CustomFieldChoiceColorChoices(ChoiceSet):
-
-    BLUE = 'blue'
-    INDIGO = 'indigo'
-    PURPLE = 'purple'
-    PINK = 'pink'
-    RED = 'red'
-    ORANGE = 'orange'
-    YELLOW = 'yellow'
-    GREEN = 'green'
-    TEAL = 'teal'
-    CYAN = 'cyan'
-    GRAY = 'gray'
-    BLACK = 'black'
-    WHITE = 'white'
-
-    CHOICES = (
-        (BLUE, _('Blue'), BLUE),
-        (INDIGO, _('Indigo'), INDIGO),
-        (PURPLE, _('Purple'), PURPLE),
-        (PINK, _('Pink'), PINK),
-        (RED, _('Red'), RED),
-        (ORANGE, _('Orange'), ORANGE),
-        (YELLOW, _('Yellow'), YELLOW),
-        (GREEN, _('Green'), GREEN),
-        (TEAL, _('Teal'), TEAL),
-        (CYAN, _('Cyan'), CYAN),
-        (GRAY, _('Gray'), GRAY),
-        (BLACK, _('Black'), BLACK),
-        (WHITE, _('White'), WHITE),
     )
 
 

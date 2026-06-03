@@ -3,7 +3,7 @@ from utilities.prefetch import get_prefetchable_fields
 from utilities.testing.base import TestCase
 
 
-class GetPrefetchableFieldsTestCase(TestCase):
+class GetPrefetchableFieldsTest(TestCase):
     """
     Verify the operation of get_prefetchable_fields()
     """

@@ -47,7 +47,7 @@ If a new Django release is adopted or other major dependencies (Python, PostgreS
 Start the documentation server and navigate to the current version of the installation docs:
 
 ```no-highlight
-zensical serve
+mkdocs serve
 ```
 
 Follow these instructions to perform a new installation of NetBox in a temporary environment. This process must not be automated: The goal of this step is to catch any errors or omissions in the documentation and ensure that it is kept up to date for each release. Make any necessary changes to the documentation before proceeding with the release.
@@ -144,7 +144,7 @@ Then, compile these portable (`.po`) files for use in the application:
 
 * Update the version number and published date in `netbox/release.yaml`. Add or remove the designation (e.g. `beta1`) if applicable.
 * Copy the version number from `release.yaml` to `pyproject.toml` in the project root.
-* Update the example version numbers in the feature request, bug report, and performance templates under `.github/ISSUE_TEMPLATES/`.
+* Update the example version numbers in the feature request and bug report templates under `.github/ISSUE_TEMPLATES/`.
 * Add a section for this release at the top of the changelog page for the minor version (e.g. `docs/release-notes/version-4.2.md`) listing all relevant changes made in this release.
 
 !!! tip
@@ -167,14 +167,6 @@ Update the static OpenAPI schema definition at `contrib/openapi.json` with the m
 ```nohighlight
 ./manage.py spectacular --format openapi-json > ../contrib/openapi.json
 ```
-
-### Update Development Dependencies
-
-Keep development tooling versions consistent across the project. If you upgrade a dev-only dependency, update all places where it’s pinned so local tooling and CI run the same versions.
-
-* Ruff:
-  * `.pre-commit-config.yaml`
-  * `.github/workflows/ci.yml`
 
 ### Submit a Pull Request
 

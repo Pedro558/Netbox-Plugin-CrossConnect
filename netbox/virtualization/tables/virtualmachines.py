@@ -2,72 +2,32 @@ import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
 
 from dcim.tables.devices import BaseInterfaceTable
-from netbox.tables import NetBoxTable, PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 from tenancy.tables import ContactsColumnMixin, TenancyColumnsMixin
-from utilities.templatetags.helpers import humanize_disk_capacity, humanize_ram_capacity
-
-from ..models import VirtualDisk, VirtualMachine, VirtualMachineType, VMInterface
+from utilities.templatetags.helpers import humanize_disk_megabytes
+from virtualization.models import VirtualDisk, VirtualMachine, VMInterface
 from .template_code import *
 
 __all__ = (
-    'VMInterfaceTable',
     'VirtualDiskTable',
     'VirtualMachineTable',
-    'VirtualMachineTypeTable',
-    'VirtualMachineVMInterfaceTable',
     'VirtualMachineVirtualDiskTable',
+    'VirtualMachineVMInterfaceTable',
+    'VMInterfaceTable',
 )
 
-#
-# Virtual machine types
-#
-
-
-class VirtualMachineTypeTable(PrimaryModelTable):
-    name = tables.Column(
-        verbose_name=_('Name'),
-        linkify=True,
-    )
-    default_platform = tables.Column(
-        verbose_name=_('Default platform'),
-        linkify=True,
-    )
-    virtual_machine_count = tables.Column(
-        verbose_name=_('VM count')
-    )
-    tags = columns.TagColumn(
-        url_name='virtualization:virtualmachinetype_list'
-    )
-
-    class Meta(PrimaryModelTable.Meta):
-        model = VirtualMachineType
-        fields = (
-            'pk', 'id', 'name', 'slug', 'default_platform', 'default_vcpus', 'default_memory', 'virtual_machine_count',
-            'description', 'comments', 'tags', 'created', 'last_updated',
-        )
-        default_columns = (
-            'pk', 'name', 'default_platform', 'default_vcpus', 'default_memory', 'virtual_machine_count', 'description',
-        )
 
 #
 # Virtual machines
 #
 
-
-class VirtualMachineTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class VirtualMachineTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
     )
-    virtual_machine_type = tables.Column(
-        verbose_name=_('Type'),
-        linkify=True,
-    )
     status = columns.ChoiceFieldColumn(
         verbose_name=_('Status'),
-    )
-    start_on_boot = columns.ChoiceFieldColumn(
-        verbose_name=_('Start on boot'),
     )
     site = tables.Column(
         verbose_name=_('Site'),
@@ -87,6 +47,9 @@ class VirtualMachineTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModel
     platform = tables.Column(
         linkify=True,
         verbose_name=_('Platform')
+    )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
     )
     primary_ip4 = tables.Column(
         linkify=True,
@@ -118,23 +81,19 @@ class VirtualMachineTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModel
         verbose_name=_('Disk'),
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = VirtualMachine
         fields = (
-            'pk', 'id', 'name', 'virtual_machine_type', 'role', 'status', 'start_on_boot', 'site', 'cluster', 'device',
-            'platform', 'primary_ip4', 'primary_ip6', 'primary_ip', 'vcpus', 'memory', 'disk', 'description', 'serial',
-            'tenant_group', 'tenant', 'contacts', 'comments', 'tags', 'config_template', 'created', 'last_updated',
+            'pk', 'id', 'name', 'status', 'site', 'cluster', 'device', 'role', 'tenant', 'tenant_group', 'vcpus',
+            'memory', 'disk', 'primary_ip4', 'primary_ip6', 'primary_ip', 'description', 'comments', 'config_template',
+            'serial', 'contacts', 'tags', 'created', 'last_updated',
         )
         default_columns = (
-            'pk', 'name', 'virtual_machine_type', 'role', 'status', 'site', 'cluster', 'tenant',
-            'vcpus', 'memory', 'disk', 'primary_ip',
+            'pk', 'name', 'status', 'site', 'cluster', 'role', 'tenant', 'vcpus', 'memory', 'disk', 'primary_ip',
         )
 
-    def render_memory(self, value):
-        return humanize_ram_capacity(value)
-
     def render_disk(self, value):
-        return humanize_disk_capacity(value)
+        return humanize_disk_megabytes(value)
 
 
 #
@@ -224,7 +183,7 @@ class VirtualDiskTable(NetBoxTable):
         }
 
     def render_size(self, value):
-        return humanize_disk_capacity(value)
+        return humanize_disk_megabytes(value)
 
 
 class VirtualMachineVirtualDiskTable(VirtualDiskTable):

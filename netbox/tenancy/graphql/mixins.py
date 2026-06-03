@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List
 
 import strawberry
 
@@ -9,4 +9,4 @@ __all__ = (
 
 @strawberry.type
 class ContactAssignmentsMixin:
-    assignments: list[Annotated["ContactAssignmentType", strawberry.lazy('tenancy.graphql.types')]]  # noqa: F821
+    assignments: List[Annotated["ContactAssignmentType", strawberry.lazy('tenancy.graphql.types')]]  # noqa: F821

@@ -19,7 +19,6 @@ REVISION_BUTTONS = """
 class ConfigRevisionTable(NetBoxTable):
     is_active = columns.BooleanColumn(
         verbose_name=_('Is Active'),
-        accessor='active',
         false_mark=None
     )
     actions = columns.ActionsColumn(

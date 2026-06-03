@@ -1,13 +1,13 @@
 import datetime
 
 from django.contrib.contenttypes.models import ContentType
+from django.test import override_settings
 from django.urls import reverse
 from netaddr import IPNetwork
 
-from core.choices import ObjectChangeActionChoices
-from core.models import ObjectChange, ObjectType
+from core.models import ObjectType
 from dcim.constants import InterfaceTypeChoices
-from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
+from dcim.models import Device, DeviceRole, DeviceType, Manufacturer, Site, Interface
 from ipam.choices import *
 from ipam.models import *
 from netbox.choices import CSVDelimiterChoices, ImportFormatChoices
@@ -84,12 +84,6 @@ class ASNTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         ]
         RIR.objects.bulk_create(rirs)
 
-        roles = (
-            Role(name='Role 1', slug='role-1'),
-            Role(name='Role 2', slug='role-2'),
-        )
-        Role.objects.bulk_create(roles)
-
         sites = (
             Site(name='Site 1', slug='site-1'),
             Site(name='Site 2', slug='site-2')
@@ -103,10 +97,10 @@ class ASNTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         Tenant.objects.bulk_create(tenants)
 
         asns = (
-            ASN(asn=65001, rir=rirs[0], role=roles[0], tenant=tenants[0]),
-            ASN(asn=65002, rir=rirs[1], role=roles[1], tenant=tenants[1]),
-            ASN(asn=4200000001, rir=rirs[0], role=roles[0], tenant=tenants[0]),
-            ASN(asn=4200000002, rir=rirs[1], role=roles[1], tenant=tenants[1]),
+            ASN(asn=65001, rir=rirs[0], tenant=tenants[0]),
+            ASN(asn=65002, rir=rirs[1], tenant=tenants[1]),
+            ASN(asn=4200000001, rir=rirs[0], tenant=tenants[0]),
+            ASN(asn=4200000002, rir=rirs[1], tenant=tenants[1]),
         )
         ASN.objects.bulk_create(asns)
 
@@ -120,7 +114,6 @@ class ASNTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         cls.form_data = {
             'asn': 65000,
             'rir': rirs[0].pk,
-            'role': roles[0].pk,
             'tenant': tenants[0].pk,
             'site': sites[0].pk,
             'description': 'A new ASN',
@@ -128,11 +121,11 @@ class ASNTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         }
 
         cls.csv_data = (
-            "asn,rir,role",
-            f"65003,RIR 1,{roles[0].name}",
-            f"65004,RIR 2,{roles[1].name}",
-            f"4200000003,RIR 1,{roles[0].name}",
-            f"4200000004,RIR 2,{roles[1].name}",
+            "asn,rir",
+            "65003,RIR 1",
+            "65004,RIR 2",
+            "4200000003,RIR 1",
+            "4200000004,RIR 2",
         )
 
         cls.csv_update_data = (
@@ -144,7 +137,6 @@ class ASNTestCase(ViewTestCases.PrimaryObjectViewTestCase):
 
         cls.bulk_edit_data = {
             'rir': rirs[1].pk,
-            'role': roles[1].pk,
             'description': 'Next description',
         }
 
@@ -338,8 +330,8 @@ class AggregateTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'description': 'New description',
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_aggregate_prefixes(self):
-        self.add_permissions('ipam.view_aggregate', 'ipam.view_prefix')
         rir = RIR.objects.first()
         aggregate = Aggregate.objects.create(prefix=IPNetwork('192.168.0.0/16'), rir=rir)
         prefixes = (
@@ -443,21 +435,13 @@ class PrefixTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'tags': [t.pk for t in tags],
         }
 
-        site = sites[0]
-        cls.csv_data = {
-            'default': (
-                "vrf,prefix,status,scope_type,scope_id",
-                f"VRF 1,10.4.0.0/16,active,dcim.site,{site.pk}",
-                f"VRF 1,10.5.0.0/16,active,dcim.site,{site.pk}",
-                f"VRF 1,10.6.0.0/16,active,dcim.site,{site.pk}",
-            ),
-            'scope_name': (
-                "vrf,prefix,status,scope_type,scope_name",
-                f"VRF 1,10.4.0.0/16,active,dcim.site,{site.name}",
-                f"VRF 1,10.5.0.0/16,active,dcim.site,{site.name}",
-                f"VRF 1,10.6.0.0/16,active,dcim.site,{site.name}",
-            ),
-        }
+        site = sites[0].pk
+        cls.csv_data = (
+            "vrf,prefix,status,scope_type,scope_id",
+            f"VRF 1,10.4.0.0/16,active,dcim.site,{site}",
+            f"VRF 1,10.5.0.0/16,active,dcim.site,{site}",
+            f"VRF 1,10.6.0.0/16,active,dcim.site,{site}",
+        )
 
         cls.csv_update_data = (
             "id,description,status",
@@ -475,107 +459,8 @@ class PrefixTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'description': 'New description',
         }
 
-    def test_bulk_add_ipv4_prefixes(self):
-        """Test bulk creating IPv4 prefixes using a pattern."""
-        self.add_permissions('ipam.view_prefix')
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(Prefix))
-
-        initial_count = Prefix.objects.count()
-        url = reverse('ipam:prefix_bulk_add')
-        data = {
-            'pattern': '10.0.[0-2].0/24',
-            'status': PrefixStatusChoices.STATUS_ACTIVE,
-        }
-        response = self.client.post(url, data)
-        self.assertHttpStatus(response, 302)
-        self.assertEqual(Prefix.objects.count(), initial_count + 3)
-
-        for i in range(3):
-            self.assertTrue(Prefix.objects.filter(prefix=IPNetwork(f'10.0.{i}.0/24')).exists())
-
-    def test_bulk_add_ipv6_prefixes(self):
-        """Test bulk creating IPv6 prefixes using a pattern."""
-        self.add_permissions('ipam.view_prefix')
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(Prefix))
-
-        initial_count = Prefix.objects.count()
-        url = reverse('ipam:prefix_bulk_add')
-        data = {
-            'pattern': 'fd00:db8:[0-3]::/48',
-            'status': PrefixStatusChoices.STATUS_ACTIVE,
-        }
-        response = self.client.post(url, data)
-        self.assertHttpStatus(response, 302)
-        self.assertEqual(Prefix.objects.count(), initial_count + 4)
-
-        for i in range(4):
-            self.assertTrue(Prefix.objects.filter(prefix=IPNetwork(f'fd00:db8:{i}::/48')).exists())
-
-    def test_bulk_add_ipv6_prefixes_uppercase_hex(self):
-        """Test bulk creating IPv6 prefixes using uppercase hex in the pattern."""
-        self.add_permissions('ipam.view_prefix')
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(Prefix))
-
-        initial_count = Prefix.objects.count()
-        url = reverse('ipam:prefix_bulk_add')
-        data = {
-            'pattern': 'fd00:0:0:[48-4F]00::/56',
-            'status': PrefixStatusChoices.STATUS_ACTIVE,
-        }
-        response = self.client.post(url, data)
-        self.assertHttpStatus(response, 302)
-        self.assertEqual(Prefix.objects.count(), initial_count + 8)
-
-        expected_hex = ['48', '49', '4a', '4b', '4c', '4d', '4e', '4f']
-        for h in expected_hex:
-            prefix_str = f'fd00:0:0:{h}00::/56'
-            self.assertTrue(
-                Prefix.objects.filter(prefix=IPNetwork(prefix_str)).exists(),
-                f'Expected prefix {prefix_str} was not created'
-            )
-
-    def test_bulk_add_prefixes_with_changelog_message(self):
-        self.add_permissions('ipam.view_prefix')
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(Prefix))
-
-        changelog_message = 'Bulk-created prefixes'
-        prefixes = [IPNetwork(f'198.18.{i}.0/24') for i in range(3)]
-        url = reverse('ipam:prefix_bulk_add')
-        data = {
-            'pattern': '198.18.[0-2].0/24',
-            'status': PrefixStatusChoices.STATUS_ACTIVE,
-            'changelog_message': changelog_message,
-        }
-
-        response = self.client.post(url, data)
-        self.assertHttpStatus(response, 302)
-
-        created_prefixes = list(Prefix.objects.filter(prefix__in=prefixes))
-        self.assertEqual(len(created_prefixes), len(prefixes))
-
-        objectchanges = ObjectChange.objects.filter(
-            action=ObjectChangeActionChoices.ACTION_CREATE,
-            changed_object_type=ContentType.objects.get_for_model(Prefix),
-            changed_object_id__in=[obj.pk for obj in created_prefixes],
-        )
-        self.assertEqual(objectchanges.count(), len(prefixes))
-        for objectchange in objectchanges:
-            self.assertEqual(objectchange.message, changelog_message)
-
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_prefix_prefixes(self):
-        self.add_permissions('ipam.view_prefix')
         prefixes = (
             Prefix(prefix=IPNetwork('192.168.0.0/16')),
             Prefix(prefix=IPNetwork('192.168.1.0/24')),
@@ -588,8 +473,8 @@ class PrefixTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('ipam:prefix_prefixes', kwargs={'pk': prefixes[0].pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_prefix_ipranges(self):
-        self.add_permissions('ipam.view_prefix', 'ipam.view_iprange')
         prefix = Prefix.objects.create(prefix=IPNetwork('192.168.0.0/16'))
         ip_ranges = (
             IPRange(start_address='192.168.0.1/24', end_address='192.168.0.100/24', size=99),
@@ -602,8 +487,8 @@ class PrefixTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('ipam:prefix_ipranges', kwargs={'pk': prefix.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_prefix_ipaddresses(self):
-        self.add_permissions('ipam.view_prefix', 'ipam.view_ipaddress', 'ipam.view_iprange')
         prefix = Prefix.objects.create(prefix=IPNetwork('192.168.0.0/16'))
         ip_addresses = (
             IPAddress(address=IPNetwork('192.168.0.1/16')),
@@ -616,33 +501,11 @@ class PrefixTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('ipam:prefix_ipaddresses', kwargs={'pk': prefix.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
-    def test_prefix_ipaddresses_with_single_address_range(self):
-        self.add_permissions('ipam.view_prefix', 'ipam.view_ipaddress', 'ipam.view_iprange')
-        # The IP Addresses tab annotates child IP addresses alongside any
-        # mark-populated child IP ranges. Make sure a single-address range
-        # (start_address == end_address) renders without errors and is shown
-        # in its range-like display form rather than as a plain IP address.
-        prefix = Prefix.objects.create(prefix=IPNetwork('192.168.0.0/16'))
-        IPAddress.objects.create(address=IPNetwork('192.168.0.1/16'))
-        IPRange.objects.create(
-            start_address=IPNetwork('192.168.0.50/16'),
-            end_address=IPNetwork('192.168.0.50/16'),
-            mark_populated=True,
-        )
-
-        url = reverse('ipam:prefix_ipaddresses', kwargs={'pk': prefix.pk})
-        response = self.client.get(url)
-        self.assertHttpStatus(response, 200)
-        # The single-address range is rendered with both endpoints, not as
-        # 192.168.0.50/16 (which would make it indistinguishable from an
-        # IPAddress row in this mixed-record view).
-        self.assertContains(response, '192.168.0.50-192.168.0.50/16')
-
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_prefix_import(self):
         """
         Custom import test for YAML-based imports (versus CSV)
         """
-        self.add_permissions('dcim.view_site', 'ipam.view_vlan')
         site = Site.objects.get(name='Site 1')
         IMPORT_DATA = f"""
 prefix: 10.1.1.0/24
@@ -669,37 +532,11 @@ scope_id: {site.pk}
         self.assertEqual(prefix.vlan.vid, 101)
         self.assertEqual(prefix.scope, site)
 
-    def test_prefix_import_with_scope_name(self):
-        """
-        Test YAML-based import using scope_name instead of scope_id.
-        """
-        self.add_permissions('dcim.view_site')
-        site = Site.objects.get(name='Site 1')
-        IMPORT_DATA = """
-prefix: 10.1.3.0/24
-status: active
-scope_type: dcim.site
-scope_name: Site 1
-"""
-        # Add all required permissions to the test user
-        self.add_permissions('ipam.view_prefix', 'ipam.add_prefix')
-
-        form_data = {
-            'data': IMPORT_DATA,
-            'format': 'yaml'
-        }
-        response = self.client.post(reverse('ipam:prefix_bulk_import'), data=form_data, follow=True)
-        self.assertHttpStatus(response, 200)
-
-        prefix = Prefix.objects.get(prefix='10.1.3.0/24')
-        self.assertEqual(prefix.status, PrefixStatusChoices.STATUS_ACTIVE)
-        self.assertEqual(prefix.scope, site)
-
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_prefix_import_with_vlan_group(self):
         """
         This test covers a unique import edge case where VLAN group is specified during the import.
         """
-        self.add_permissions('dcim.view_site', 'ipam.view_vlan', 'ipam.view_vlangroup')
         site = Site.objects.get(name='Site 1')
         IMPORT_DATA = f"""
 prefix: 10.1.2.0/24
@@ -726,82 +563,6 @@ vlan: 102
         self.assertEqual(prefix.status, PrefixStatusChoices.STATUS_ACTIVE)
         self.assertEqual(prefix.vlan.vid, 102)
         self.assertEqual(prefix.scope, site)
-
-    def test_prefix_import_with_vlan_site_multiple_vlans_same_vid(self):
-        """
-        Test import when multiple VLANs exist with the same vid but different sites.
-        Ref: #20560
-        """
-        self.add_permissions('dcim.view_site', 'ipam.view_vlan')
-        site1 = Site.objects.get(name='Site 1')
-        site2 = Site.objects.get(name='Site 2')
-
-        # Create VLANs with the same vid but different sites
-        vlan1 = VLAN.objects.create(vid=1, name='VLAN1-Site1', site=site1)
-        VLAN.objects.create(vid=1, name='VLAN1-Site2', site=site2)  # Create ambiguity
-
-        # Import prefix with vlan_site specified
-        IMPORT_DATA = f"""
-prefix: 10.11.0.0/22
-status: active
-scope_type: dcim.site
-scope_id: {site1.pk}
-vlan_site: {site1.name}
-vlan: 1
-description: LOC02-MGMT
-"""
-
-        # Add all required permissions to the test user
-        self.add_permissions('ipam.view_prefix', 'ipam.add_prefix')
-
-        form_data = {
-            'data': IMPORT_DATA,
-            'format': 'yaml'
-        }
-        response = self.client.post(reverse('ipam:prefix_bulk_import'), data=form_data, follow=True)
-        self.assertHttpStatus(response, 200)
-
-        # Verify the prefix was created with the correct VLAN
-        prefix = Prefix.objects.get(prefix='10.11.0.0/22')
-        self.assertEqual(prefix.vlan, vlan1)
-
-    def test_prefix_import_with_vlan_site_and_global_vlan(self):
-        """
-        Test import when a global VLAN (no site) and site-specific VLAN exist with same vid.
-        When vlan_site is specified, should prefer the site-specific VLAN.
-        Ref: #20560
-        """
-        self.add_permissions('dcim.view_site', 'ipam.view_vlan')
-        site1 = Site.objects.get(name='Site 1')
-
-        # Create a global VLAN (no site) and a site-specific VLAN with the same vid
-        VLAN.objects.create(vid=10, name='VLAN10-Global', site=None)  # Create ambiguity
-        vlan_site = VLAN.objects.create(vid=10, name='VLAN10-Site1', site=site1)
-
-        # Import prefix with vlan_site specified
-        IMPORT_DATA = f"""
-prefix: 10.12.0.0/22
-status: active
-scope_type: dcim.site
-scope_id: {site1.pk}
-vlan_site: {site1.name}
-vlan: 10
-description: Test Site-Specific VLAN
-"""
-
-        # Add all required permissions to the test user
-        self.add_permissions('ipam.view_prefix', 'ipam.add_prefix')
-
-        form_data = {
-            'data': IMPORT_DATA,
-            'format': 'yaml'
-        }
-        response = self.client.post(reverse('ipam:prefix_bulk_import'), data=form_data, follow=True)
-        self.assertHttpStatus(response, 200)
-
-        # Verify the prefix was created with the site-specific VLAN (not the global one)
-        prefix = Prefix.objects.get(prefix='10.12.0.0/22')
-        self.assertEqual(prefix.vlan, vlan_site)
 
 
 class IPRangeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -851,8 +612,6 @@ class IPRangeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             "VRF 1,10.1.0.1/16,10.1.9.254/16,active",
             "VRF 1,10.2.0.1/16,10.2.9.254/16,active",
             "VRF 1,10.3.0.1/16,10.3.9.254/16,active",
-            # Single-address range (start == end)
-            "VRF 1,10.4.0.1/16,10.4.0.1/16,active",
         )
 
         cls.csv_update_data = (
@@ -870,8 +629,8 @@ class IPRangeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'description': 'New description',
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_iprange_ipaddresses(self):
-        self.add_permissions('ipam.view_iprange', 'ipam.view_ipaddress')
         iprange = IPRange.objects.create(
             start_address=IPNetwork('192.168.0.1/24'),
             end_address=IPNetwork('192.168.0.100/24'),
@@ -887,28 +646,6 @@ class IPRangeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
 
         url = reverse('ipam:iprange_ipaddresses', kwargs={'pk': iprange.pk})
         self.assertHttpStatus(self.client.get(url), 200)
-
-    def test_create_single_address_range(self):
-        # Exercise the UI form path with start_address == end_address. The
-        # generic test_create_object_with_permission covers the multi-address
-        # case via cls.form_data; this test mirrors that flow for the single-
-        # address case so both paths stay covered.
-        self.add_permissions('ipam.add_iprange')
-        form_data = {
-            'start_address': '192.0.6.10/24',
-            'end_address': '192.0.6.10/24',
-            'status': IPRangeStatusChoices.STATUS_ACTIVE,
-        }
-        initial_count = IPRange.objects.count()
-
-        response = self.client.post(reverse('ipam:iprange_add'), data=form_data)
-        self.assertHttpStatus(response, 302)
-        self.assertEqual(IPRange.objects.count(), initial_count + 1)
-
-        iprange = IPRange.objects.order_by('pk').last()
-        self.assertEqual(str(iprange.start_address), '192.0.6.10/24')
-        self.assertEqual(str(iprange.end_address), '192.0.6.10/24')
-        self.assertEqual(iprange.size, 1)
 
 
 class IPAddressTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -984,39 +721,6 @@ class IPAddressTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'dns_name': 'example',
             'description': 'New description',
         }
-
-    def test_bulk_add_ipaddresses_with_changelog_message(self):
-        self.add_permissions('ipam.view_ipaddress', 'ipam.view_vrf')
-        obj_perm = ObjectPermission(name='Test permission', actions=['add'])
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(IPAddress))
-
-        vrf = VRF.objects.get(name='VRF 1')
-        changelog_message = 'Bulk-created IP addresses'
-        addresses = [IPNetwork(f'198.51.100.{i}/24') for i in range(10, 13)]
-        url = reverse('ipam:ipaddress_bulk_add')
-        data = {
-            'pattern': '198.51.100.[10-12]/24',
-            'vrf': vrf.pk,
-            'status': IPAddressStatusChoices.STATUS_ACTIVE,
-            'changelog_message': changelog_message,
-        }
-
-        response = self.client.post(url, data)
-        self.assertHttpStatus(response, 302)
-
-        created_addresses = list(IPAddress.objects.filter(address__in=addresses, vrf=vrf))
-        self.assertEqual(len(created_addresses), len(addresses))
-
-        objectchanges = ObjectChange.objects.filter(
-            action=ObjectChangeActionChoices.ACTION_CREATE,
-            changed_object_type=ContentType.objects.get_for_model(IPAddress),
-            changed_object_id__in=[obj.pk for obj in created_addresses],
-        )
-        self.assertEqual(objectchanges.count(), len(addresses))
-        for objectchange in objectchanges:
-            self.assertEqual(objectchange.message, changelog_message)
 
 
 class FHRPGroupTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -1104,20 +808,12 @@ class VLANGroupTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
             'tags': [t.pk for t in tags],
         }
 
-        cls.csv_data = {
-            'default': (
-                "name,slug,scope_type,scope_id,description",
-                "VLAN Group 4,vlan-group-4,,,Fourth VLAN group",
-                f"VLAN Group 5,vlan-group-5,dcim.site,{sites[0].pk},Fifth VLAN group",
-                f"VLAN Group 6,vlan-group-6,dcim.site,{sites[1].pk},Sixth VLAN group",
-            ),
-            'scope_name': (
-                "name,slug,scope_type,scope_name,description",
-                "VLAN Group 4,vlan-group-4,,,Fourth VLAN group",
-                f"VLAN Group 5,vlan-group-5,dcim.site,{sites[0].name},Fifth VLAN group",
-                f"VLAN Group 6,vlan-group-6,dcim.site,{sites[1].name},Sixth VLAN group",
-            ),
-        }
+        cls.csv_data = (
+            "name,slug,scope_type,scope_id,description",
+            "VLAN Group 4,vlan-group-4,,,Fourth VLAN group",
+            f"VLAN Group 5,vlan-group-5,dcim.site,{sites[0].pk},Fifth VLAN group",
+            f"VLAN Group 6,vlan-group-6,dcim.site,{sites[1].pk},Sixth VLAN group",
+        )
 
         cls.csv_update_data = (
             "id,name,description",
@@ -1424,8 +1120,8 @@ class ServiceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'description': 'New description',
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
     def test_unassigned_ip_addresses(self):
-        self.add_permissions('ipam.view_service', 'dcim.view_device', 'ipam.view_ipaddress')
         device = Device.objects.first()
         addr = IPAddress.objects.create(address='192.0.2.4/24')
         csv_data = (
@@ -1454,8 +1150,8 @@ class ServiceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         self.assertIn(addr.address, form_errors['__all__'][0])
         self.assertEqual(self._get_queryset().count(), initial_count)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
     def test_alternate_csv_import(self):
-        self.add_permissions('ipam.view_service', 'dcim.view_device', 'ipam.view_ipaddress')
         device = Device.objects.first()
         interface = device.interfaces.first()
         addr = IPAddress.objects.create(assigned_object=interface, address='192.0.2.3/24')
@@ -1484,13 +1180,9 @@ class ServiceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         self.assertHttpStatus(response, 302)
         self.assertEqual(self._get_queryset().count(), initial_count + len(csv_data) - 1)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_create_from_template(self):
-        self.add_permissions(
-            'ipam.view_service',
-            'ipam.add_service',
-            'dcim.view_device',
-            'ipam.view_servicetemplate',
-        )
+        self.add_permissions('ipam.add_service')
 
         device = Device.objects.first()
         service_template = ServiceTemplate.objects.create(

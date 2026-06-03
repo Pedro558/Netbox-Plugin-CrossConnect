@@ -1,28 +1,15 @@
-from django.utils.translation import gettext_lazy as _
-
-from extras.ui.panels import CustomFieldsPanel, TagsPanel
 from ipam.tables import RouteTargetTable
 from netbox.object_actions import AddObject, BulkDelete, BulkEdit, BulkExport, BulkImport
-from netbox.ui import actions, layout
-from netbox.ui.panels import (
-    CommentsPanel,
-    ContextTablePanel,
-    ObjectsTablePanel,
-    PluginContentPanel,
-    RelatedObjectsPanel,
-)
 from netbox.views import generic
 from utilities.query import count_related
 from utilities.views import GetRelatedModelsMixin, register_model_view
-
 from . import filtersets, forms, tables
 from .models import *
-from .ui import panels
+
 
 #
 # Tunnel groups
 #
-
 
 @register_model_view(TunnelGroup, 'list', path='', detail=False)
 class TunnelGroupListView(generic.ObjectListView):
@@ -37,17 +24,6 @@ class TunnelGroupListView(generic.ObjectListView):
 @register_model_view(TunnelGroup)
 class TunnelGroupView(GetRelatedModelsMixin, generic.ObjectView):
     queryset = TunnelGroup.objects.all()
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.TunnelGroupPanel(),
-            TagsPanel(),
-        ],
-        right_panels=[
-            RelatedObjectsPanel(),
-            CommentsPanel(),
-            CustomFieldsPanel(),
-        ],
-    )
 
     def get_extra_context(self, request, instance):
         return {
@@ -115,31 +91,6 @@ class TunnelListView(generic.ObjectListView):
 @register_model_view(Tunnel)
 class TunnelView(generic.ObjectView):
     queryset = Tunnel.objects.all()
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.TunnelPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            TagsPanel(),
-            CommentsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                'vpn.tunneltermination',
-                filters={'tunnel_id': lambda ctx: ctx['object'].pk},
-                exclude_columns=['tunnel'],
-                actions=[
-                    actions.AddObject(
-                        'vpn.tunneltermination',
-                        url_params={'tunnel': lambda ctx: ctx['object'].pk},
-                        label=_('Add a Termination'),
-                    ),
-                ],
-                title=_('Terminations'),
-            ),
-        ],
-    )
 
 
 @register_model_view(Tunnel, 'add', detail=False)
@@ -208,27 +159,6 @@ class TunnelTerminationListView(generic.ObjectListView):
 @register_model_view(TunnelTermination)
 class TunnelTerminationView(generic.ObjectView):
     queryset = TunnelTermination.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.TunnelTerminationPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            TagsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                'vpn.tunneltermination',
-                filters={
-                    'tunnel_id': lambda ctx: ctx['object'].tunnel.pk,
-                    'id__n': lambda ctx: ctx['object'].pk,
-                },
-                exclude_columns=['tunnel'],
-                title=_('Peer Terminations'),
-            ),
-        ],
-    )
 
 
 @register_model_view(TunnelTermination, 'add', detail=False)
@@ -279,24 +209,6 @@ class IKEProposalListView(generic.ObjectListView):
 @register_model_view(IKEProposal)
 class IKEProposalView(generic.ObjectView):
     queryset = IKEProposal.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.IKEProposalPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            CommentsPanel(),
-            TagsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                'vpn.ikepolicy',
-                filters={'ike_proposal_id': lambda ctx: ctx['object'].pk},
-                title=_('IKE Policies'),
-            ),
-        ],
-    )
 
 
 @register_model_view(IKEProposal, 'add', detail=False)
@@ -351,32 +263,8 @@ class IKEPolicyListView(generic.ObjectListView):
 
 
 @register_model_view(IKEPolicy)
-class IKEPolicyView(GetRelatedModelsMixin, generic.ObjectView):
+class IKEPolicyView(generic.ObjectView):
     queryset = IKEPolicy.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.IKEPolicyPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            CommentsPanel(),
-            TagsPanel(),
-            RelatedObjectsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                'vpn.ikeproposal',
-                filters={'ike_policy_id': lambda ctx: ctx['object'].pk},
-                title=_('Proposals'),
-            ),
-        ],
-    )
-
-    def get_extra_context(self, request, instance):
-        return {
-            'related_models': self.get_related_models(request, instance),
-        }
 
 
 @register_model_view(IKEPolicy, 'add', detail=False)
@@ -433,24 +321,6 @@ class IPSecProposalListView(generic.ObjectListView):
 @register_model_view(IPSecProposal)
 class IPSecProposalView(generic.ObjectView):
     queryset = IPSecProposal.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.IPSecProposalPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            CommentsPanel(),
-            TagsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                'vpn.ipsecpolicy',
-                filters={'ipsec_proposal_id': lambda ctx: ctx['object'].pk},
-                title=_('IPSec Policies'),
-            ),
-        ],
-    )
 
 
 @register_model_view(IPSecProposal, 'add', detail=False)
@@ -505,32 +375,8 @@ class IPSecPolicyListView(generic.ObjectListView):
 
 
 @register_model_view(IPSecPolicy)
-class IPSecPolicyView(GetRelatedModelsMixin, generic.ObjectView):
+class IPSecPolicyView(generic.ObjectView):
     queryset = IPSecPolicy.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.IPSecPolicyPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            CommentsPanel(),
-            TagsPanel(),
-            RelatedObjectsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                'vpn.ipsecproposal',
-                filters={'ipsec_policy_id': lambda ctx: ctx['object'].pk},
-                title=_('Proposals'),
-            ),
-        ],
-    )
-
-    def get_extra_context(self, request, instance):
-        return {
-            'related_models': self.get_related_models(request, instance),
-        }
 
 
 @register_model_view(IPSecPolicy, 'add', detail=False)
@@ -587,19 +433,6 @@ class IPSecProfileListView(generic.ObjectListView):
 @register_model_view(IPSecProfile)
 class IPSecProfileView(generic.ObjectView):
     queryset = IPSecProfile.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.IPSecProfilePanel(),
-            TagsPanel(),
-            CustomFieldsPanel(),
-            CommentsPanel(),
-        ],
-        right_panels=[
-            panels.IPSecProfileIKEPolicyPanel(),
-            panels.IPSecProfileIPSecPolicyPanel(),
-        ],
-    )
 
 
 @register_model_view(IPSecProfile, 'add', detail=False)
@@ -656,47 +489,6 @@ class L2VPNListView(generic.ObjectListView):
 @register_model_view(L2VPN)
 class L2VPNView(generic.ObjectView):
     queryset = L2VPN.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.Layout(
-        layout.Row(
-            layout.Column(
-                panels.L2VPNPanel(),
-                TagsPanel(),
-                PluginContentPanel('left_page'),
-            ),
-            layout.Column(
-                CustomFieldsPanel(),
-                CommentsPanel(),
-                PluginContentPanel('right_page'),
-            ),
-        ),
-        layout.Row(
-            layout.Column(
-                ContextTablePanel('import_targets_table', title=_('Import Route Targets')),
-            ),
-            layout.Column(
-                ContextTablePanel('export_targets_table', title=_('Export Route Targets')),
-            ),
-        ),
-        layout.Row(
-            layout.Column(
-                ObjectsTablePanel(
-                    'vpn.l2vpntermination',
-                    filters={'l2vpn_id': lambda ctx: ctx['object'].pk},
-                    exclude_columns=['l2vpn'],
-                    actions=[
-                        actions.AddObject(
-                            'vpn.l2vpntermination',
-                            url_params={'l2vpn': lambda ctx: ctx['object'].pk},
-                            label=_('Add a Termination'),
-                        ),
-                    ],
-                    title=_('Terminations'),
-                ),
-                PluginContentPanel('full_width_page'),
-            ),
-        ),
-    )
 
     def get_extra_context(self, request, instance):
         import_targets_table = RouteTargetTable(
@@ -771,16 +563,6 @@ class L2VPNTerminationListView(generic.ObjectListView):
 @register_model_view(L2VPNTermination)
 class L2VPNTerminationView(generic.ObjectView):
     queryset = L2VPNTermination.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.L2VPNTerminationPanel(),
-        ],
-        right_panels=[
-            CustomFieldsPanel(),
-            TagsPanel(),
-        ],
-    )
 
 
 @register_model_view(L2VPNTermination, 'add', detail=False)

@@ -1,5 +1,3 @@
-import re
-
 from django.db.models import Q
 
 from .choices import InterfaceTypeChoices
@@ -23,22 +21,11 @@ RACK_STARTING_UNIT_DEFAULT = 1
 
 
 #
-# Cables
-#
-
-CABLE_CONNECTOR_MIN = 1
-CABLE_CONNECTOR_MAX = 256
-
-CABLE_POSITION_MIN = 1
-CABLE_POSITION_MAX = 1024
-
-
-#
 # RearPorts
 #
 
-PORT_POSITION_MIN = 1
-PORT_POSITION_MAX = 1024
+REARPORT_POSITIONS_MIN = 1
+REARPORT_POSITIONS_MAX = 1024
 
 
 #
@@ -81,7 +68,6 @@ NONCONNECTABLE_IFACE_TYPES = VIRTUAL_IFACE_TYPES + WIRELESS_IFACE_TYPES
 #
 
 MODULE_TOKEN = '{module}'
-VC_POSITION_RE = re.compile(r'\{vc_position(?::([^}]*))?\}')
 
 MODULAR_COMPONENT_TEMPLATE_MODELS = Q(
     app_label='dcim',

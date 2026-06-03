@@ -24,24 +24,6 @@ INTERFACE_LINKTERMINATION = """
 {% else %}""" + LINKTERMINATION + """{% endif %}
 """
 
-INTERFACE_LAG_MEMBERS_LINKTERMINATION = """
-{% for termination in value %}
-  {% if termination.parent_object %}
-    <a href="{{ termination.parent_object.get_absolute_url }}">{{ termination.parent_object }}</a>
-    <i class="mdi mdi-chevron-right"></i>
-  {% endif %}
-  <a href="{{ termination.get_absolute_url }}">{{ termination }}</a>
-  {% if termination.lag %}
-    <i class="mdi mdi-chevron-right"></i>
-    <a href="{{ termination.lag.get_absolute_url }}">{{ termination.lag }}</a>
-    <span class="text-muted">(LAG)</span>
-  {% endif %}
-  {% if not forloop.last %}<br />{% endif %}
-{% empty %}
-  {{ ''|placeholder }}
-{% endfor %}
-"""
-
 CABLE_LENGTH = """
 {% load helpers %}
 {% if record.length %}{{ record.length|floatformat:"-2" }} {{ record.length_unit }}{% endif %}
@@ -565,7 +547,7 @@ DEVICEBAY_BUTTONS = """
         <a href="{% url 'dcim:devicebay_depopulate' pk=record.pk %}?return_url={% url 'dcim:device_devicebays' pk=object.pk %}" class="btn btn-danger btn-sm">
             <i class="mdi mdi-server-minus" aria-hidden="true" title="Remove device"></i>
         </a>
-    {% elif record.enabled %}
+    {% else %}
         <a href="{% url 'dcim:devicebay_populate' pk=record.pk %}?return_url={% url 'dcim:device_devicebays' pk=object.pk %}" class="btn btn-success btn-sm">
             <i class="mdi mdi-server-plus" aria-hidden="true" title="Install device"></i>
         </a>
@@ -579,7 +561,7 @@ MODULEBAY_BUTTONS = """
         <a href="{% url 'dcim:module_delete' pk=record.installed_module.pk %}?return_url={% url 'dcim:device_modulebays' pk=object.pk %}" class="btn btn-danger btn-sm">
             <i class="mdi mdi-server-minus" aria-hidden="true" title="Remove module"></i>
         </a>
-    {% elif record.enabled %}
+    {% else %}
         <a href="{% url 'dcim:module_add' %}?device={{ record.device_id }}&module_bay={{ record.pk }}&manufacturer={{ object.device_type.manufacturer_id }}&return_url={% url 'dcim:device_modulebays' pk=object.pk %}" class="btn btn-success btn-sm">
             <i class="mdi mdi-server-plus" aria-hidden="true" title="Install module"></i>
         </a>

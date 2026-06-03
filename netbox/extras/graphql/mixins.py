@@ -1,11 +1,8 @@
-from typing import TYPE_CHECKING, Annotated
+from typing import TYPE_CHECKING, Annotated, List
 
 import strawberry
 import strawberry_django
 from strawberry.types import Info
-
-from extras.models import ImageAttachment, JournalEntry
-from utilities.querysets import RestrictedPrefetch
 
 __all__ = (
     'ConfigContextMixin',
@@ -17,27 +14,14 @@ __all__ = (
 )
 
 if TYPE_CHECKING:
-    from tenancy.graphql.types import ContactAssignmentType
-
     from .types import ImageAttachmentType, JournalEntryType, TagType
+    from tenancy.graphql.types import ContactAssignmentType
 
 
 @strawberry.type
 class ConfigContextMixin:
 
-    @classmethod
-    def get_queryset(cls, queryset, info: Info, **kwargs):
-        queryset = super().get_queryset(queryset, info, **kwargs)
-
-        # If `config_context` is requested, call annotate_config_context_data() on the queryset
-        selected = {f.name for f in info.selected_fields[0].selections}
-        if 'config_context' in selected and hasattr(queryset, 'annotate_config_context_data'):
-            return queryset.annotate_config_context_data()
-
-        return queryset
-
-    # Ensure `local_context_data` is fetched when `config_context` is requested
-    @strawberry_django.field(only=['local_context_data'])
+    @strawberry_django.field
     def config_context(self) -> strawberry.scalars.JSON:
         return self.get_config_context()
 
@@ -53,34 +37,26 @@ class CustomFieldsMixin:
 @strawberry.type
 class ImageAttachmentsMixin:
 
-    @strawberry_django.field(
-        prefetch_related=lambda info: RestrictedPrefetch(
-            'images', info.context.request.user, 'view', queryset=ImageAttachment.objects.all()
-        ),
-    )
-    def image_attachments(self) -> list[Annotated['ImageAttachmentType', strawberry.lazy('.types')]]:
-        return self.images.all()
+    @strawberry_django.field
+    def image_attachments(self, info: Info) -> List[Annotated['ImageAttachmentType', strawberry.lazy('.types')]]:
+        return self.images.restrict(info.context.request.user, 'view')
 
 
 @strawberry.type
 class JournalEntriesMixin:
 
-    @strawberry_django.field(
-        prefetch_related=lambda info: RestrictedPrefetch(
-            'journal_entries', info.context.request.user, 'view', queryset=JournalEntry.objects.all()
-        ),
-    )
-    def journal_entries(self) -> list[Annotated['JournalEntryType', strawberry.lazy('.types')]]:
+    @strawberry_django.field
+    def journal_entries(self, info: Info) -> List[Annotated['JournalEntryType', strawberry.lazy('.types')]]:
         return self.journal_entries.all()
 
 
 @strawberry.type
 class TagsMixin:
 
-    tags: list[Annotated['TagType', strawberry.lazy('.types')]]
+    tags: List[Annotated['TagType', strawberry.lazy('.types')]]
 
 
 @strawberry.type
 class ContactsMixin:
 
-    contacts: list[Annotated['ContactAssignmentType', strawberry.lazy('tenancy.graphql.types')]]
+    contacts: List[Annotated['ContactAssignmentType', strawberry.lazy('tenancy.graphql.types')]]

@@ -9,17 +9,12 @@ from core.models import DataFile, DataSource, ObjectType
 from extras.choices import *
 from extras.models import *
 from netbox.events import get_event_type_choices
-from netbox.forms import NetBoxModelImportForm, OwnerCSVMixin, PrimaryModelImportForm
+from netbox.forms import NetBoxModelImportForm
 from users.models import Group, User
 from utilities.forms import CSVModelForm
 from utilities.forms.fields import (
-    CSVChoiceField,
-    CSVContentTypeField,
-    CSVModelChoiceField,
-    CSVModelMultipleChoiceField,
-    CSVMultipleChoiceField,
-    CSVMultipleContentTypeField,
-    SlugField,
+    CSVChoiceField, CSVContentTypeField, CSVModelChoiceField, CSVModelMultipleChoiceField, CSVMultipleChoiceField,
+    CSVMultipleContentTypeField, SlugField,
 )
 
 __all__ = (
@@ -38,7 +33,7 @@ __all__ = (
 )
 
 
-class CustomFieldImportForm(OwnerCSVMixin, CSVModelForm):
+class CustomFieldImportForm(CSVModelForm):
     object_types = CSVMultipleContentTypeField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('custom_fields'),
@@ -80,12 +75,11 @@ class CustomFieldImportForm(OwnerCSVMixin, CSVModelForm):
         fields = (
             'name', 'label', 'group_name', 'type', 'object_types', 'related_object_type', 'required', 'unique',
             'description', 'search_weight', 'filter_logic', 'default', 'choice_set', 'weight', 'validation_minimum',
-            'validation_maximum', 'validation_regex', 'validation_schema', 'ui_visible', 'ui_editable',
-            'is_cloneable', 'owner', 'comments',
+            'validation_maximum', 'validation_regex', 'ui_visible', 'ui_editable', 'is_cloneable', 'comments',
         )
 
 
-class CustomFieldChoiceSetImportForm(OwnerCSVMixin, CSVModelForm):
+class CustomFieldChoiceSetImportForm(CSVModelForm):
     base_choices = CSVChoiceField(
         choices=CustomFieldChoiceSetBaseChoices,
         required=False,
@@ -99,19 +93,11 @@ class CustomFieldChoiceSetImportForm(OwnerCSVMixin, CSVModelForm):
             '"choice1:First Choice,choice2:Second Choice"'
         )
     )
-    choice_colors = SimpleArrayField(
-        base_field=forms.CharField(),
-        required=False,
-        help_text=_(
-            'Quoted string of comma-separated color mappings in the format '
-            '"choice1:red,choice2:green". Supported colors: {colors}'
-        ).format(colors=', '.join(CustomFieldChoiceColorChoices.values())),
-    )
 
     class Meta:
         model = CustomFieldChoiceSet
         fields = (
-            'name', 'description', 'base_choices', 'extra_choices', 'choice_colors', 'order_alphabetically', 'owner',
+            'name', 'description', 'base_choices', 'extra_choices', 'order_alphabetically',
         )
 
     def clean_extra_choices(self):
@@ -126,32 +112,9 @@ class CustomFieldChoiceSetImportForm(OwnerCSVMixin, CSVModelForm):
                     value, label = line, line
                 data.append((value, label))
             return data
-        return None
-
-    def clean_choice_colors(self):
-        if isinstance(self.cleaned_data['choice_colors'], list):
-            data = {}
-            for line in self.cleaned_data['choice_colors']:
-                try:
-                    value, color = re.split(r'(?<!\\):', line, maxsplit=1)
-                    value = value.replace('\\:', ':')
-                except ValueError as e:
-                    raise forms.ValidationError(
-                        _("Invalid color mapping '{line}'. Use the format value:color.").format(line=line)
-                    ) from e
-
-                value = value.strip()
-                color = color.strip()
-                if value in data:
-                    raise forms.ValidationError(
-                        _("Duplicate color mapping defined for choice '{value}'.").format(value=value)
-                    )
-                data[value] = color
-            return data
-        return {}
 
 
-class CustomLinkImportForm(OwnerCSVMixin, CSVModelForm):
+class CustomLinkImportForm(CSVModelForm):
     object_types = CSVMultipleContentTypeField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('custom_links'),
@@ -168,11 +131,11 @@ class CustomLinkImportForm(OwnerCSVMixin, CSVModelForm):
         model = CustomLink
         fields = (
             'name', 'object_types', 'enabled', 'weight', 'group_name', 'button_class', 'new_window', 'link_text',
-            'link_url', 'owner',
+            'link_url',
         )
 
 
-class ExportTemplateImportForm(OwnerCSVMixin, CSVModelForm):
+class ExportTemplateImportForm(CSVModelForm):
     object_types = CSVMultipleContentTypeField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('export_templates'),
@@ -183,20 +146,20 @@ class ExportTemplateImportForm(OwnerCSVMixin, CSVModelForm):
         model = ExportTemplate
         fields = (
             'name', 'object_types', 'description', 'environment_params', 'mime_type', 'file_name', 'file_extension',
-            'as_attachment', 'template_code', 'owner',
+            'as_attachment', 'template_code',
         )
 
 
-class ConfigContextProfileImportForm(PrimaryModelImportForm):
+class ConfigContextProfileImportForm(NetBoxModelImportForm):
 
     class Meta:
         model = ConfigContextProfile
         fields = [
-            'name', 'description', 'schema', 'owner', 'comments', 'tags',
+            'name', 'description', 'schema', 'comments', 'tags',
         ]
 
 
-class ConfigTemplateImportForm(OwnerCSVMixin, CSVModelForm):
+class ConfigTemplateImportForm(CSVModelForm):
     data_source = CSVModelChoiceField(
         label=_('Data source'),
         queryset=DataSource.objects.all(),
@@ -221,8 +184,7 @@ class ConfigTemplateImportForm(OwnerCSVMixin, CSVModelForm):
         model = ConfigTemplate
         fields = (
             'name', 'description', 'template_code', 'data_source', 'data_file', 'auto_sync_enabled',
-            'environment_params', 'mime_type', 'file_name', 'file_extension', 'as_attachment', 'debug', 'owner',
-            'tags',
+            'environment_params', 'mime_type', 'file_name', 'file_extension', 'as_attachment', 'tags',
         )
 
     def clean(self):
@@ -234,7 +196,7 @@ class ConfigTemplateImportForm(OwnerCSVMixin, CSVModelForm):
         return self.cleaned_data['template_code']
 
 
-class SavedFilterImportForm(OwnerCSVMixin, CSVModelForm):
+class SavedFilterImportForm(CSVModelForm):
     object_types = CSVMultipleContentTypeField(
         label=_('Object types'),
         queryset=ObjectType.objects.all(),
@@ -244,21 +206,21 @@ class SavedFilterImportForm(OwnerCSVMixin, CSVModelForm):
     class Meta:
         model = SavedFilter
         fields = (
-            'name', 'slug', 'object_types', 'description', 'weight', 'enabled', 'shared', 'parameters', 'owner',
+            'name', 'slug', 'object_types', 'description', 'weight', 'enabled', 'shared', 'parameters',
         )
 
 
-class WebhookImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class WebhookImportForm(NetBoxModelImportForm):
 
     class Meta:
         model = Webhook
         fields = (
             'name', 'payload_url', 'http_method', 'http_content_type', 'additional_headers', 'body_template',
-            'secret', 'ssl_verification', 'ca_file_path', 'description', 'owner', 'tags'
+            'secret', 'ssl_verification', 'ca_file_path', 'description', 'tags'
         )
 
 
-class EventRuleImportForm(OwnerCSVMixin, NetBoxModelImportForm):
+class EventRuleImportForm(NetBoxModelImportForm):
     object_types = CSVMultipleContentTypeField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('event_rules'),
@@ -279,7 +241,7 @@ class EventRuleImportForm(OwnerCSVMixin, NetBoxModelImportForm):
         model = EventRule
         fields = (
             'name', 'description', 'enabled', 'conditions', 'object_types', 'event_types', 'action_type',
-            'owner', 'comments', 'tags'
+            'comments', 'tags'
         )
 
     def clean(self):
@@ -307,8 +269,12 @@ class EventRuleImportForm(OwnerCSVMixin, NetBoxModelImportForm):
                 self.instance.action_object_type = ObjectType.objects.get_for_model(script, for_concrete_model=False)
 
 
-class TagImportForm(OwnerCSVMixin, CSVModelForm):
+class TagImportForm(CSVModelForm):
     slug = SlugField()
+    weight = forms.IntegerField(
+        label=_('Weight'),
+        required=False
+    )
     object_types = CSVMultipleContentTypeField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('tags'),
@@ -319,7 +285,7 @@ class TagImportForm(OwnerCSVMixin, CSVModelForm):
     class Meta:
         model = Tag
         fields = (
-            'name', 'slug', 'color', 'weight', 'description', 'object_types', 'owner',
+            'name', 'slug', 'color', 'weight', 'description', 'object_types',
         )
 
 

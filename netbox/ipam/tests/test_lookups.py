@@ -1,10 +1,9 @@
-from django.db.backends.postgresql.psycopg_any import NumericRange
 from django.test import TestCase
-
+from django.db.backends.postgresql.psycopg_any import NumericRange
 from ipam.models import VLANGroup
 
 
-class VLANGroupRangeContainsLookupTestCase(TestCase):
+class VLANGroupRangeContainsLookupTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         # Two ranges: [1,11) and [20,31)

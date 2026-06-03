@@ -1,7 +1,6 @@
 import functools
 import operator
 import re
-
 from django.utils.translation import gettext as _
 
 __all__ = (

@@ -1,4 +1,5 @@
-from django.test import TestCase, override_settings
+from django.test import TestCase
+from django.test import override_settings
 
 from circuits.api.serializers import ProviderSerializer
 from circuits.forms import ProviderForm
@@ -8,7 +9,7 @@ from netbox.choices import CSVDelimiterChoices, ImportFormatChoices
 from utilities.testing import APITestCase, ModelViewTestCase, create_tags, post_data
 
 
-class ModelFormCustomValidationTestCase(TestCase):
+class ModelFormCustomValidationTest(TestCase):
 
     @override_settings(CUSTOM_VALIDATORS={
         'circuits.provider': [
@@ -58,7 +59,7 @@ class ModelFormCustomValidationTestCase(TestCase):
         self.assertTrue(form.is_valid())
 
 
-class BulkEditCustomValidationTestCase(ModelViewTestCase):
+class BulkEditCustomValidationTest(ModelViewTestCase):
     model = Provider
 
     @classmethod
@@ -155,7 +156,7 @@ class BulkEditCustomValidationTestCase(ModelViewTestCase):
             self.assertTrue(provider.asns.exists())
 
 
-class BulkImportCustomValidationTestCase(ModelViewTestCase):
+class BulkImportCustomValidationTest(ModelViewTestCase):
     model = Provider
 
     @classmethod
@@ -214,7 +215,7 @@ class BulkImportCustomValidationTestCase(ModelViewTestCase):
         self.assertTrue(Provider.objects.exists())
 
 
-class APISerializerCustomValidationTestCase(APITestCase):
+class APISerializerCustomValidationTest(APITestCase):
 
     @override_settings(CUSTOM_VALIDATORS={
         'circuits.provider': [

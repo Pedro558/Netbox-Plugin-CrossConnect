@@ -4,15 +4,14 @@ from django import forms
 from django.utils.translation import gettext as _
 
 from netbox.models.features import ChangeLoggingMixin
-from utilities.forms.fields import QueryField
-from utilities.forms.mixins import BackgroundJobMixin, FilterModifierMixin
+from utilities.forms.mixins import BackgroundJobMixin
 
 __all__ = (
     'BulkDeleteForm',
     'BulkEditForm',
     'BulkRenameForm',
-    'CSVModelForm',
     'ConfirmationForm',
+    'CSVModelForm',
     'DeleteForm',
     'FilterForm',
     'TableConfigForm',
@@ -141,11 +140,11 @@ class CSVModelForm(forms.ModelForm):
         return super().clean()
 
 
-class FilterForm(FilterModifierMixin, forms.Form):
+class FilterForm(forms.Form):
     """
     Base Form class for FilterSet forms.
     """
-    q = QueryField(
+    q = forms.CharField(
         required=False,
         label=_('Search')
     )

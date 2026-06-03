@@ -1,16 +1,17 @@
-import type { RecursivePartial, TomOption, TomSettings, TomInput } from 'tom-select/dist/cjs/types';
+import { RecursivePartial, TomOption, TomSettings } from 'tom-select/dist/types/types';
+import { TomInput } from 'tom-select/dist/cjs/types/core';
 import { addClasses } from 'tom-select/src/vanilla.ts';
 import queryString from 'query-string';
+import TomSelect from 'tom-select';
 import type { Stringifiable } from 'query-string';
 import { DynamicParamsMap } from './dynamicParamsMap';
-import { NetBoxTomSelect } from './netboxTomSelect';
 
 // Transitional
 import { QueryFilter, PathFilter } from '../types';
 import { getElement, replaceAll } from '../../util';
 
-// Extends NetBoxTomSelect to provide enhanced fetching of options via the REST API
-export class DynamicTomSelect extends NetBoxTomSelect {
+// Extends TomSelect to provide enhanced fetching of options via the REST API
+export class DynamicTomSelect extends TomSelect {
   public readonly nullOption: Nullable<TomOption> = null;
 
   // Transitional code from APISelect
@@ -71,7 +72,7 @@ export class DynamicTomSelect extends NetBoxTomSelect {
     this.addEventListeners();
   }
 
-  load(value: string, preserveValue?: string | string[]) {
+  load(value: string) {
     const self = this;
 
     // Automatically clear any cached options. (Only options included
@@ -107,14 +108,6 @@ export class DynamicTomSelect extends NetBoxTomSelect {
       // Pass the options to the callback function
       .then(options => {
         self.loadCallback(options, []);
-        // Restore the previous selection if it is still valid under the new filter.
-        if (preserveValue !== undefined) {
-          const values = Array.isArray(preserveValue) ? preserveValue : [preserveValue];
-          const validValues = values.filter(v => v !== '' && v in self.options);
-          if (validValues.length > 0) {
-            self.setValue(validValues.length === 1 ? validValues[0] : validValues, true);
-          }
-        }
       })
       .catch(() => {
         self.loadCallback([], []);
@@ -346,9 +339,6 @@ export class DynamicTomSelect extends NetBoxTomSelect {
   private handleEvent(event: Event): void {
     const target = event.target as HTMLSelectElement;
 
-    // Save the current selection so we can restore it after loading if it remains valid.
-    const previousValue = this.getValue();
-
     // Update the element's URL after any changes to a dependency.
     this.updateQueryParams(target.name);
     this.updatePathValues(target.name);
@@ -356,8 +346,7 @@ export class DynamicTomSelect extends NetBoxTomSelect {
     // Clear any previous selection(s) as the parent filter has changed
     this.clear();
 
-    // Load new data, restoring the previous selection if it is still valid under the new filter.
-    const preserve = previousValue !== '' && previousValue !== null ? previousValue : undefined;
-    this.load(this.lastValue, preserve);
+    // Load new data.
+    this.load(this.lastValue);
   }
 }

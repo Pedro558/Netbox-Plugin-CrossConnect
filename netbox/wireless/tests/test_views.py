@@ -1,12 +1,11 @@
 from django.contrib.contenttypes.models import ContentType
-
+from wireless.choices import *
+from wireless.models import *
 from dcim.choices import InterfaceTypeChoices, LinkStatusChoices
 from dcim.models import Interface, Site
 from netbox.choices import DistanceUnitChoices
 from tenancy.models import Tenant
 from utilities.testing import ViewTestCases, create_tags, create_test_device
-from wireless.choices import *
-from wireless.models import *
 
 
 class WirelessLANGroupTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
@@ -116,42 +115,23 @@ class WirelessLANTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'tags': [t.pk for t in tags],
         }
 
-        cls.csv_data = {
-            'default': (
-                "group,ssid,status,tenant,scope_type,scope_id",
-                "Wireless LAN Group 2,WLAN4,{status},{tenant},,".format(
-                    status=WirelessLANStatusChoices.STATUS_ACTIVE,
-                    tenant=tenants[0].name
-                ),
-                "Wireless LAN Group 2,WLAN5,{status},{tenant},dcim.site,{site}".format(
-                    status=WirelessLANStatusChoices.STATUS_DISABLED,
-                    tenant=tenants[1].name,
-                    site=sites[0].pk
-                ),
-                "Wireless LAN Group 2,WLAN6,{status},{tenant},dcim.site,{site}".format(
-                    status=WirelessLANStatusChoices.STATUS_RESERVED,
-                    tenant=tenants[2].name,
-                    site=sites[1].pk
-                ),
+        cls.csv_data = (
+            "group,ssid,status,tenant,scope_type,scope_id",
+            "Wireless LAN Group 2,WLAN4,{status},{tenant},,".format(
+                status=WirelessLANStatusChoices.STATUS_ACTIVE,
+                tenant=tenants[0].name
             ),
-            'scope_name': (
-                "group,ssid,status,tenant,scope_type,scope_name",
-                "Wireless LAN Group 2,WLAN4,{status},{tenant},,".format(
-                    status=WirelessLANStatusChoices.STATUS_ACTIVE,
-                    tenant=tenants[0].name
-                ),
-                "Wireless LAN Group 2,WLAN5,{status},{tenant},dcim.site,{site}".format(
-                    status=WirelessLANStatusChoices.STATUS_DISABLED,
-                    tenant=tenants[1].name,
-                    site=sites[0].name
-                ),
-                "Wireless LAN Group 2,WLAN6,{status},{tenant},dcim.site,{site}".format(
-                    status=WirelessLANStatusChoices.STATUS_RESERVED,
-                    tenant=tenants[2].name,
-                    site=sites[1].name
-                ),
+            "Wireless LAN Group 2,WLAN5,{status},{tenant},dcim.site,{site}".format(
+                status=WirelessLANStatusChoices.STATUS_DISABLED,
+                tenant=tenants[1].name,
+                site=sites[0].pk
             ),
-        }
+            "Wireless LAN Group 2,WLAN6,{status},{tenant},dcim.site,{site}".format(
+                status=WirelessLANStatusChoices.STATUS_RESERVED,
+                tenant=tenants[2].name,
+                site=sites[1].pk
+            ),
+        )
 
         cls.csv_update_data = (
             "id,ssid",

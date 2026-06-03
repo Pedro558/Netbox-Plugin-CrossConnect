@@ -13,7 +13,6 @@ __all__ = (
     'InterfaceTemplateImportForm',
     'InventoryItemTemplateImportForm',
     'ModuleBayTemplateImportForm',
-    'PortTemplateMappingImportForm',
     'PowerOutletTemplateImportForm',
     'PowerPortTemplateImportForm',
     'RearPortTemplateImportForm',
@@ -114,11 +113,31 @@ class FrontPortTemplateImportForm(forms.ModelForm):
         label=_('Type'),
         choices=PortTypeChoices.CHOICES
     )
+    rear_port = forms.ModelChoiceField(
+        label=_('Rear port'),
+        queryset=RearPortTemplate.objects.all(),
+        to_field_name='name'
+    )
+
+    def clean_device_type(self):
+        if device_type := self.cleaned_data['device_type']:
+            rear_port = self.fields['rear_port']
+            rear_port.queryset = rear_port.queryset.filter(device_type=device_type)
+
+        return device_type
+
+    def clean_module_type(self):
+        if module_type := self.cleaned_data['module_type']:
+            rear_port = self.fields['rear_port']
+            rear_port.queryset = rear_port.queryset.filter(module_type=module_type)
+
+        return module_type
 
     class Meta:
         model = FrontPortTemplate
         fields = [
-            'device_type', 'module_type', 'name', 'type', 'color', 'positions', 'label', 'description',
+            'device_type', 'module_type', 'name', 'type', 'color', 'rear_port', 'rear_port_position', 'label',
+            'description',
         ]
 
 
@@ -133,41 +152,6 @@ class RearPortTemplateImportForm(forms.ModelForm):
         fields = [
             'device_type', 'module_type', 'name', 'type', 'color', 'positions', 'label', 'description',
         ]
-
-
-class PortTemplateMappingImportForm(forms.ModelForm):
-    front_port = forms.ModelChoiceField(
-        label=_('Front port'),
-        queryset=FrontPortTemplate.objects.all(),
-        to_field_name='name',
-    )
-    rear_port = forms.ModelChoiceField(
-        label=_('Rear port'),
-        queryset=RearPortTemplate.objects.all(),
-        to_field_name='name',
-    )
-
-    class Meta:
-        model = PortTemplateMapping
-        fields = [
-            'device_type', 'module_type', 'front_port', 'front_port_position', 'rear_port', 'rear_port_position',
-        ]
-
-    def clean_device_type(self):
-        if device_type := self.cleaned_data['device_type']:
-            front_port = self.fields['front_port']
-            rear_port = self.fields['rear_port']
-            front_port.queryset = front_port.queryset.filter(device_type=device_type)
-            rear_port.queryset = rear_port.queryset.filter(device_type=device_type)
-        return device_type
-
-    def clean_module_type(self):
-        if module_type := self.cleaned_data['module_type']:
-            front_port = self.fields['front_port']
-            rear_port = self.fields['rear_port']
-            front_port.queryset = front_port.queryset.filter(module_type=module_type)
-            rear_port.queryset = rear_port.queryset.filter(module_type=module_type)
-        return module_type
 
 
 class ModuleBayTemplateImportForm(forms.ModelForm):

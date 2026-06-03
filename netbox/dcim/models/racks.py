@@ -15,44 +15,25 @@ from dcim.constants import *
 from dcim.svg import RackElevationSVG
 from netbox.choices import ColorChoices
 from netbox.models import OrganizationalModel, PrimaryModel
-from netbox.models.features import ContactsMixin, ImageAttachmentsMixin
 from netbox.models.mixins import WeightMixin
+from netbox.models.features import ContactsMixin, ImageAttachmentsMixin
 from utilities.conversion import to_grams
 from utilities.data import array_to_string, drange
-from utilities.fields import ColorField, CounterCacheField
-from utilities.tracking import TrackingModelMixin
-
+from utilities.fields import ColorField
 from .device_components import PowerPort
-from .devices import Device
-from .modules import Module
+from .devices import Device, Module
 from .power import PowerFeed
 
 __all__ = (
     'Rack',
-    'RackGroup',
     'RackReservation',
     'RackRole',
     'RackType',
 )
 
-#
-# Rack Organization
-#
-
-
-class RackGroup(OrganizationalModel):
-    """
-    Racks can be grouped by physical placement within a Location.
-    """
-
-    class Meta:
-        ordering = ('name',)
-        verbose_name = _('rack group')
-        verbose_name_plural = _('rack groups')
-
 
 #
-# Rack Base
+# Rack Types
 #
 
 class RackBase(WeightMixin, PrimaryModel):
@@ -139,11 +120,7 @@ class RackBase(WeightMixin, PrimaryModel):
         abstract = True
 
 
-#
-# Rack Types
-#
-
-class RackType(ImageAttachmentsMixin, RackBase):
+class RackType(RackBase):
     """
     Devices are housed within Racks. Each rack has a defined height measured in rack units, and a front and rear face.
     Each Rack is assigned to a Site and (optionally) a Location.
@@ -166,10 +143,6 @@ class RackType(ImageAttachmentsMixin, RackBase):
         verbose_name=_('slug'),
         max_length=100,
         unique=True
-    )
-    rack_count = CounterCacheField(
-        to_model='dcim.Rack',
-        to_field='rack_type'
     )
 
     clone_fields = (
@@ -261,7 +234,7 @@ class RackRole(OrganizationalModel):
         verbose_name_plural = _('rack roles')
 
 
-class Rack(ContactsMixin, ImageAttachmentsMixin, TrackingModelMixin, RackBase):
+class Rack(ContactsMixin, ImageAttachmentsMixin, RackBase):
     """
     Devices are housed within Racks. Each rack has a defined height measured in rack units, and a front and rear face.
     Each Rack is assigned to a Site and (optionally) a Location.
@@ -309,14 +282,6 @@ class Rack(ContactsMixin, ImageAttachmentsMixin, TrackingModelMixin, RackBase):
         related_name='racks',
         blank=True,
         null=True
-    )
-    group = models.ForeignKey(
-        to='dcim.RackGroup',
-        on_delete=models.PROTECT,
-        related_name='racks',
-        blank=True,
-        null=True,
-        help_text=_('physical grouping')
     )
     tenant = models.ForeignKey(
         to='tenancy.Tenant',
@@ -390,9 +355,6 @@ class Rack(ContactsMixin, ImageAttachmentsMixin, TrackingModelMixin, RackBase):
                 name='%(app_label)s_%(class)s_unique_location_facility_id'
             ),
         )
-        indexes = (
-            models.Index(fields=('site', 'location', 'name', 'id')),  # Default ordering
-        )
         verbose_name = _('rack')
         verbose_name_plural = _('racks')
 
@@ -405,7 +367,7 @@ class Rack(ContactsMixin, ImageAttachmentsMixin, TrackingModelMixin, RackBase):
         super().clean()
 
         # Validate location/site assignment
-        if self.site_id and self.location_id and self.location.site_id != self.site_id:
+        if self.site and self.location and self.location.site != self.site:
             raise ValidationError(_("Assigned location must belong to parent site ({site}).").format(site=self.site))
 
         # Validate outer dimensions and unit
@@ -547,7 +509,7 @@ class Rack(ContactsMixin, ImageAttachmentsMixin, TrackingModelMixin, RackBase):
 
         return [u for u in elevation.values()]
 
-    def get_available_units(self, u_height=1.0, rack_face=None, exclude=None, ignore_excluded_devices=False):
+    def get_available_units(self, u_height=1, rack_face=None, exclude=None, ignore_excluded_devices=False):
         """
         Return a list of units within the rack available to accommodate a device of a given U height (default 1).
         Optionally exclude one or more devices when calculating empty units (needed when moving a device from one
@@ -619,10 +581,9 @@ class Rack(ContactsMixin, ImageAttachmentsMixin, TrackingModelMixin, RackBase):
         :param unit_height: Height of each rack unit for the rendered drawing. Note this is not the total
             height of the elevation
         :param legend_width: Width of the unit legend, in pixels
-        :param margin_width: Width of the right-hand margin, in pixels
+        :param margin_width: Width of the rigth-hand margin, in pixels
         :param include_images: Embed front/rear device images where available
         :param base_url: Base URL for links and images. If none, URLs will be relative.
-        :param highlight_params: Dictionary of parameters to be passed to the RackElevationSVG.render_highlight() method
         """
         elevation = RackElevationSVG(
             self,
@@ -741,9 +702,6 @@ class RackReservation(PrimaryModel):
 
     class Meta:
         ordering = ['created', 'pk']
-        indexes = (
-            models.Index(fields=('created', 'id')),  # Default ordering
-        )
         verbose_name = _('rack reservation')
         verbose_name_plural = _('rack reservations')
 

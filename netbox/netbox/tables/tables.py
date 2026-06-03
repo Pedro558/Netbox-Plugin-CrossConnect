@@ -23,15 +23,11 @@ from utilities.html import highlight
 from utilities.paginator import EnhancedPaginator, get_paginate_count
 from utilities.string import title
 from utilities.views import get_action_url
-
 from .template_code import *
 
 __all__ = (
     'BaseTable',
-    'NestedGroupModelTable',
     'NetBoxTable',
-    'OrganizationalModelTable',
-    'PrimaryModelTable',
     'SearchTable',
 )
 
@@ -53,13 +49,42 @@ class BaseTable(tables.Table):
             'class': 'table table-hover object-list',
         }
 
-    # TODO: Remove user kwarg in NetBox v4.7
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, user=None, **kwargs):
+
         super().__init__(*args, **kwargs)
 
         # Set default empty_text if none was provided
         if self.empty_text is None:
             self.empty_text = _("No {model_name} found").format(model_name=self._meta.model._meta.verbose_name_plural)
+
+        # Dynamically update the table's QuerySet to ensure related fields are pre-fetched
+        if isinstance(self.data, TableQuerysetData):
+
+            prefetch_fields = []
+            for column in self.columns:
+                if column.visible:
+                    model = getattr(self.Meta, 'model')
+                    accessor = column.accessor
+                    if accessor.startswith('custom_field_data__'):
+                        # Ignore custom field references
+                        continue
+                    prefetch_path = []
+                    for field_name in accessor.split(accessor.SEPARATOR):
+                        try:
+                            field = model._meta.get_field(field_name)
+                        except FieldDoesNotExist:
+                            break
+                        if isinstance(field, (RelatedField, ManyToOneRel)):
+                            # Follow ForeignKeys to the related model
+                            prefetch_path.append(field_name)
+                            model = field.remote_field.model
+                        elif isinstance(field, GenericForeignKey):
+                            # Can't prefetch beyond a GenericForeignKey
+                            prefetch_path.append(field_name)
+                            break
+                    if prefetch_path:
+                        prefetch_fields.append('__'.join(prefetch_path))
+            self.data.data = self.data.data.prefetch_related(*prefetch_fields)
 
     def _get_columns(self, visible=True):
         columns = []
@@ -116,48 +141,6 @@ class BaseTable(tables.Table):
             self.sequence.remove('actions')
             self.sequence.append('actions')
 
-    def _apply_prefetching(self, columns=None):
-        """
-        Dynamically update the table's QuerySet to ensure related fields are pre-fetched.
-
-        Args:
-            columns: An optional iterable of column names for which to apply prefetching,
-                regardless of visibility. If None, only currently visible columns are used.
-        """
-        if not isinstance(self.data, TableQuerysetData):
-            return
-
-        prefetch_fields = []
-        for column in self.columns.iterall():
-            if columns is not None:
-                if column.name not in columns:
-                    continue
-            elif not column.visible:
-                # Skip hidden columns
-                continue
-            model = getattr(self.Meta, 'model')  # Must be called *after* resolving columns
-            accessor = column.accessor
-            if accessor.startswith('custom_field_data__'):
-                # Ignore custom field references
-                continue
-            prefetch_path = []
-            for field_name in accessor.split(accessor.SEPARATOR):
-                try:
-                    field = model._meta.get_field(field_name)
-                except FieldDoesNotExist:
-                    break
-                if isinstance(field, (RelatedField, ManyToOneRel)):
-                    # Follow ForeignKeys to the related model
-                    prefetch_path.append(field_name)
-                    model = field.remote_field.model
-                elif isinstance(field, GenericForeignKey):
-                    # Can't prefetch beyond a GenericForeignKey
-                    prefetch_path.append(field_name)
-                    break
-            if prefetch_path:
-                prefetch_fields.append('__'.join(prefetch_path))
-        self.data.data = self.data.data.prefetch_related(*prefetch_fields)
-
     def configure(self, request):
         """
         Configure the table for a specific request context. This performs pagination and records
@@ -166,7 +149,7 @@ class BaseTable(tables.Table):
         columns = None
         ordering = None
 
-        if request.user.is_authenticated and self.prefixed_order_by_field in request.GET:
+        if self.prefixed_order_by_field in request.GET:
             if request.GET[self.prefixed_order_by_field]:
                 # If an ordering has been specified as a query parameter, save it as the
                 # user's preferred ordering for this table.
@@ -192,19 +175,6 @@ class BaseTable(tables.Table):
             columns = getattr(self.Meta, 'default_columns', self.Meta.fields)
 
         self._set_columns(columns)
-
-        # Apply column inclusion/exclusion (overrides user preferences)
-        if columns_param := request.GET.get('include_columns'):
-            for column_name in columns_param.split(','):
-                if column_name in self.columns.names():
-                    self.columns.show(column_name)
-        if exclude_columns := request.GET.get('exclude_columns'):
-            exclude_columns = exclude_columns.split(',')
-            for column_name in exclude_columns:
-                if column_name in self.columns.names() and column_name not in self.exempt_columns:
-                    self.columns.hide(column_name)
-
-        self._apply_prefetching()
         if ordering is not None:
             self.order_by = ordering
 
@@ -269,17 +239,14 @@ class NetBoxTable(BaseTable):
                 (name, deepcopy(column)) for name, column in registered_columns.items()
             ])
 
-        # Add columns for custom fields
-        custom_fields = [
-            cf for cf in CustomField.objects.get_for_model(self._meta.model)
-            if cf.ui_visible != CustomFieldUIVisibleChoices.HIDDEN
-        ]
+        # Add custom field & custom link columns
+        object_type = ObjectType.objects.get_for_model(self._meta.model)
+        custom_fields = CustomField.objects.filter(
+            object_types=object_type
+        ).exclude(ui_visible=CustomFieldUIVisibleChoices.HIDDEN)
         extra_columns.extend([
             (f'cf_{cf.name}', columns.CustomFieldColumn(cf)) for cf in custom_fields
         ])
-
-        # Add columns for custom links
-        object_type = ObjectType.objects.get_for_model(self._meta.model)
         custom_links = CustomLink.objects.filter(object_types=object_type, enabled=True)
         extra_columns.extend([
             (f'cl_{cl.name}', columns.CustomLinkColumn(cl)) for cl in custom_links
@@ -298,59 +265,6 @@ class NetBoxTable(BaseTable):
             except NoReverseMatch:
                 pass
         return ''
-
-
-class PrimaryModelTable(NetBoxTable):
-    owner_group = tables.Column(
-        accessor='owner__group',
-        linkify=True,
-        verbose_name=_('Owner Group'),
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner'),
-    )
-    comments = columns.MarkdownColumn(
-        verbose_name=_('Comments'),
-    )
-
-
-class OrganizationalModelTable(NetBoxTable):
-    owner_group = tables.Column(
-        accessor='owner__group',
-        linkify=True,
-        verbose_name=_('Owner Group'),
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner'),
-    )
-    comments = columns.MarkdownColumn(
-        verbose_name=_('Comments'),
-    )
-
-
-class NestedGroupModelTable(NetBoxTable):
-    owner_group = tables.Column(
-        accessor='owner__group',
-        linkify=True,
-        verbose_name=_('Owner Group'),
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner'),
-    )
-    name = columns.MPTTColumn(
-        verbose_name=_('Name'),
-        linkify=True
-    )
-    parent = tables.Column(
-        verbose_name=_('Parent'),
-        linkify=True,
-    )
-    comments = columns.MarkdownColumn(
-        verbose_name=_('Comments'),
-    )
 
 
 class SearchTable(tables.Table):

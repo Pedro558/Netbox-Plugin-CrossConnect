@@ -3,7 +3,7 @@ from django.test import TestCase
 from netbox.registry import Registry
 
 
-class RegistryTestCase(TestCase):
+class RegistryTest(TestCase):
 
     def test_set_store(self):
         reg = Registry({

@@ -1,8 +1,7 @@
 from django.core.cache import cache
 from django.db import models
 from django.urls import reverse
-from django.utils.translation import gettext
-from django.utils.translation import gettext_lazy as _
+from django.utils.translation import gettext, gettext_lazy as _
 
 from utilities.querysets import RestrictedQuerySet
 
@@ -37,9 +36,6 @@ class ConfigRevision(models.Model):
 
     class Meta:
         ordering = ['-created']
-        indexes = (
-            models.Index(fields=('-created',)),  # Default ordering
-        )
         verbose_name = _('config revision')
         verbose_name_plural = _('config revisions')
         constraints = [
@@ -67,20 +63,16 @@ class ConfigRevision(models.Model):
             return reverse('core:config')  # Default config view
         return reverse('core:configrevision', args=[self.pk])
 
-    def activate(self, update_db=True):
+    def activate(self):
         """
         Cache the configuration data.
-
-        Parameters:
-            update_db: Mark the ConfigRevision as active in the database (default: True)
         """
         cache.set('config', self.data, None)
         cache.set('config_version', self.pk, None)
 
-        if update_db:
-            # Set all instances of ConfigRevision to false and set this instance to true
-            ConfigRevision.objects.all().update(active=False)
-            ConfigRevision.objects.filter(pk=self.pk).update(active=True)
+        # Set all instances of ConfigRevision to false and set this instance to true
+        ConfigRevision.objects.all().update(active=False)
+        ConfigRevision.objects.filter(pk=self.pk).update(active=True)
 
     activate.alters_data = True
 

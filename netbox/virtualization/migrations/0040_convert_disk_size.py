@@ -1,6 +1,5 @@
 from django.db import migrations
 from django.db.models import F, Sum
-
 from netbox.settings import DISK_BASE_UNIT
 
 

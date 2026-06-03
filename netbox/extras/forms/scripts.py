@@ -1,10 +1,8 @@
+from core.choices import JobIntervalChoices
+from core.forms import ManagedFileForm
 from django import forms
 from django.core.files.storage import storages
 from django.utils.translation import gettext_lazy as _
-
-from core.choices import JobIntervalChoices, JobNotificationChoices
-from core.forms import ManagedFileForm
-from extras.utils import validate_script_content
 from utilities.datetime import local_now
 from utilities.forms.widgets import DateTimePicker, NumberWithOptions
 
@@ -36,13 +34,6 @@ class ScriptForm(forms.Form):
         ),
         help_text=_("Interval at which this script is re-run (in minutes)")
     )
-    _notifications = forms.ChoiceField(
-        required=False,
-        choices=JobNotificationChoices,
-        initial=JobNotificationChoices.NOTIFICATION_ALWAYS,
-        label=_("Notifications"),
-        help_text=_("When to notify the user of job completion")
-    )
 
     def __init__(self, *args, scheduling_enabled=True, **kwargs):
         super().__init__(*args, **kwargs)
@@ -65,11 +56,6 @@ class ScriptForm(forms.Form):
         if self.cleaned_data.get('_interval') and not scheduled_time:
             self.cleaned_data['_schedule_at'] = local_now()
 
-        # Fall back to the field's initial value if no notification preference was submitted
-        # (e.g. when running a script via the "Run Script" button on the scripts list view)
-        if not self.cleaned_data.get('_notifications'):
-            self.cleaned_data['_notifications'] = self.fields['_notifications'].initial
-
         return self.cleaned_data
 
 
@@ -77,22 +63,6 @@ class ScriptFileForm(ManagedFileForm):
     """
     ManagedFileForm with a custom save method to use django-storages.
     """
-    def clean(self):
-        super().clean()
-
-        if upload_file := self.cleaned_data.get('upload_file'):
-            # Validate that the uploaded script can be loaded as a Python module
-            content = upload_file.read()
-            upload_file.seek(0)
-            try:
-                validate_script_content(content, upload_file.name)
-            except Exception as e:
-                raise forms.ValidationError(
-                    _("Error loading script: {error}").format(error=e)
-                )
-
-        return self.cleaned_data
-
     def save(self, *args, **kwargs):
         # If a file was uploaded, save it to disk
         if self.cleaned_data['upload_file']:

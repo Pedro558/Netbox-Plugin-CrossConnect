@@ -1,6 +1,5 @@
-from django.db import migrations, models
-
 import users.models
+from django.db import migrations, models
 
 
 def update_custom_fields(apps, schema_editor):

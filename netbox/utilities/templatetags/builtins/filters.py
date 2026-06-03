@@ -227,11 +227,12 @@ def isodate(value):
     if type(value) is datetime.date:
         text = value.isoformat()
         return mark_safe(f'<span title="{naturalday(value)}">{text}</span>')
-    if type(value) is datetime.datetime:
+    elif type(value) is datetime.datetime:
         local_value = localtime(value) if value.tzinfo else value
         text = local_value.date().isoformat()
         return mark_safe(f'<span title="{naturaltime(value)}">{text}</span>')
-    return ''
+    else:
+        return ''
 
 
 @register.filter()
@@ -251,16 +252,3 @@ def isodatetime(value, spec='seconds'):
     else:
         return ''
     return mark_safe(f'<span title="{naturaltime(value)}">{text}</span>')
-
-
-@register.filter
-def truncate_middle(value, length):
-    if len(value) <= length:
-        return value
-
-    # Calculate split points for the two parts
-    half_len = (length - 1) // 2  # 1 for the ellipsis
-    first_part = value[:half_len]
-    second_part = value[len(value) - (length - 1 - half_len):]
-
-    return mark_safe(f"{first_part}&hellip;{second_part}")

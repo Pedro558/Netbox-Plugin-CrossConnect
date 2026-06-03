@@ -4,15 +4,14 @@ from functools import cached_property
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
-from django.core.files.storage import storages
 from django.db import models
+from django.core.files.storage import storages
 from django.utils.translation import gettext as _
 
+from ..choices import ManagedFileRootPathChoices
 from extras.storage import ScriptFileSystemStorage
 from netbox.models.features import SyncedDataMixin
 from utilities.querysets import RestrictedQuerySet
-
-from ..choices import ManagedFileRootPathChoices
 
 __all__ = (
     'ManagedFile',
@@ -79,7 +78,8 @@ class ManagedFile(SyncedDataMixin, models.Model):
                 'scripts': settings.SCRIPTS_ROOT,
                 'reports': settings.REPORTS_ROOT,
             }[self.file_root]
-        return ""
+        else:
+            return ""
 
     def sync_data(self):
         if self.data_file:
@@ -89,7 +89,6 @@ class ManagedFile(SyncedDataMixin, models.Model):
 
             with storage.open(self.full_path, 'wb+') as new_file:
                 new_file.write(self.data_file.data)
-    sync_data.alters_data = True
 
     @cached_property
     def storage(self):

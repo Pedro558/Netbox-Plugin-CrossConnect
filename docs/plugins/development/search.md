@@ -1,14 +1,12 @@
 # Search
 
-Plugins can define and register their own models to extend NetBox's core search functionality. Typically, a plugin will include a file named `search.py`, which holds all search indexes for its models.
+Plugins can define and register their own models to extend NetBox's core search functionality. Typically, a plugin will include a file named `search.py`, which holds all search indexes for its models (see the example below).
 
-```python title="search.py"
+```python
 # search.py
-from netbox.search import SearchIndex, register_search
-
+from netbox.search import SearchIndex
 from .models import MyModel
 
-@register_search
 class MyModelIndex(SearchIndex):
     model = MyModel
     fields = (
@@ -19,11 +17,15 @@ class MyModelIndex(SearchIndex):
     display_attrs = ('site', 'device', 'status', 'description')
 ```
 
-Decorate each `SearchIndex` subclass with `@register_search` to register it with NetBox. When using the default `search.py` module, no additional `indexes = [...]` list is required.
+Fields listed in `display_attrs` will not be cached for search, but will be displayed alongside the object when it appears in global search results. This is helpful for conveying to the user additional information about an object.
 
-Fields listed in `display_attrs` are not cached for matching, but they are displayed alongside the object in global search results to provide additional context.
+To register one or more indexes with NetBox, define a list named `indexes` at the end of this file:
+
+```python
+indexes = [MyModelIndex]
+```
 
 !!! tip
-    The legacy `indexes = [...]` list remains supported via `PluginConfig.search_indexes` for backward compatibility and custom loading patterns.
+    The path to the list of search indexes can be modified by setting `search_indexes` in the PluginConfig instance.
 
 ::: netbox.search.SearchIndex

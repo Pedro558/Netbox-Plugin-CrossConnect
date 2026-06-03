@@ -1,12 +1,12 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
+import django_tables2 as tables
 
 from ipam.models import *
-from netbox.tables import NetBoxTable, PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 
 __all__ = (
-    'FHRPGroupAssignmentTable',
     'FHRPGroupTable',
+    'FHRPGroupAssignmentTable',
 )
 
 
@@ -17,7 +17,7 @@ IPADDRESSES = """
 """
 
 
-class FHRPGroupTable(PrimaryModelTable):
+class FHRPGroupTable(NetBoxTable):
     group_id = tables.Column(
         verbose_name=_('Group ID'),
         linkify=True
@@ -30,6 +30,9 @@ class FHRPGroupTable(PrimaryModelTable):
     member_count = tables.Column(
         verbose_name=_('Members')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='ipam:fhrpgroup_list'
     )
@@ -37,7 +40,7 @@ class FHRPGroupTable(PrimaryModelTable):
     def value_ip_addresses(self, value):
         return ",".join([str(obj.address) for obj in value.all()])
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = FHRPGroup
         fields = (
             'pk', 'group_id', 'protocol', 'name', 'auth_type', 'auth_key', 'description', 'comments', 'ip_addresses',

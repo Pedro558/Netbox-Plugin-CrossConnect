@@ -1,36 +1,11 @@
-import uuid
-from unittest.mock import MagicMock, patch
-
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.test import TestCase
 
-from core.choices import JobNotificationChoices, JobStatusChoices, ObjectChangeActionChoices
-from core.models import DataSource, Job, ObjectType
-from dcim.models import Device, Location, Site
-from extras.models import Notification
+from core.models import DataSource, ObjectType
+from core.choices import ObjectChangeActionChoices
+from dcim.models import Site, Location, Device
 from netbox.constants import CENSOR_TOKEN, CENSOR_TOKEN_CHANGED
-from users.models import User
-
-
-class DataSourceIgnoreRulesTestCase(TestCase):
-
-    def test_no_ignore_rules(self):
-        ds = DataSource(ignore_rules='')
-        self.assertFalse(ds._ignore('README.md'))
-        self.assertFalse(ds._ignore('subdir/file.py'))
-
-    def test_ignore_by_filename(self):
-        ds = DataSource(ignore_rules='*.txt')
-        self.assertTrue(ds._ignore('notes.txt'))
-        self.assertTrue(ds._ignore('subdir/notes.txt'))
-        self.assertFalse(ds._ignore('notes.py'))
-
-    def test_ignore_by_subdirectory(self):
-        ds = DataSource(ignore_rules='dev/*')
-        self.assertTrue(ds._ignore('dev/README.md'))
-        self.assertTrue(ds._ignore('dev/script.py'))
-        self.assertFalse(ds._ignore('prod/script.py'))
 
 
 class DataSourceChangeLoggingTestCase(TestCase):
@@ -150,7 +125,7 @@ class DataSourceChangeLoggingTestCase(TestCase):
         self.assertEqual(objectchange.postchange_data['parameters']['password'], CENSOR_TOKEN)
 
 
-class ObjectTypeTestCase(TestCase):
+class ObjectTypeTest(TestCase):
 
     def test_create(self):
         """
@@ -225,122 +200,3 @@ class ObjectTypeTestCase(TestCase):
         bookmarks_ots = ObjectType.objects.with_feature('bookmarks')
         self.assertIn(ObjectType.objects.get_by_natural_key('dcim', 'site'), bookmarks_ots)
         self.assertNotIn(ObjectType.objects.get_by_natural_key('dcim', 'cabletermination'), bookmarks_ots)
-
-
-class JobTestCase(TestCase):
-
-    def _make_job(self, user, notifications):
-        """
-        Create and return a persisted Job with the given user and notifications setting.
-        """
-        return Job.objects.create(
-            name='Test Job',
-            job_id=uuid.uuid4(),
-            user=user,
-            notifications=notifications,
-            status=JobStatusChoices.STATUS_RUNNING,
-        )
-
-    @patch('core.models.jobs.django_rq.get_queue')
-    def test_delete_cancels_job_from_correct_queue(self, mock_get_queue):
-        """
-        Test that when a job is deleted, it's canceled from the correct queue.
-        """
-        mock_queue = MagicMock()
-        mock_rq_job = MagicMock()
-        mock_queue.fetch_job.return_value = mock_rq_job
-        mock_get_queue.return_value = mock_queue
-
-        def dummy_func(**kwargs):
-            pass
-
-        # Enqueue a job with a custom queue name
-        custom_queue = 'my_custom_queue'
-        job = Job.enqueue(
-            func=dummy_func,
-            name='Test Job',
-            queue_name=custom_queue
-        )
-
-        # Reset mock to clear enqueue call
-        mock_get_queue.reset_mock()
-
-        # Delete the job
-        job.delete()
-
-        # Verify the correct queue was used for cancellation
-        mock_get_queue.assert_called_with(custom_queue)
-        mock_queue.fetch_job.assert_called_with(str(job.job_id))
-        mock_rq_job.cancel.assert_called_once()
-
-    @patch('core.models.jobs.job_end')
-    def test_terminate_notification_always(self, mock_job_end):
-        """
-        With notifications=always, a Notification should be created for every
-        terminal status (completed, failed, errored).
-        """
-        user = User.objects.create_user(username='notification-always')
-
-        for status in (
-            JobStatusChoices.STATUS_COMPLETED,
-            JobStatusChoices.STATUS_FAILED,
-            JobStatusChoices.STATUS_ERRORED,
-        ):
-            with self.subTest(status=status):
-                job = self._make_job(user, JobNotificationChoices.NOTIFICATION_ALWAYS)
-                job.terminate(status=status)
-                self.assertEqual(
-                    Notification.objects.filter(user=user, object_id=job.pk).count(),
-                    1,
-                    msg=f"Expected a notification for status={status} with notifications=always",
-                )
-
-    @patch('core.models.jobs.job_end')
-    def test_terminate_notification_on_failure(self, mock_job_end):
-        """
-        With notifications=on_failure, a Notification should be created only for
-        non-completed terminal statuses (failed, errored), not for completed.
-        """
-        user = User.objects.create_user(username='notification-on-failure')
-
-        # No notification on successful completion
-        job = self._make_job(user, JobNotificationChoices.NOTIFICATION_ON_FAILURE)
-        job.terminate(status=JobStatusChoices.STATUS_COMPLETED)
-        self.assertEqual(
-            Notification.objects.filter(user=user, object_id=job.pk).count(),
-            0,
-            msg="Expected no notification for status=completed with notifications=on_failure",
-        )
-
-        # Notification on failure/error
-        for status in (JobStatusChoices.STATUS_FAILED, JobStatusChoices.STATUS_ERRORED):
-            with self.subTest(status=status):
-                job = self._make_job(user, JobNotificationChoices.NOTIFICATION_ON_FAILURE)
-                job.terminate(status=status)
-                self.assertEqual(
-                    Notification.objects.filter(user=user, object_id=job.pk).count(),
-                    1,
-                    msg=f"Expected a notification for status={status} with notifications=on_failure",
-                )
-
-    @patch('core.models.jobs.job_end')
-    def test_terminate_notification_never(self, mock_job_end):
-        """
-        With notifications=never, no Notification should be created regardless
-        of terminal status.
-        """
-        user = User.objects.create_user(username='notification-never')
-
-        for status in (
-            JobStatusChoices.STATUS_COMPLETED,
-            JobStatusChoices.STATUS_FAILED,
-            JobStatusChoices.STATUS_ERRORED,
-        ):
-            with self.subTest(status=status):
-                job = self._make_job(user, JobNotificationChoices.NOTIFICATION_NEVER)
-                job.terminate(status=status)
-                self.assertEqual(
-                    Notification.objects.filter(user=user, object_id=job.pk).count(),
-                    0,
-                    msg=f"Expected no notification for status={status} with notifications=never",
-                )

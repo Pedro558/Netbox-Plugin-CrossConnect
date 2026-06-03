@@ -8,7 +8,6 @@ from jinja2.exceptions import TemplateError
 
 from netbox.registry import registry
 from utilities.proxy import resolve_proxies
-
 from .constants import WEBHOOK_EVENT_TYPES
 
 __all__ = (
@@ -53,17 +52,11 @@ def send_webhook(event_rule, object_type, event_type, data, timestamp, username,
         'event': WEBHOOK_EVENT_TYPES.get(event_type, event_type),
         'timestamp': timestamp,
         'object_type': '.'.join(object_type.natural_key()),
+        'model': object_type.model,
         'username': username,
         'request_id': request.id if request else None,
         'data': data,
     }
-    if request:
-        context['request'] = {
-            'id': str(request.id) if request.id else None,
-            'method': request.method,
-            'path': request.path,
-            'user': str(request.user),
-        }
     if snapshots:
         context.update({
             'snapshots': snapshots
@@ -107,7 +100,7 @@ def send_webhook(event_rule, object_type, event_type, data, timestamp, username,
         'data': body.encode('utf8'),
     }
     logger.info(
-        f"Sending {params['method']} request to {params['url']} ({context['object_type']} {context['event']})"
+        f"Sending {params['method']} request to {params['url']} ({context['model']} {context['event']})"
     )
     logger.debug(params)
     try:
@@ -131,7 +124,8 @@ def send_webhook(event_rule, object_type, event_type, data, timestamp, username,
     if 200 <= response.status_code <= 299:
         logger.info(f"Request succeeded; response status {response.status_code}")
         return f"Status {response.status_code} returned, webhook successfully processed."
-    logger.warning(f"Request failed; response status {response.status_code}: {response.content}")
-    raise requests.exceptions.RequestException(
-        f"Status {response.status_code} returned with content '{response.content}', webhook FAILED to process."
-    )
+    else:
+        logger.warning(f"Request failed; response status {response.status_code}: {response.content}")
+        raise requests.exceptions.RequestException(
+            f"Status {response.status_code} returned with content '{response.content}', webhook FAILED to process."
+        )

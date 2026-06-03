@@ -325,14 +325,14 @@ class CircuitTypeType(OrganizationalObjectType):
 
 ### Change filters.py
 
-Filter classes should inherit from `netbox.graphql.filters.BaseModelFilter`.
+Strawberry currently doesn't directly support django-filter, so an explicit filters.py file will need to be created.  NetBox includes a new `autotype_decorator` used to automatically wrap FilterSets to reduce the required code to a minimum.
 
 ```python title="New"
 import strawberry
 import strawberry_django
 from circuits import filtersets, models
 
-from netbox.graphql.filters import BaseModelFilter
+from netbox.graphql.filter_mixins import autotype_decorator, BaseFilterMixin
 
 __all__ = (
     'CircuitFilter',
@@ -340,7 +340,8 @@ __all__ = (
 
 
 @strawberry_django.filter(models.Circuit, lookups=True)
-class CircuitFilter(BaseModelFilter):
+@autotype_decorator(filtersets.CircuitFilterSet)
+class CircuitFilter(BaseFilterMixin):
     pass
 
 ```

@@ -34,6 +34,9 @@ Sets the default number of rows displayed on paginated tables.
 ### Paginator placement
 Controls where pagination controls are rendered relative to a table.
 
+### HTMX navigation (experimental)
+Enables partial‑page navigation for supported views. Disable this preference if unexpected behavior is observed.
+
 ### Striped table rows
 Toggles alternating row backgrounds on tables.
 

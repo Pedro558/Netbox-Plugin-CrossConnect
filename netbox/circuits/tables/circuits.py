@@ -1,9 +1,10 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
+import django_tables2 as tables
 
 from circuits.models import *
-from netbox.tables import NetBoxTable, OrganizationalModelTable, PrimaryModelTable, columns
 from tenancy.tables import ContactsColumnMixin, TenancyColumnsMixin
+
+from netbox.tables import NetBoxTable, columns
 
 from .columns import CommitRateColumn
 
@@ -23,7 +24,7 @@ CIRCUITTERMINATION_LINK = """
 """
 
 
-class CircuitTypeTable(OrganizationalModelTable):
+class CircuitTypeTable(NetBoxTable):
     name = tables.Column(
         linkify=True,
         verbose_name=_('Name'),
@@ -38,16 +39,16 @@ class CircuitTypeTable(OrganizationalModelTable):
         verbose_name=_('Circuits')
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = CircuitType
         fields = (
-            'pk', 'id', 'name', 'circuit_count', 'color', 'description', 'slug', 'comments', 'tags', 'created',
-            'last_updated', 'actions',
+            'pk', 'id', 'name', 'circuit_count', 'color', 'description', 'slug', 'tags', 'created', 'last_updated',
+            'actions',
         )
         default_columns = ('pk', 'name', 'circuit_count', 'color', 'description')
 
 
-class CircuitTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class CircuitTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     cid = tables.Column(
         linkify=True,
         verbose_name=_('Circuit ID')
@@ -78,6 +79,9 @@ class CircuitTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         verbose_name=_('Commit Rate')
     )
     distance = columns.DistanceColumn()
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments')
+    )
     tags = columns.TagColumn(
         url_name='circuits:circuit_list'
     )
@@ -86,7 +90,7 @@ class CircuitTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         linkify_item=True
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Circuit
         fields = (
             'pk', 'id', 'cid', 'provider', 'provider_account', 'type', 'status', 'tenant', 'tenant_group',
@@ -159,7 +163,7 @@ class CircuitTerminationTable(NetBoxTable):
         )
 
 
-class CircuitGroupTable(TenancyColumnsMixin, OrganizationalModelTable):
+class CircuitGroupTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -173,11 +177,11 @@ class CircuitGroupTable(TenancyColumnsMixin, OrganizationalModelTable):
         url_name='circuits:circuitgroup_list'
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = CircuitGroup
         fields = (
-            'pk', 'name', 'description', 'circuit_group_assignment_count', 'tenant', 'tenant_group', 'comments',
-            'tags', 'created', 'last_updated', 'actions',
+            'pk', 'name', 'description', 'circuit_group_assignment_count', 'tags',
+            'created', 'last_updated', 'actions',
         )
         default_columns = ('pk', 'name', 'description', 'circuit_group_assignment_count')
 
@@ -190,16 +194,14 @@ class CircuitGroupAssignmentTable(NetBoxTable):
     provider = tables.Column(
         accessor='member__provider',
         verbose_name=_('Provider'),
-        orderable=False,
-        linkify=True,
+        linkify=True
     )
     member_type = columns.ContentTypeColumn(
         verbose_name=_('Type')
     )
     member = tables.Column(
         verbose_name=_('Circuit'),
-        orderable=False,
-        linkify=True,
+        linkify=True
     )
     priority = tables.Column(
         verbose_name=_('Priority'),

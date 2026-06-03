@@ -1,7 +1,6 @@
 from django.urls import include, path
 
 from utilities.urls import get_model_urls
-
 from . import views
 
 app_name = 'virtualization'
@@ -15,9 +14,6 @@ urlpatterns = [
 
     path('clusters/', include(get_model_urls('virtualization', 'cluster', detail=False))),
     path('clusters/<int:pk>/', include(get_model_urls('virtualization', 'cluster'))),
-
-    path('virtual-machine-types/', include(get_model_urls('virtualization', 'virtualmachinetype', detail=False))),
-    path('virtual-machine-types/<int:pk>/', include(get_model_urls('virtualization', 'virtualmachinetype'))),
 
     path('virtual-machines/', include(get_model_urls('virtualization', 'virtualmachine', detail=False))),
     path('virtual-machines/<int:pk>/', include(get_model_urls('virtualization', 'virtualmachine'))),

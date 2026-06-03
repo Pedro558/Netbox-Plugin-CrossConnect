@@ -37,6 +37,8 @@ class PluginMenuItem:
     Alternatively, a pre-generated url can be set on the object which will be rendered literally.
     Buttons are each specified as a list of PluginMenuButton instances.
     """
+    permissions = []
+    buttons = []
     _url = None
 
     def __init__(
@@ -52,14 +54,10 @@ class PluginMenuItem:
             if type(permissions) not in (list, tuple):
                 raise TypeError(_("Permissions must be passed as a tuple or list."))
             self.permissions = permissions
-        else:
-            self.permissions = []
         if buttons is not None:
             if type(buttons) not in (list, tuple):
                 raise TypeError(_("Buttons must be passed as a tuple or list."))
             self.buttons = buttons
-        else:
-            self.buttons = []
 
     @property
     def url(self):
@@ -76,6 +74,7 @@ class PluginMenuButton:
     ButtonColorChoices.
     """
     color = ButtonColorChoices.DEFAULT
+    permissions = []
     _url = None
 
     def __init__(self, link, title, icon_class, color=None, permissions=None):
@@ -88,8 +87,6 @@ class PluginMenuButton:
             if type(permissions) not in (list, tuple):
                 raise TypeError(_("Permissions must be passed as a tuple or list."))
             self.permissions = permissions
-        else:
-            self.permissions = []
         if color is not None:
             if color not in ButtonColorChoices.values():
                 raise ValueError(_("Button color must be a choice within ButtonColorChoices."))

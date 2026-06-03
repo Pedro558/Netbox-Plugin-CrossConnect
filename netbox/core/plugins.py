@@ -1,6 +1,7 @@
 import datetime
 import importlib
 from dataclasses import dataclass, field
+from typing import Optional
 
 import requests
 from django.conf import settings
@@ -54,7 +55,7 @@ class Plugin:
     tag_line: str = ''
     description_short: str = ''
     slug: str = ''
-    author: PluginAuthor | None = None
+    author: Optional[PluginAuthor] = None
     created_at: datetime.datetime = None
     updated_at: datetime.datetime = None
     license_type: str = ''

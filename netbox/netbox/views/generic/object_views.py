@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+from copy import deepcopy
 
 from django.contrib import messages
 from django.db import router, transaction
@@ -22,8 +23,7 @@ from utilities.permissions import get_permission_for_model
 from utilities.querydict import normalize_querydict, prepare_cloned_fields
 from utilities.request import safe_for_redirect
 from utilities.tables import get_table_configs
-from utilities.views import GetReturnURLMixin, get_action_url, get_default_template
-
+from utilities.views import GetReturnURLMixin, get_action_url
 from .base import BaseObjectView
 from .mixins import ActionsMixin, TableMixin
 from .utils import get_prerequisite_model
@@ -44,11 +44,9 @@ class ObjectView(ActionsMixin, BaseObjectView):
     Note: If `template_name` is not specified, it will be determined automatically based on the queryset model.
 
     Attributes:
-        layout: An instance of `netbox.ui.layout.Layout` which defines the page layout (overrides HTML template)
         tab: A ViewTab instance for the view
         actions: An iterable of ObjectAction subclasses (see ActionsMixin)
     """
-    layout = None
     tab = None
     actions = (CloneObject, EditObject, DeleteObject)
 
@@ -83,7 +81,6 @@ class ObjectView(ActionsMixin, BaseObjectView):
             'object': instance,
             'actions': actions,
             'tab': self.tab,
-            'layout': self.layout,
             **self.get_extra_context(request, instance),
         })
 
@@ -163,7 +160,7 @@ class ObjectChildrenView(ObjectView, ActionsMixin, TableMixin):
             'object': instance,
             'model': self.child_model,
             'child_model': self.child_model,
-            'base_template': get_default_template(instance),
+            'base_template': f'{instance._meta.app_label}/{instance._meta.model_name}.html',
             'table': table,
             'table_config': f'{table.name}_config',
             'table_configs': get_table_configs(table, request.user),
@@ -413,7 +410,8 @@ class ObjectDeleteView(GetReturnURLMixin, BaseObjectView):
             return HttpResponse(headers={
                 'HX-Redirect': obj.get_absolute_url(),
             })
-        return redirect(obj.get_absolute_url())
+        else:
+            return redirect(obj.get_absolute_url())
 
     #
     # Request handlers
@@ -498,7 +496,8 @@ class ObjectDeleteView(GetReturnURLMixin, BaseObjectView):
                 return redirect(return_url)
             return redirect(self.get_return_url(request, obj))
 
-        logger.debug("Form validation failed")
+        else:
+            logger.debug("Form validation failed")
 
         return render(request, self.template_name, {
             'object': obj,
@@ -562,7 +561,7 @@ class ComponentCreateView(GetReturnURLMixin, BaseObjectView):
         if form.is_valid():
             changelog_message = form.cleaned_data.pop('changelog_message', '')
             new_components = []
-            data = request.POST.copy()
+            data = deepcopy(request.POST)
             pattern_count = len(form.cleaned_data[self.form.replication_fields[0]])
 
             for i in range(pattern_count):
@@ -571,8 +570,7 @@ class ComponentCreateView(GetReturnURLMixin, BaseObjectView):
                         data[field_name] = form.cleaned_data[field_name][i]
 
                 if hasattr(form, 'get_iterative_data'):
-                    for k, v in form.get_iterative_data(i).items():
-                        data.setlist(k, v)
+                    data.update(form.get_iterative_data(i))
 
                 component_form = self.model_form(data)
 
@@ -605,7 +603,8 @@ class ComponentCreateView(GetReturnURLMixin, BaseObjectView):
                         # Redirect user on success
                         if '_addanother' in request.POST and safe_for_redirect(request.get_full_path()):
                             return redirect(request.get_full_path())
-                        return redirect(self.get_return_url(request))
+                        else:
+                            return redirect(self.get_return_url(request))
 
                 except (AbortRequest, PermissionsViolation) as e:
                     logger.debug(e.message)

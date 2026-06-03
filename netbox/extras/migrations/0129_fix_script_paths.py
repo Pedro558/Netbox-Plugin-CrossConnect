@@ -1,8 +1,7 @@
-from urllib.parse import urlparse
-
 from django.conf import settings
 from django.core.files.storage import storages
 from django.db import migrations
+from urllib.parse import urlparse
 
 from extras.storage import ScriptFileSystemStorage
 

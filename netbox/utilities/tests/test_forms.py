@@ -6,18 +6,13 @@ from netbox.choices import ImportFormatChoices
 from utilities.forms.bulk_import import BulkImportForm
 from utilities.forms.fields.csv import CSVSelectWidget
 from utilities.forms.forms import BulkRenameForm
-from utilities.forms.utils import (
-    expand_alphanumeric_pattern,
-    expand_ipnetwork_pattern,
-    get_capacity_unit_label,
-    get_field_value,
-)
+from utilities.forms.utils import get_field_value, expand_alphanumeric_pattern, expand_ipaddress_pattern
 from utilities.forms.widgets.select import AvailableOptions, SelectedOptions
 
 
-class ExpandIPNetworkTestCase(TestCase):
+class ExpandIPAddress(TestCase):
     """
-    Validate the operation of expand_ipnetwork_pattern().
+    Validate the operation of expand_ipaddress_pattern().
     """
     def test_ipv4_range(self):
         input = '1.2.3.[9-10]/32'
@@ -26,7 +21,7 @@ class ExpandIPNetworkTestCase(TestCase):
             '1.2.3.10/32',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 4)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 4)), output)
 
     def test_ipv4_set(self):
         input = '1.2.3.[4,44]/32'
@@ -35,7 +30,7 @@ class ExpandIPNetworkTestCase(TestCase):
             '1.2.3.44/32',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 4)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 4)), output)
 
     def test_ipv4_multiple_ranges(self):
         input = '1.[9-10].3.[9-11]/32'
@@ -48,7 +43,7 @@ class ExpandIPNetworkTestCase(TestCase):
             '1.10.3.11/32',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 4)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 4)), output)
 
     def test_ipv4_multiple_sets(self):
         input = '1.[2,22].3.[4,44]/32'
@@ -59,7 +54,7 @@ class ExpandIPNetworkTestCase(TestCase):
             '1.22.3.44/32',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 4)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 4)), output)
 
     def test_ipv4_set_and_range(self):
         input = '1.[2,22].3.[9-11]/32'
@@ -72,7 +67,7 @@ class ExpandIPNetworkTestCase(TestCase):
             '1.22.3.11/32',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 4)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 4)), output)
 
     def test_ipv6_range(self):
         input = 'fec::abcd:[9-b]/64'
@@ -82,7 +77,7 @@ class ExpandIPNetworkTestCase(TestCase):
             'fec::abcd:b/64',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 6)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 6)), output)
 
     def test_ipv6_range_multichar_field(self):
         input = 'fec::abcd:[f-11]/64'
@@ -92,7 +87,7 @@ class ExpandIPNetworkTestCase(TestCase):
             'fec::abcd:11/64',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 6)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 6)), output)
 
     def test_ipv6_set(self):
         input = 'fec::abcd:[9,ab]/64'
@@ -101,7 +96,7 @@ class ExpandIPNetworkTestCase(TestCase):
             'fec::abcd:ab/64',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 6)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 6)), output)
 
     def test_ipv6_multiple_ranges(self):
         input = 'fec::[1-2]bcd:[9-b]/64'
@@ -114,7 +109,7 @@ class ExpandIPNetworkTestCase(TestCase):
             'fec::2bcd:b/64',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 6)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 6)), output)
 
     def test_ipv6_multiple_sets(self):
         input = 'fec::[a,f]bcd:[9,ab]/64'
@@ -125,7 +120,7 @@ class ExpandIPNetworkTestCase(TestCase):
             'fec::fbcd:ab/64',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 6)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 6)), output)
 
     def test_ipv6_set_and_range(self):
         input = 'fec::[dead,beaf]:[9-b]/64'
@@ -138,44 +133,44 @@ class ExpandIPNetworkTestCase(TestCase):
             'fec::beaf:b/64',
         ])
 
-        self.assertEqual(sorted(expand_ipnetwork_pattern(input, 6)), output)
+        self.assertEqual(sorted(expand_ipaddress_pattern(input, 6)), output)
 
     def test_invalid_address_family(self):
         with self.assertRaisesRegex(Exception, 'Invalid IP address family: 5'):
-            sorted(expand_ipnetwork_pattern(None, 5))
+            sorted(expand_ipaddress_pattern(None, 5))
 
     def test_invalid_non_pattern(self):
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.4/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.4/32', 4))
 
     def test_invalid_range(self):
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[4-]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[4-]/32', 4))
 
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[-4]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[-4]/32', 4))
 
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[4--5]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[4--5]/32', 4))
 
     def test_invalid_range_bounds(self):
-        self.assertEqual(sorted(expand_ipnetwork_pattern('1.2.3.[4-3]/32', 6)), [])
+        self.assertEqual(sorted(expand_ipaddress_pattern('1.2.3.[4-3]/32', 6)), [])
 
     def test_invalid_set(self):
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[4]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[4]/32', 4))
 
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[4,]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[4,]/32', 4))
 
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[,4]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[,4]/32', 4))
 
         with self.assertRaises(ValueError):
-            sorted(expand_ipnetwork_pattern('1.2.3.[4,,5]/32', 4))
+            sorted(expand_ipaddress_pattern('1.2.3.[4,,5]/32', 4))
 
 
-class ExpandAlphanumericTestCase(TestCase):
+class ExpandAlphanumeric(TestCase):
     """
     Validate the operation of expand_alphanumeric_pattern().
     """
@@ -304,7 +299,7 @@ class ExpandAlphanumericTestCase(TestCase):
             sorted(expand_alphanumeric_pattern('r[a,,b]a'))
 
 
-class ImportFormTestCase(TestCase):
+class ImportFormTest(TestCase):
 
     def test_format_detection(self):
         form = BulkImportForm()
@@ -384,7 +379,7 @@ class ImportFormTestCase(TestCase):
         ])
 
 
-class BulkRenameFormTestCase(TestCase):
+class BulkRenameFormTest(TestCase):
     def test_no_strip_whitespace(self):
         # Tests to make sure Bulk Rename Form isn't stripping whitespaces
         # See: https://github.com/netbox-community/netbox/issues/13791
@@ -397,7 +392,7 @@ class BulkRenameFormTestCase(TestCase):
         self.assertEqual(form.cleaned_data["replace"], " world ")
 
 
-class GetFieldValueTestCase(TestCase):
+class GetFieldValueTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -457,7 +452,7 @@ class GetFieldValueTestCase(TestCase):
         )
 
 
-class CSVSelectWidgetTestCase(TestCase):
+class CSVSelectWidgetTest(TestCase):
     """
     Validate that CSVSelectWidget treats blank values as omitted.
     This allows model defaults to be applied when CSV fields are present but empty.
@@ -489,7 +484,7 @@ class CSVSelectWidgetTestCase(TestCase):
         self.assertFalse(widget.value_omitted_from_data(data, {}, 'test_field'))
 
 
-class SelectMultipleWidgetTestCase(TestCase):
+class SelectMultipleWidgetTest(TestCase):
     """
     Validate filtering behavior of AvailableOptions and SelectedOptions widgets.
     """
@@ -555,15 +550,3 @@ class SelectMultipleWidgetTestCase(TestCase):
         self.assertEqual(widget.choices[0][1], [(2, 'Option 2')])
         self.assertEqual(widget.choices[1][0], 'Group B')
         self.assertEqual(widget.choices[1][1], [(3, 'Option 3')])
-
-
-class GetCapacityUnitLabelTestCase(TestCase):
-    """
-    Test the get_capacity_unit_label function for correct base unit label.
-    """
-
-    def test_si_label(self):
-        self.assertEqual(get_capacity_unit_label(1000), 'MB')
-
-    def test_iec_label(self):
-        self.assertEqual(get_capacity_unit_label(1024), 'MiB')

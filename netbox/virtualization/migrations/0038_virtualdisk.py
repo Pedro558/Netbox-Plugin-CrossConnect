@@ -1,7 +1,6 @@
+from django.db import migrations, models
 import django.db.models.deletion
 import taggit.managers
-from django.db import migrations, models
-
 import utilities.fields
 import utilities.json
 import utilities.ordering

@@ -5,6 +5,7 @@ from django.dispatch import receiver
 
 from netbox.registry import registry
 
+
 logger = logging.getLogger('netbox.denormalized')
 
 

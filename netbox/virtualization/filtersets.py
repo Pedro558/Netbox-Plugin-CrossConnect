@@ -1,21 +1,17 @@
 import django_filters
-import netaddr
 from django.db.models import Q
 from django.utils.translation import gettext as _
-from netaddr.core import AddrFormatError
 
 from dcim.base_filtersets import ScopedFilterSet
 from dcim.filtersets import CommonInterfaceFilterSet
-from dcim.models import Device, DeviceRole, MACAddress, Platform, Region, Site, SiteGroup
+from dcim.models import Device, DeviceRole, Platform, Region, Site, SiteGroup
+from dcim.models import MACAddress
 from extras.filtersets import LocalConfigContextFilterSet
 from extras.models import ConfigTemplate
 from ipam.filtersets import PrimaryIPFilterSet
-from netbox.filtersets import NetBoxModelFilterSet, OrganizationalModelFilterSet, PrimaryModelFilterSet
-from tenancy.filtersets import ContactModelFilterSet, TenancyFilterSet
-from users.filterset_mixins import OwnerFilterMixin
+from netbox.filtersets import OrganizationalModelFilterSet, NetBoxModelFilterSet
+from tenancy.filtersets import TenancyFilterSet, ContactModelFilterSet
 from utilities.filters import MultiValueCharFilter, MultiValueMACAddressFilter, TreeNodeMultipleChoiceFilter
-from utilities.filtersets import register_filterset
-
 from .choices import *
 from .models import *
 
@@ -23,14 +19,12 @@ __all__ = (
     'ClusterFilterSet',
     'ClusterGroupFilterSet',
     'ClusterTypeFilterSet',
-    'VMInterfaceFilterSet',
     'VirtualDiskFilterSet',
     'VirtualMachineFilterSet',
-    'VirtualMachineTypeFilterSet',
+    'VMInterfaceFilterSet',
 )
 
 
-@register_filterset
 class ClusterTypeFilterSet(OrganizationalModelFilterSet):
 
     class Meta:
@@ -38,7 +32,6 @@ class ClusterTypeFilterSet(OrganizationalModelFilterSet):
         fields = ('id', 'name', 'slug', 'description')
 
 
-@register_filterset
 class ClusterGroupFilterSet(OrganizationalModelFilterSet, ContactModelFilterSet):
 
     class Meta:
@@ -46,35 +39,29 @@ class ClusterGroupFilterSet(OrganizationalModelFilterSet, ContactModelFilterSet)
         fields = ('id', 'name', 'slug', 'description')
 
 
-@register_filterset
-class ClusterFilterSet(PrimaryModelFilterSet, TenancyFilterSet, ScopedFilterSet, ContactModelFilterSet):
+class ClusterFilterSet(NetBoxModelFilterSet, TenancyFilterSet, ScopedFilterSet, ContactModelFilterSet):
     group_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ClusterGroup.objects.all(),
-        distinct=False,
         label=_('Parent group (ID)'),
     )
     group = django_filters.ModelMultipleChoiceFilter(
         field_name='group__slug',
         queryset=ClusterGroup.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('Parent group (slug)'),
     )
     type_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ClusterType.objects.all(),
-        distinct=False,
         label=_('Cluster type (ID)'),
     )
     type = django_filters.ModelMultipleChoiceFilter(
         field_name='type__slug',
         queryset=ClusterType.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('Cluster type (slug)'),
     )
     status = django_filters.MultipleChoiceFilter(
         choices=ClusterStatusChoices,
-        distinct=False,
         null_value=None
     )
 
@@ -92,122 +79,56 @@ class ClusterFilterSet(PrimaryModelFilterSet, TenancyFilterSet, ScopedFilterSet,
         )
 
 
-@register_filterset
-class VirtualMachineTypeFilterSet(PrimaryModelFilterSet):
-    default_platform_id = TreeNodeMultipleChoiceFilter(
-        queryset=Platform.objects.all(),
-        field_name='default_platform',
-        lookup_expr='in',
-        label=_('Default platform (ID)'),
-    )
-    default_platform = TreeNodeMultipleChoiceFilter(
-        queryset=Platform.objects.all(),
-        field_name='default_platform',
-        to_field_name='slug',
-        lookup_expr='in',
-        label=_('Default platform (slug)'),
-    )
-
-    class Meta:
-        model = VirtualMachineType
-        fields = (
-            'id',
-            'name',
-            'slug',
-            'default_vcpus',
-            'default_memory',
-            'description',
-            'virtual_machine_count',
-        )
-
-    def search(self, queryset, name, value):
-        if not value.strip():
-            return queryset
-
-        return queryset.filter(
-            Q(name__icontains=value) |
-            Q(description__icontains=value) |
-            Q(comments__icontains=value)
-        )
-
-
-@register_filterset
 class VirtualMachineFilterSet(
-    PrimaryModelFilterSet,
+    NetBoxModelFilterSet,
     TenancyFilterSet,
     ContactModelFilterSet,
     LocalConfigContextFilterSet,
     PrimaryIPFilterSet,
 ):
-    virtual_machine_type_id = django_filters.ModelMultipleChoiceFilter(
-        queryset=VirtualMachineType.objects.all(),
-        distinct=False,
-        label=_('Virtual machine type (ID)'),
-    )
-    virtual_machine_type = django_filters.ModelMultipleChoiceFilter(
-        field_name='virtual_machine_type__slug',
-        queryset=VirtualMachineType.objects.all(),
-        distinct=False,
-        to_field_name='slug',
-        label=_('Virtual machine type (slug)'),
-    )
     status = django_filters.MultipleChoiceFilter(
         choices=VirtualMachineStatusChoices,
-        distinct=False,
-        null_value=None
-    )
-    start_on_boot = django_filters.MultipleChoiceFilter(
-        choices=VirtualMachineStartOnBootChoices,
-        distinct=False,
         null_value=None
     )
     cluster_group_id = django_filters.ModelMultipleChoiceFilter(
         field_name='cluster__group',
         queryset=ClusterGroup.objects.all(),
-        distinct=False,
         label=_('Cluster group (ID)'),
     )
     cluster_group = django_filters.ModelMultipleChoiceFilter(
         field_name='cluster__group__slug',
         queryset=ClusterGroup.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('Cluster group (slug)'),
     )
     cluster_type_id = django_filters.ModelMultipleChoiceFilter(
         field_name='cluster__type',
         queryset=ClusterType.objects.all(),
-        distinct=False,
         label=_('Cluster type (ID)'),
     )
     cluster_type = django_filters.ModelMultipleChoiceFilter(
         field_name='cluster__type__slug',
         queryset=ClusterType.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('Cluster type (slug)'),
     )
     cluster_id = django_filters.ModelMultipleChoiceFilter(
         queryset=Cluster.objects.all(),
-        distinct=False,
         label=_('Cluster (ID)'),
     )
     cluster = django_filters.ModelMultipleChoiceFilter(
         field_name='cluster__name',
         queryset=Cluster.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Cluster'),
     )
     device_id = django_filters.ModelMultipleChoiceFilter(
         queryset=Device.objects.all(),
-        distinct=False,
         label=_('Device (ID)'),
     )
     device = django_filters.ModelMultipleChoiceFilter(
         field_name='device__name',
         queryset=Device.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Device'),
     )
@@ -239,13 +160,11 @@ class VirtualMachineFilterSet(
     )
     site_id = django_filters.ModelMultipleChoiceFilter(
         queryset=Site.objects.all(),
-        distinct=False,
         label=_('Site (ID)'),
     )
     site = django_filters.ModelMultipleChoiceFilter(
         field_name='site__slug',
         queryset=Site.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('Site (slug)'),
     )
@@ -287,7 +206,6 @@ class VirtualMachineFilterSet(
     )
     config_template_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ConfigTemplate.objects.all(),
-        distinct=False,
         label=_('Config template (ID)'),
     )
 
@@ -301,22 +219,14 @@ class VirtualMachineFilterSet(
     def search(self, queryset, name, value):
         if not value.strip():
             return queryset
-        qs_filter = Q(
+        return queryset.filter(
             Q(name__icontains=value) |
             Q(description__icontains=value) |
             Q(comments__icontains=value) |
+            Q(primary_ip4__address__startswith=value) |
+            Q(primary_ip6__address__startswith=value) |
             Q(serial__icontains=value)
         )
-        # If the given value looks like an IP address, look for primary IPv4/IPv6 assignments
-        try:
-            ipaddress = netaddr.IPNetwork(value)
-            if ipaddress.version == 4:
-                qs_filter |= Q(primary_ip4__address__host__inet=ipaddress.ip)
-            elif ipaddress.version == 6:
-                qs_filter |= Q(primary_ip6__address__host__inet=ipaddress.ip)
-        except (AddrFormatError, ValueError):
-            pass
-        return queryset.filter(qs_filter)
 
     def _has_primary_ip(self, queryset, name, value):
         params = Q(primary_ip4__isnull=False) | Q(primary_ip6__isnull=False)
@@ -325,44 +235,37 @@ class VirtualMachineFilterSet(
         return queryset.exclude(params)
 
 
-@register_filterset
-class VMInterfaceFilterSet(CommonInterfaceFilterSet, OwnerFilterMixin, NetBoxModelFilterSet):
+class VMInterfaceFilterSet(NetBoxModelFilterSet, CommonInterfaceFilterSet):
     cluster_id = django_filters.ModelMultipleChoiceFilter(
         field_name='virtual_machine__cluster',
         queryset=Cluster.objects.all(),
-        distinct=False,
         label=_('Cluster (ID)'),
     )
     cluster = django_filters.ModelMultipleChoiceFilter(
         field_name='virtual_machine__cluster__name',
         queryset=Cluster.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Cluster'),
     )
     virtual_machine_id = django_filters.ModelMultipleChoiceFilter(
         field_name='virtual_machine',
         queryset=VirtualMachine.objects.all(),
-        distinct=False,
         label=_('Virtual machine (ID)'),
     )
     virtual_machine = django_filters.ModelMultipleChoiceFilter(
         field_name='virtual_machine__name',
         queryset=VirtualMachine.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Virtual machine'),
     )
     parent_id = django_filters.ModelMultipleChoiceFilter(
         field_name='parent',
         queryset=VMInterface.objects.all(),
-        distinct=False,
         label=_('Parent interface (ID)'),
     )
     bridge_id = django_filters.ModelMultipleChoiceFilter(
         field_name='bridge',
         queryset=VMInterface.objects.all(),
-        distinct=False,
         label=_('Bridged interface (ID)'),
     )
     mac_address = MultiValueMACAddressFilter(
@@ -372,13 +275,11 @@ class VMInterfaceFilterSet(CommonInterfaceFilterSet, OwnerFilterMixin, NetBoxMod
     primary_mac_address_id = django_filters.ModelMultipleChoiceFilter(
         field_name='primary_mac_address',
         queryset=MACAddress.objects.all(),
-        distinct=False,
         label=_('Primary MAC address (ID)'),
     )
     primary_mac_address = django_filters.ModelMultipleChoiceFilter(
         field_name='primary_mac_address__mac_address',
         queryset=MACAddress.objects.all(),
-        distinct=False,
         to_field_name='mac_address',
         label=_('Primary MAC address'),
     )
@@ -396,18 +297,15 @@ class VMInterfaceFilterSet(CommonInterfaceFilterSet, OwnerFilterMixin, NetBoxMod
         )
 
 
-@register_filterset
-class VirtualDiskFilterSet(OwnerFilterMixin, NetBoxModelFilterSet):
+class VirtualDiskFilterSet(NetBoxModelFilterSet):
     virtual_machine_id = django_filters.ModelMultipleChoiceFilter(
         field_name='virtual_machine',
         queryset=VirtualMachine.objects.all(),
-        distinct=False,
         label=_('Virtual machine (ID)'),
     )
     virtual_machine = django_filters.ModelMultipleChoiceFilter(
         field_name='virtual_machine__name',
         queryset=VirtualMachine.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Virtual machine'),
     )

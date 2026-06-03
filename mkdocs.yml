@@ -1,4 +1,3 @@
-# Note: NetBox has migrated from MkDocs to Zensical
 site_name: NetBox Documentation
 site_dir: netbox/project-static/docs
 site_url: https://docs.netbox.dev/
@@ -78,7 +77,6 @@ nav:
         - Wireless: 'features/wireless.md'
         - Virtualization: 'features/virtualization.md'
         - VPN Tunnels: 'features/vpn-tunnels.md'
-        - Resource Ownership: 'features/resource-ownership.md'
         - Tenancy: 'features/tenancy.md'
         - Contacts: 'features/contacts.md'
         - Search: 'features/search.md'
@@ -144,7 +142,6 @@ nav:
             - Getting Started: 'plugins/development/index.md'
             - Models: 'plugins/development/models.md'
             - Views: 'plugins/development/views.md'
-            - UI Components: 'plugins/development/ui-components.md'
             - Navigation: 'plugins/development/navigation.md'
             - Templates: 'plugins/development/templates.md'
             - Tables: 'plugins/development/tables.md'
@@ -152,7 +149,6 @@ nav:
             - Filters & Filter Sets: 'plugins/development/filtersets.md'
             - Search: 'plugins/development/search.md'
             - Event Types: 'plugins/development/event-types.md'
-            - Permissions: 'plugins/development/permissions.md'
             - Data Backends: 'plugins/development/data-backends.md'
             - Webhooks: 'plugins/development/webhooks.md'
             - User Interface: 'plugins/development/user-interface.md'
@@ -189,11 +185,8 @@ nav:
             - DataFile: 'models/core/datafile.md'
             - DataSource: 'models/core/datasource.md'
             - Job: 'models/core/job.md'
-            - ObjectChange: 'models/core/objectchange.md'
-            - ObjectType: 'models/core/objecttype.md'
         - DCIM:
             - Cable: 'models/dcim/cable.md'
-            - CableBundle: 'models/dcim/cablebundle.md'
             - ConsolePort: 'models/dcim/consoleport.md'
             - ConsolePortTemplate: 'models/dcim/consoleporttemplate.md'
             - ConsoleServerPort: 'models/dcim/consoleserverport.md'
@@ -226,7 +219,6 @@ nav:
             - PowerPort: 'models/dcim/powerport.md'
             - PowerPortTemplate: 'models/dcim/powerporttemplate.md'
             - Rack: 'models/dcim/rack.md'
-            - RackGroup: 'models/dcim/rackgroup.md'
             - RackReservation: 'models/dcim/rackreservation.md'
             - RackRole: 'models/dcim/rackrole.md'
             - RackType: 'models/dcim/racktype.md'
@@ -281,13 +273,6 @@ nav:
             - ContactRole: 'models/tenancy/contactrole.md'
             - Tenant: 'models/tenancy/tenant.md'
             - TenantGroup: 'models/tenancy/tenantgroup.md'
-        - Users:
-            - Group: 'models/users/group.md'
-            - ObjectPermission: 'models/users/objectpermission.md'
-            - Owner: 'models/users/owner.md'
-            - OwnerGroup: 'models/users/ownergroup.md'
-            - Token: 'models/users/token.md'
-            - User: 'models/users/user.md'
         - Virtualization:
             - Cluster: 'models/virtualization/cluster.md'
             - ClusterGroup: 'models/virtualization/clustergroup.md'
@@ -295,7 +280,6 @@ nav:
             - VMInterface: 'models/virtualization/vminterface.md'
             - VirtualDisk: 'models/virtualization/virtualdisk.md'
             - VirtualMachine: 'models/virtualization/virtualmachine.md'
-            - VirtualMachineType: 'models/virtualization/virtualmachinetype.md'
         - VPN:
             - IKEPolicy: 'models/vpn/ikepolicy.md'
             - IKEProposal: 'models/vpn/ikeproposal.md'
@@ -333,8 +317,6 @@ nav:
         - git Cheat Sheet: 'development/git-cheat-sheet.md'
     - Release Notes:
         - Summary: 'release-notes/index.md'
-        - Version 4.6: 'release-notes/version-4.6.md'
-        - Version 4.5: 'release-notes/version-4.5.md'
         - Version 4.4: 'release-notes/version-4.4.md'
         - Version 4.3: 'release-notes/version-4.3.md'
         - Version 4.2: 'release-notes/version-4.2.md'

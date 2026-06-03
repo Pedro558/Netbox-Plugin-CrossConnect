@@ -1,5 +1,6 @@
 import zoneinfo
 from dataclasses import dataclass
+from typing import Optional
 from urllib.parse import quote
 
 import django_tables2 as tables
@@ -10,9 +11,8 @@ from django.db.models import DateField, DateTimeField
 from django.template import Context, Template
 from django.urls import reverse
 from django.utils.dateparse import parse_date
-from django.utils.html import escape, format_html
+from django.utils.html import escape
 from django.utils.safestring import mark_safe
-from django.utils.text import format_lazy
 from django.utils.translation import gettext_lazy as _
 from django_tables2.columns import library
 from django_tables2.utils import Accessor
@@ -39,9 +39,9 @@ __all__ = (
     'DistanceColumn',
     'DurationColumn',
     'LinkedCountColumn',
-    'MPTTColumn',
-    'ManyToManyColumn',
     'MarkdownColumn',
+    'ManyToManyColumn',
+    'MPTTColumn',
     'TagColumn',
     'TemplateColumn',
     'ToggleColumn',
@@ -61,18 +61,15 @@ class DateColumn(tables.Column):
     def render(self, value):
         if value:
             return value.isoformat()
-        return None
 
     def value(self, value):
         if value:
             return value.isoformat()
-        return None
 
     @classmethod
     def from_field(cls, field, **kwargs):
         if isinstance(field, DateField):
             return cls(**kwargs)
-        return None
 
 
 @library.register
@@ -92,18 +89,15 @@ class DateTimeColumn(tables.Column):
             current_tz = zoneinfo.ZoneInfo(settings.TIME_ZONE)
             value = value.astimezone(current_tz)
             return f"{value.date().isoformat()} {value.time().isoformat(timespec=self.timespec)}"
-        return None
 
     def value(self, value):
         if value:
             return value.isoformat()
-        return None
 
     @classmethod
     def from_field(cls, field, **kwargs):
         if isinstance(field, DateTimeField):
             return cls(**kwargs)
-        return None
 
 
 class DurationColumn(tables.Column):
@@ -187,8 +181,7 @@ class ToggleColumn(tables.CheckBoxColumn):
                     'class': 'w-1',
                 },
                 'input': {
-                    'class': 'form-check-input',
-                    'aria-label': lambda record, value: format_lazy(_('Select {object}'), object=record),
+                    'class': 'form-check-input'
                 }
             }
         super().__init__(*args, default=default, visible=visible, **kwargs)
@@ -196,10 +189,7 @@ class ToggleColumn(tables.CheckBoxColumn):
     @property
     def header(self):
         title_text = _('Toggle all')
-        return format_html(
-            '<input type="checkbox" class="toggle form-check-input" title="{}" aria-label="{}" />',
-            title_text, title_text,
-        )
+        return mark_safe(f'<input type="checkbox" class="toggle form-check-input" title="{title_text}" />')
 
 
 class BooleanColumn(tables.Column):
@@ -233,8 +223,8 @@ class BooleanColumn(tables.Column):
 class ActionsItem:
     title: str
     icon: str
-    permission: str | None = None
-    css_class: str | None = 'secondary'
+    permission: Optional[str] = None
+    css_class: Optional[str] = 'secondary'
 
 
 class ActionsColumn(tables.Column):
@@ -280,7 +270,7 @@ class ActionsColumn(tables.Column):
         if not (self.actions or self.extra_buttons):
             return ''
         # Skip dummy records (e.g. available VLANs or IP ranges replacing individual IPs)
-        if not isinstance(record, model) or not getattr(record, 'pk', None):
+        if type(record) is not model or not getattr(record, 'pk', None):
             return ''
 
         if request := getattr(table, 'context', {}).get('request'):

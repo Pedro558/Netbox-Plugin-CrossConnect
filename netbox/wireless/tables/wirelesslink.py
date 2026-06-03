@@ -1,7 +1,7 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
+import django_tables2 as tables
 
-from netbox.tables import PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 from tenancy.tables import TenancyColumnsMixin
 from wireless.models import *
 
@@ -10,7 +10,7 @@ __all__ = (
 )
 
 
-class WirelessLinkTable(TenancyColumnsMixin, PrimaryModelTable):
+class WirelessLinkTable(TenancyColumnsMixin, NetBoxTable):
     id = tables.Column(
         linkify=True,
         verbose_name=_('ID')
@@ -41,7 +41,7 @@ class WirelessLinkTable(TenancyColumnsMixin, PrimaryModelTable):
         url_name='wireless:wirelesslink_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = WirelessLink
         fields = (
             'pk', 'id', 'status', 'device_a', 'interface_a', 'device_b', 'interface_b', 'ssid', 'tenant',

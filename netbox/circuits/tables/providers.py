@@ -1,19 +1,19 @@
 import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
-from django_tables2.utils import Accessor
-
 from circuits.models import *
-from netbox.tables import PrimaryModelTable, columns
+from django_tables2.utils import Accessor
 from tenancy.tables import ContactsColumnMixin
 
+from netbox.tables import NetBoxTable, columns
+
 __all__ = (
+    'ProviderTable',
     'ProviderAccountTable',
     'ProviderNetworkTable',
-    'ProviderTable',
 )
 
 
-class ProviderTable(ContactsColumnMixin, PrimaryModelTable):
+class ProviderTable(ContactsColumnMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -42,11 +42,14 @@ class ProviderTable(ContactsColumnMixin, PrimaryModelTable):
         url_params={'provider_id': 'pk'},
         verbose_name=_('Circuits')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='circuits:provider_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Provider
         fields = (
             'pk', 'id', 'name', 'accounts', 'account_count', 'asns', 'asn_count', 'circuit_count', 'description',
@@ -55,7 +58,7 @@ class ProviderTable(ContactsColumnMixin, PrimaryModelTable):
         default_columns = ('pk', 'name', 'account_count', 'circuit_count')
 
 
-class ProviderAccountTable(ContactsColumnMixin, PrimaryModelTable):
+class ProviderAccountTable(ContactsColumnMixin, NetBoxTable):
     account = tables.Column(
         linkify=True,
         verbose_name=_('Account'),
@@ -73,11 +76,14 @@ class ProviderAccountTable(ContactsColumnMixin, PrimaryModelTable):
         url_params={'provider_account_id': 'pk'},
         verbose_name=_('Circuits')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='circuits:provideraccount_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = ProviderAccount
         fields = (
             'pk', 'id', 'account', 'name', 'provider', 'circuit_count', 'comments', 'contacts', 'tags', 'created',
@@ -86,7 +92,7 @@ class ProviderAccountTable(ContactsColumnMixin, PrimaryModelTable):
         default_columns = ('pk', 'account', 'name', 'provider', 'circuit_count')
 
 
-class ProviderNetworkTable(PrimaryModelTable):
+class ProviderNetworkTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -95,11 +101,14 @@ class ProviderNetworkTable(PrimaryModelTable):
         verbose_name=_('Provider'),
         linkify=True
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='circuits:providernetwork_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = ProviderNetwork
         fields = (
             'pk', 'id', 'name', 'provider', 'service_id', 'description', 'comments', 'created', 'last_updated', 'tags',

@@ -3,16 +3,13 @@ from django.utils.translation import gettext_lazy as _
 
 from core.choices import *
 from core.models import *
-from netbox.forms import NetBoxModelFilterSetForm, PrimaryModelFilterSetForm
+from netbox.forms import NetBoxModelFilterSetForm
 from netbox.forms.mixins import SavedFiltersMixin
 from netbox.utils import get_data_backend_choices
 from users.models import User
 from utilities.forms import BOOLEAN_WITH_BLANK_CHOICES, FilterForm, add_blank_choice
 from utilities.forms.fields import (
-    ContentTypeChoiceField,
-    ContentTypeMultipleChoiceField,
-    DynamicModelMultipleChoiceField,
-    TagFilterField,
+    ContentTypeChoiceField, ContentTypeMultipleChoiceField, DynamicModelMultipleChoiceField,
 )
 from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import DateTimePicker
@@ -26,12 +23,11 @@ __all__ = (
 )
 
 
-class DataSourceFilterForm(PrimaryModelFilterSetForm):
+class DataSourceFilterForm(NetBoxModelFilterSetForm):
     model = DataSource
     fieldsets = (
-        FieldSet('q', 'filter_id', 'tag'),
+        FieldSet('q', 'filter_id'),
         FieldSet('type', 'status', 'enabled', 'sync_interval', name=_('Data Source')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     type = forms.MultipleChoiceField(
         label=_('Type'),
@@ -55,7 +51,6 @@ class DataSourceFilterForm(PrimaryModelFilterSetForm):
         choices=JobIntervalChoices,
         required=False
     )
-    tag = TagFilterField(model)
 
 
 class DataFileFilterForm(NetBoxModelFilterSetForm):
@@ -75,7 +70,7 @@ class JobFilterForm(SavedFiltersMixin, FilterForm):
     model = Job
     fieldsets = (
         FieldSet('q', 'filter_id'),
-        FieldSet('object_type_id', 'status', 'queue_name', name=_('Attributes')),
+        FieldSet('object_type_id', 'status', name=_('Attributes')),
         FieldSet(
             'created__before', 'created__after', 'scheduled__before', 'scheduled__after', 'started__before',
             'started__after', 'completed__before', 'completed__after', 'user', name=_('Creation')
@@ -89,10 +84,6 @@ class JobFilterForm(SavedFiltersMixin, FilterForm):
     status = forms.MultipleChoiceField(
         label=_('Status'),
         choices=JobStatusChoices,
-        required=False
-    )
-    queue_name = forms.CharField(
-        label=_('Queue'),
         required=False
     )
     created__after = forms.DateTimeField(

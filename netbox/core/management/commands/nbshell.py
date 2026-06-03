@@ -144,13 +144,13 @@ class Command(BaseCommand):
         # If Python code has been passed, execute it and exit.
         if options['command']:
             exec(options['command'], namespace)
-            return None
+            return
 
         # Try to enable tab-complete
         try:
             import readline
             import rlcompleter
-        except ModuleNotFoundError:  # pragma: no cover
+        except ModuleNotFoundError:
             pass
         else:
             readline.set_completer(rlcompleter.Completer(namespace).complete)

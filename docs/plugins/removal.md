@@ -19,19 +19,18 @@ Delete the plugin's entry (if any) in the `PLUGINS_CONFIG` dictionary in `config
 Run the `reindex` management command to reindex the global search engine. This will remove any stale entries pertaining to objects provided by the plugin.
 
 ```no-highlight
-$ cd /opt/netbox/
+$ cd /opt/netbox/netbox/
 $ source /opt/netbox/venv/bin/activate
-(venv) $ python3 netbox/manage.py reindex
+(venv) $ python3 manage.py reindex
 ```
 
 ## Uninstall its Python Package
 
-If the plugin was installed by adding it to `/opt/netbox/local_requirements.txt`, remove its package entry from that file first. Otherwise, the package will be reinstalled the next time NetBox's upgrade script is run.
-
-Use `pip` to remove the installed plugin from NetBox's virtual environment:
+Use `pip` to remove the installed plugin:
 
 ```no-highlight
-$ sudo /opt/netbox/venv/bin/python3 -m pip uninstall <package>
+$ source /opt/netbox/venv/bin/activate
+(venv) $ pip uninstall <package>
 ```
 
 ## Restart WSGI Service
@@ -39,7 +38,7 @@ $ sudo /opt/netbox/venv/bin/python3 -m pip uninstall <package>
 Restart the WSGI service:
 
 ```no-highlight
-$ sudo systemctl restart netbox
+# sudo systemctl restart netbox
 ```
 
 ## Drop Database Tables
@@ -151,5 +150,5 @@ stale_types.delete()
 After making these changes, restart the NetBox service to ensure all changes are reflected.
 
 ```no-highlight
-$ sudo systemctl restart netbox
+sudo systemctl restart netbox
 ```

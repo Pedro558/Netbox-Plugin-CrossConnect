@@ -6,7 +6,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
-from rest_framework.mixins import CreateModelMixin, ListModelMixin, RetrieveModelMixin
+from rest_framework.mixins import ListModelMixin, RetrieveModelMixin
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
 from rest_framework.routers import APIRootView
@@ -16,15 +16,13 @@ from rq import Worker
 from extras import filtersets
 from extras.jobs import ScriptJob
 from extras.models import *
-from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired, TokenWritePermission
+from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.features import SyncedDataMixin
 from netbox.api.metadata import ContentTypeMetadata
 from netbox.api.renderers import TextRenderer
 from netbox.api.viewsets import BaseViewSet, NetBoxModelViewSet
-from netbox.api.viewsets.mixins import ObjectValidationMixin
 from utilities.exceptions import RQWorkerNotRunningException
 from utilities.request import copy_safe_request
-
 from . import serializers
 from .mixins import ConfigTemplateRenderMixin
 
@@ -240,22 +238,13 @@ class ConfigTemplateViewSet(SyncedDataMixin, ConfigTemplateRenderMixin, NetBoxMo
     serializer_class = serializers.ConfigTemplateSerializer
     filterset_class = filtersets.ConfigTemplateFilterSet
 
-    def get_permissions(self):
-        # For render action, check only token write ability (not model permissions)
-        if self.action == 'render':
-            return [TokenWritePermission()]
-        return super().get_permissions()
-
     @action(detail=True, methods=['post'], renderer_classes=[JSONRenderer, TextRenderer])
     def render(self, request, pk):
         """
         Render a ConfigTemplate using the context data provided (if any). If the client requests "text/plain" data,
         return the raw rendered content, rather than serialized JSON.
         """
-        # Override restrict() on the default queryset to enforce the render & view actions
-        self.queryset = self.queryset.model.objects.restrict(request.user, 'render').restrict(request.user, 'view')
         configtemplate = self.get_object()
-
         context = request.data
 
         return self.render_configtemplate(request, configtemplate, context)
@@ -264,11 +253,6 @@ class ConfigTemplateViewSet(SyncedDataMixin, ConfigTemplateRenderMixin, NetBoxMo
 #
 # Scripts
 #
-
-class ScriptModuleViewSet(ObjectValidationMixin, CreateModelMixin, BaseViewSet):
-    queryset = ScriptModule.objects.all()
-    serializer_class = serializers.ScriptModuleSerializer
-
 
 @extend_schema_view(
     update=extend_schema(request=serializers.ScriptInputSerializer),
@@ -338,8 +322,7 @@ class ScriptViewSet(ModelViewSet):
                 commit=input_serializer.data['commit'],
                 job_timeout=script.python_class.job_timeout,
                 schedule_at=input_serializer.validated_data.get('schedule_at'),
-                interval=input_serializer.validated_data.get('interval'),
-                notifications=input_serializer.validated_data.get('notifications'),
+                interval=input_serializer.validated_data.get('interval')
             )
             serializer = serializers.ScriptDetailSerializer(script, context={'request': request})
 

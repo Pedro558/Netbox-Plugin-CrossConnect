@@ -1,5 +1,4 @@
 from netbox.search import SearchIndex, register_search
-
 from . import models
 
 

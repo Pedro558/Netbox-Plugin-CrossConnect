@@ -113,7 +113,6 @@ class UserConfig(models.Model):
 
         if commit:
             self.save()
-    set.alters_data = True
 
     def clear(self, path, commit=False):
         """
@@ -141,4 +140,3 @@ class UserConfig(models.Model):
 
         if commit:
             self.save()
-    clear.alters_data = True

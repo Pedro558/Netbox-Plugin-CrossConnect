@@ -1,15 +1,12 @@
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated, List, TYPE_CHECKING
 
 import strawberry
 import strawberry_django
-from strawberry.scalars import JSON
 
 from core.graphql.mixins import SyncedDataMixin
 from extras import models
 from extras.graphql.mixins import CustomFieldsMixin, TagsMixin
-from netbox.graphql.types import BaseObjectType, ContentTypeType, ObjectType, PrimaryObjectType
-from users.graphql.mixins import OwnerMixin
-
+from netbox.graphql.types import BaseObjectType, ContentTypeType, NetBoxObjectType, ObjectType, OrganizationalObjectType
 from .filters import *
 
 if TYPE_CHECKING:
@@ -54,7 +51,7 @@ __all__ = (
     filters=ConfigContextProfileFilter,
     pagination=True
 )
-class ConfigContextProfileType(SyncedDataMixin, PrimaryObjectType):
+class ConfigContextProfileType(SyncedDataMixin, NetBoxObjectType):
     pass
 
 
@@ -64,21 +61,21 @@ class ConfigContextProfileType(SyncedDataMixin, PrimaryObjectType):
     filters=ConfigContextFilter,
     pagination=True
 )
-class ConfigContextType(SyncedDataMixin, OwnerMixin, ObjectType):
+class ConfigContextType(SyncedDataMixin, ObjectType):
     profile: ConfigContextProfileType | None
-    roles: list[Annotated["DeviceRoleType", strawberry.lazy('dcim.graphql.types')]]
-    device_types: list[Annotated["DeviceTypeType", strawberry.lazy('dcim.graphql.types')]]
-    tags: list[Annotated["TagType", strawberry.lazy('extras.graphql.types')]]
-    platforms: list[Annotated["PlatformType", strawberry.lazy('dcim.graphql.types')]]
-    regions: list[Annotated["RegionType", strawberry.lazy('dcim.graphql.types')]]
-    cluster_groups: list[Annotated["ClusterGroupType", strawberry.lazy('virtualization.graphql.types')]]
-    tenant_groups: list[Annotated["TenantGroupType", strawberry.lazy('tenancy.graphql.types')]]
-    cluster_types: list[Annotated["ClusterTypeType", strawberry.lazy('virtualization.graphql.types')]]
-    clusters: list[Annotated["ClusterType", strawberry.lazy('virtualization.graphql.types')]]
-    locations: list[Annotated["LocationType", strawberry.lazy('dcim.graphql.types')]]
-    sites: list[Annotated["SiteType", strawberry.lazy('dcim.graphql.types')]]
-    tenants: list[Annotated["TenantType", strawberry.lazy('tenancy.graphql.types')]]
-    site_groups: list[Annotated["SiteGroupType", strawberry.lazy('dcim.graphql.types')]]
+    roles: List[Annotated["DeviceRoleType", strawberry.lazy('dcim.graphql.types')]]
+    device_types: List[Annotated["DeviceTypeType", strawberry.lazy('dcim.graphql.types')]]
+    tags: List[Annotated["TagType", strawberry.lazy('extras.graphql.types')]]
+    platforms: List[Annotated["PlatformType", strawberry.lazy('dcim.graphql.types')]]
+    regions: List[Annotated["RegionType", strawberry.lazy('dcim.graphql.types')]]
+    cluster_groups: List[Annotated["ClusterGroupType", strawberry.lazy('virtualization.graphql.types')]]
+    tenant_groups: List[Annotated["TenantGroupType", strawberry.lazy('tenancy.graphql.types')]]
+    cluster_types: List[Annotated["ClusterTypeType", strawberry.lazy('virtualization.graphql.types')]]
+    clusters: List[Annotated["ClusterType", strawberry.lazy('virtualization.graphql.types')]]
+    locations: List[Annotated["LocationType", strawberry.lazy('dcim.graphql.types')]]
+    sites: List[Annotated["SiteType", strawberry.lazy('dcim.graphql.types')]]
+    tenants: List[Annotated["TenantType", strawberry.lazy('tenancy.graphql.types')]]
+    site_groups: List[Annotated["SiteGroupType", strawberry.lazy('dcim.graphql.types')]]
 
 
 @strawberry_django.type(
@@ -87,11 +84,11 @@ class ConfigContextType(SyncedDataMixin, OwnerMixin, ObjectType):
     filters=ConfigTemplateFilter,
     pagination=True
 )
-class ConfigTemplateType(SyncedDataMixin, OwnerMixin, TagsMixin, ObjectType):
-    virtualmachines: list[Annotated["VirtualMachineType", strawberry.lazy('virtualization.graphql.types')]]
-    devices: list[Annotated["DeviceType", strawberry.lazy('dcim.graphql.types')]]
-    platforms: list[Annotated["PlatformType", strawberry.lazy('dcim.graphql.types')]]
-    device_roles: list[Annotated["DeviceRoleType", strawberry.lazy('dcim.graphql.types')]]
+class ConfigTemplateType(SyncedDataMixin, TagsMixin, ObjectType):
+    virtualmachines: List[Annotated["VirtualMachineType", strawberry.lazy('virtualization.graphql.types')]]
+    devices: List[Annotated["DeviceType", strawberry.lazy('dcim.graphql.types')]]
+    platforms: List[Annotated["PlatformType", strawberry.lazy('dcim.graphql.types')]]
+    device_roles: List[Annotated["DeviceRoleType", strawberry.lazy('dcim.graphql.types')]]
 
 
 @strawberry_django.type(
@@ -100,22 +97,21 @@ class ConfigTemplateType(SyncedDataMixin, OwnerMixin, TagsMixin, ObjectType):
     filters=CustomFieldFilter,
     pagination=True
 )
-class CustomFieldType(OwnerMixin, ObjectType):
+class CustomFieldType(ObjectType):
     related_object_type: Annotated["ContentTypeType", strawberry.lazy('netbox.graphql.types')] | None
     choice_set: Annotated["CustomFieldChoiceSetType", strawberry.lazy('extras.graphql.types')] | None
 
 
 @strawberry_django.type(
     models.CustomFieldChoiceSet,
-    exclude=['extra_choices', 'choice_colors'],
+    exclude=['extra_choices'],
     filters=CustomFieldChoiceSetFilter,
     pagination=True
 )
-class CustomFieldChoiceSetType(OwnerMixin, ObjectType):
+class CustomFieldChoiceSetType(ObjectType):
 
-    choices_for: list[Annotated["CustomFieldType", strawberry.lazy('extras.graphql.types')]]
-    extra_choices: list[list[str]] | None
-    choice_colors: JSON
+    choices_for: List[Annotated["CustomFieldType", strawberry.lazy('extras.graphql.types')]]
+    extra_choices: List[List[str]] | None
 
 
 @strawberry_django.type(
@@ -124,7 +120,7 @@ class CustomFieldChoiceSetType(OwnerMixin, ObjectType):
     filters=CustomLinkFilter,
     pagination=True
 )
-class CustomLinkType(OwnerMixin, ObjectType):
+class CustomLinkType(ObjectType):
     pass
 
 
@@ -134,7 +130,7 @@ class CustomLinkType(OwnerMixin, ObjectType):
     filters=ExportTemplateFilter,
     pagination=True
 )
-class ExportTemplateType(SyncedDataMixin, OwnerMixin, ObjectType):
+class ExportTemplateType(SyncedDataMixin, ObjectType):
     pass
 
 
@@ -161,7 +157,7 @@ class JournalEntryType(CustomFieldsMixin, TagsMixin, ObjectType):
 
 @strawberry_django.type(
     models.Notification,
-    filters=NotificationFilter,
+    # filters=NotificationFilter
     pagination=True
 )
 class NotificationType(ObjectType):
@@ -174,8 +170,8 @@ class NotificationType(ObjectType):
     pagination=True
 )
 class NotificationGroupType(ObjectType):
-    users: list[Annotated["UserType", strawberry.lazy('users.graphql.types')]]
-    groups: list[Annotated["GroupType", strawberry.lazy('users.graphql.types')]]
+    users: List[Annotated["UserType", strawberry.lazy('users.graphql.types')]]
+    groups: List[Annotated["GroupType", strawberry.lazy('users.graphql.types')]]
 
 
 @strawberry_django.type(
@@ -184,13 +180,13 @@ class NotificationGroupType(ObjectType):
     filters=SavedFilterFilter,
     pagination=True
 )
-class SavedFilterType(OwnerMixin, ObjectType):
+class SavedFilterType(ObjectType):
     user: Annotated["UserType", strawberry.lazy('users.graphql.types')] | None
 
 
 @strawberry_django.type(
     models.Subscription,
-    filters=SubscriptionFilter,
+    # filters=NotificationFilter
     pagination=True
 )
 class SubscriptionType(ObjectType):
@@ -204,7 +200,6 @@ class SubscriptionType(ObjectType):
     pagination=True
 )
 class TableConfigType(ObjectType):
-    object_type: Annotated["ContentTypeType", strawberry.lazy('netbox.graphql.types')] | None
     user: Annotated["UserType", strawberry.lazy('users.graphql.types')] | None
 
 
@@ -214,10 +209,10 @@ class TableConfigType(ObjectType):
     filters=TagFilter,
     pagination=True
 )
-class TagType(OwnerMixin, ObjectType):
+class TagType(ObjectType):
     color: str
 
-    object_types: list[ContentTypeType]
+    object_types: List[ContentTypeType]
 
 
 @strawberry_django.type(
@@ -226,7 +221,7 @@ class TagType(OwnerMixin, ObjectType):
     filters=WebhookFilter,
     pagination=True
 )
-class WebhookType(OwnerMixin, CustomFieldsMixin, TagsMixin, ObjectType):
+class WebhookType(OrganizationalObjectType):
     pass
 
 
@@ -236,5 +231,5 @@ class WebhookType(OwnerMixin, CustomFieldsMixin, TagsMixin, ObjectType):
     filters=EventRuleFilter,
     pagination=True
 )
-class EventRuleType(OwnerMixin, CustomFieldsMixin, TagsMixin, ObjectType):
+class EventRuleType(OrganizationalObjectType):
     action_object_type: Annotated["ContentTypeType", strawberry.lazy('netbox.graphql.types')] | None

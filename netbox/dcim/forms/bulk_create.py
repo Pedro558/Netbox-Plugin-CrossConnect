@@ -3,11 +3,9 @@ from django.utils.translation import gettext_lazy as _
 
 from dcim.models import *
 from extras.models import Tag
-from netbox.forms.mixins import ChangelogMessageMixin, CustomFieldsMixin
+from netbox.forms.mixins import CustomFieldsMixin
 from utilities.forms import form_from_model
 from utilities.forms.fields import DynamicModelMultipleChoiceField, ExpandableNameField
-from utilities.forms.mixins import BackgroundJobMixin
-
 from .object_create import ComponentCreateForm
 
 __all__ = (
@@ -28,7 +26,7 @@ __all__ = (
 # Device components
 #
 
-class DeviceBulkAddComponentForm(BackgroundJobMixin, ChangelogMessageMixin, CustomFieldsMixin, ComponentCreateForm):
+class DeviceBulkAddComponentForm(CustomFieldsMixin, ComponentCreateForm):
     pk = forms.ModelMultipleChoiceField(
         queryset=Device.objects.all(),
         widget=forms.MultipleHiddenInput()
@@ -95,7 +93,7 @@ class InterfaceBulkCreateForm(
 
 
 # class FrontPortBulkCreateForm(
-#     form_from_model(FrontPort, ['label', 'type', 'color', 'description', 'tags']),
+#     form_from_model(FrontPort, ['label', 'type', 'description', 'tags']),
 #     DeviceBulkAddComponentForm
 # ):
 #     pass
@@ -109,13 +107,10 @@ class RearPortBulkCreateForm(
     field_order = ('name', 'label', 'type', 'positions', 'mark_connected', 'description', 'tags')
 
 
-class ModuleBayBulkCreateForm(
-    form_from_model(ModuleBay, ['enabled']),
-    DeviceBulkAddComponentForm
-):
+class ModuleBayBulkCreateForm(DeviceBulkAddComponentForm):
     model = ModuleBay
-    field_order = ('name', 'label', 'position', 'enabled', 'description', 'tags')
-    replication_fields = ('name', 'label', 'position', 'enabled')
+    field_order = ('name', 'label', 'position', 'description', 'tags')
+    replication_fields = ('name', 'label', 'position')
     position = ExpandableNameField(
         label=_('Position'),
         required=False,
@@ -123,12 +118,9 @@ class ModuleBayBulkCreateForm(
     )
 
 
-class DeviceBayBulkCreateForm(
-    form_from_model(DeviceBay, ['enabled']),
-    DeviceBulkAddComponentForm
-):
+class DeviceBayBulkCreateForm(DeviceBulkAddComponentForm):
     model = DeviceBay
-    field_order = ('name', 'label', 'enabled', 'description', 'tags')
+    field_order = ('name', 'label', 'description', 'tags')
 
 
 class InventoryItemBulkCreateForm(

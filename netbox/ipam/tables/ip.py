@@ -4,9 +4,8 @@ from django.utils.translation import gettext_lazy as _
 from django_tables2.utils import Accessor
 
 from ipam.models import *
-from netbox.tables import NetBoxTable, OrganizationalModelTable, PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 from tenancy.tables import ContactsColumnMixin, TenancyColumnsMixin, TenantColumn
-
 from .template_code import *
 
 __all__ = (
@@ -28,7 +27,7 @@ AVAILABLE_LABEL = mark_safe('<span class="badge text-bg-success">Available</span
 # RIRs
 #
 
-class RIRTable(OrganizationalModelTable):
+class RIRTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -46,10 +45,10 @@ class RIRTable(OrganizationalModelTable):
         url_name='ipam:rir_list'
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = RIR
         fields = (
-            'pk', 'id', 'name', 'slug', 'is_private', 'aggregate_count', 'description', 'comments', 'tags', 'created',
+            'pk', 'id', 'name', 'slug', 'is_private', 'aggregate_count', 'description', 'tags', 'created',
             'last_updated', 'actions',
         )
         default_columns = ('pk', 'name', 'is_private', 'aggregate_count', 'description')
@@ -59,7 +58,7 @@ class RIRTable(OrganizationalModelTable):
 # Aggregates
 #
 
-class AggregateTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class AggregateTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     prefix = tables.Column(
         linkify=True,
         verbose_name=_('Aggregate'),
@@ -80,6 +79,9 @@ class AggregateTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable
         accessor='get_utilization',
         orderable=False
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='ipam:aggregate_list'
     )
@@ -87,7 +89,7 @@ class AggregateTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable
         extra_buttons=AGGREGATE_COPY_BUTTON
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Aggregate
         fields = (
             'pk', 'id', 'prefix', 'rir', 'tenant', 'tenant_group', 'child_count', 'utilization', 'date_added',
@@ -100,7 +102,7 @@ class AggregateTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable
 # Roles
 #
 
-class RoleTable(OrganizationalModelTable):
+class RoleTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -120,22 +122,17 @@ class RoleTable(OrganizationalModelTable):
         url_params={'role_id': 'pk'},
         verbose_name=_('VLANs')
     )
-    asn_count = columns.LinkedCountColumn(
-        viewname='ipam:asn_list',
-        url_params={'role_id': 'pk'},
-        verbose_name=_('ASNs')
-    )
     tags = columns.TagColumn(
         url_name='ipam:role_list'
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Role
         fields = (
-            'pk', 'id', 'name', 'slug', 'prefix_count', 'iprange_count', 'vlan_count', 'asn_count', 'description',
-            'weight', 'comments', 'tags', 'created', 'last_updated', 'actions',
+            'pk', 'id', 'name', 'slug', 'prefix_count', 'iprange_count', 'vlan_count', 'description', 'weight', 'tags',
+            'created', 'last_updated', 'actions',
         )
-        default_columns = ('pk', 'name', 'prefix_count', 'iprange_count', 'vlan_count', 'asn_count', 'description')
+        default_columns = ('pk', 'name', 'prefix_count', 'iprange_count', 'vlan_count', 'description')
 
 
 #
@@ -157,7 +154,7 @@ class PrefixUtilizationColumn(columns.UtilizationColumn):
     """
 
 
-class PrefixTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class PrefixTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     prefix = columns.TemplateColumn(
         verbose_name=_('Prefix'),
         template_code=PREFIX_LINK_WITH_DEPTH,
@@ -226,6 +223,9 @@ class PrefixTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         accessor='get_utilization',
         orderable=False
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='ipam:prefix_list'
     )
@@ -233,7 +233,7 @@ class PrefixTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         extra_buttons=PREFIX_COPY_BUTTON
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Prefix
         fields = (
             'pk', 'id', 'prefix', 'prefix_flat', 'status', 'children', 'vrf', 'utilization', 'tenant', 'tenant_group',
@@ -252,8 +252,7 @@ class PrefixTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
 #
 # IP ranges
 #
-
-class IPRangeTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class IPRangeTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     start_address = tables.Column(
         verbose_name=_('Start address'),
         linkify=True
@@ -283,11 +282,14 @@ class IPRangeTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         accessor='utilization',
         orderable=False
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='ipam:iprange_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IPRange
         fields = (
             'pk', 'id', 'start_address', 'end_address', 'size', 'vrf', 'status', 'role', 'tenant', 'tenant_group',
@@ -303,10 +305,10 @@ class IPRangeTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
 
 
 #
-# IP Addresses
+# IPAddresses
 #
 
-class IPAddressTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class IPAddressTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     address = tables.TemplateColumn(
         template_code=IPADDRESS_LINK,
         verbose_name=_('IP Address')
@@ -349,6 +351,9 @@ class IPAddressTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable
         verbose_name=_('Assigned'),
         false_mark=None
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='ipam:ipaddress_list'
     )
@@ -356,7 +361,7 @@ class IPAddressTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable
         extra_buttons=IPADDRESS_COPY_BUTTON
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IPAddress
         fields = (
             'pk', 'id', 'address', 'vrf', 'status', 'role', 'tenant', 'tenant_group', 'nat_inside', 'nat_outside',
@@ -375,11 +380,6 @@ class AnnotatedIPAddressTable(IPAddressTable):
         template_code=IPADDRESS_LINK,
         verbose_name=_('IP Address')
     )
-
-    def render_pk(self, value, record, bound_column):
-        if type(record) is not self._meta.model:
-            return ''
-        return bound_column.column.render(value, bound_column, record)
 
     class Meta(IPAddressTable.Meta):
         pass

@@ -6,7 +6,6 @@ from extras.models import Tag, TaggedItem
 from netbox.api.exceptions import SerializerNotFound
 from netbox.api.fields import ContentTypeField, RelatedObjectCountField
 from netbox.api.serializers import BaseModelSerializer, ChangeLogMessageSerializer, ValidatedModelSerializer
-from users.api.serializers_.mixins import OwnerMixin
 from utilities.api import get_serializer_for_model
 
 __all__ = (
@@ -15,7 +14,7 @@ __all__ = (
 )
 
 
-class TagSerializer(OwnerMixin, ChangeLogMessageSerializer, ValidatedModelSerializer):
+class TagSerializer(ChangeLogMessageSerializer, ValidatedModelSerializer):
     object_types = ContentTypeField(
         queryset=ObjectType.objects.with_feature('tags'),
         many=True,

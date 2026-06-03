@@ -1,25 +1,14 @@
-from django.utils.translation import gettext_lazy as _
-
 from dcim.models import Interface
-from extras.ui.panels import CustomFieldsPanel, TagsPanel
-from netbox.ui import actions, layout
-from netbox.ui.panels import (
-    CommentsPanel,
-    ObjectsTablePanel,
-    RelatedObjectsPanel,
-)
 from netbox.views import generic
 from utilities.query import count_related
 from utilities.views import GetRelatedModelsMixin, register_model_view
-
 from . import filtersets, forms, tables
 from .models import *
-from .ui import panels
+
 
 #
 # Wireless LAN groups
 #
-
 
 @register_model_view(WirelessLANGroup, 'list', path='', detail=False)
 class WirelessLANGroupListView(generic.ObjectListView):
@@ -38,34 +27,6 @@ class WirelessLANGroupListView(generic.ObjectListView):
 @register_model_view(WirelessLANGroup)
 class WirelessLANGroupView(GetRelatedModelsMixin, generic.ObjectView):
     queryset = WirelessLANGroup.objects.all()
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.WirelessLANGroupPanel(),
-            TagsPanel(),
-            CommentsPanel(),
-        ],
-        right_panels=[
-            RelatedObjectsPanel(),
-            CustomFieldsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model='wireless.WirelessLANGroup',
-                title=_('Child Groups'),
-                filters={'parent_id': lambda ctx: ctx['object'].pk},
-                exclude_columns=['parent'],
-                actions=[
-                    actions.AddObject(
-                        'wireless.WirelessLANGroup',
-                        label=_('Add Wireless LAN Group'),
-                        url_params={
-                            'parent': lambda ctx: ctx['object'].pk,
-                        }
-                    ),
-                ],
-            ),
-        ],
-    )
 
     def get_extra_context(self, request, instance):
         groups = instance.get_descendants(include_self=True)
@@ -143,25 +104,17 @@ class WirelessLANListView(generic.ObjectListView):
 @register_model_view(WirelessLAN)
 class WirelessLANView(generic.ObjectView):
     queryset = WirelessLAN.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.WirelessLANPanel(),
-            TagsPanel(),
-            CommentsPanel(),
-        ],
-        right_panels=[
-            panels.WirelessAuthenticationPanel(),
-            CustomFieldsPanel(),
-        ],
-        bottom_panels=[
-            ObjectsTablePanel(
-                model='dcim.Interface',
-                title=_('Attached Interfaces'),
-                filters={'wireless_lan_id': lambda ctx: ctx['object'].pk},
-            ),
-        ],
-    )
+
+    def get_extra_context(self, request, instance):
+        attached_interfaces = Interface.objects.restrict(request.user, 'view').filter(
+            wireless_lans=instance
+        )
+        interfaces_table = tables.WirelessLANInterfacesTable(attached_interfaces, user=request.user)
+        interfaces_table.configure(request)
+
+        return {
+            'interfaces_table': interfaces_table,
+        }
 
 
 @register_model_view(WirelessLAN, 'add', detail=False)
@@ -219,20 +172,6 @@ class WirelessLinkListView(generic.ObjectListView):
 @register_model_view(WirelessLink)
 class WirelessLinkView(generic.ObjectView):
     queryset = WirelessLink.objects.all()
-    template_name = 'generic/object.html'
-    layout = layout.SimpleLayout(
-        left_panels=[
-            panels.WirelessLinkInterfacePanel('interface_a', title=_('Interface A')),
-            panels.WirelessLinkPropertiesPanel(),
-            TagsPanel(),
-            CommentsPanel(),
-        ],
-        right_panels=[
-            panels.WirelessLinkInterfacePanel('interface_b', title=_('Interface B')),
-            panels.WirelessAuthenticationPanel(),
-            CustomFieldsPanel(),
-        ],
-    )
 
 
 @register_model_view(WirelessLink, 'add', detail=False)

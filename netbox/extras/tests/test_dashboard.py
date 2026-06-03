@@ -1,9 +1,9 @@
-from django.test import TestCase, tag
+from django.test import tag, TestCase
 
 from extras.dashboard.widgets import ObjectListWidget
 
 
-class ObjectListWidgetTestCase(TestCase):
+class ObjectListWidgetTests(TestCase):
     def test_widget_config_form_validates_model(self):
         model_info = 'extras.notification'
         form = ObjectListWidget.ConfigForm({'model': model_info})

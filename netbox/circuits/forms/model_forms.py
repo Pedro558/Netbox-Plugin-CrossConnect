@@ -4,25 +4,20 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
 
 from circuits.choices import (
-    CircuitCommitRateChoices,
-    CircuitTerminationPortSpeedChoices,
-    VirtualCircuitTerminationRoleChoices,
+    CircuitCommitRateChoices, CircuitTerminationPortSpeedChoices, VirtualCircuitTerminationRoleChoices,
 )
 from circuits.constants import *
 from circuits.models import *
 from dcim.models import Interface, Site
 from ipam.models import ASN
-from netbox.forms import NetBoxModelForm, OrganizationalModelForm, PrimaryModelForm
+from netbox.forms import NetBoxModelForm
 from tenancy.forms import TenancyForm
 from utilities.forms import get_field_value
 from utilities.forms.fields import (
-    ContentTypeChoiceField,
-    DynamicModelChoiceField,
-    DynamicModelMultipleChoiceField,
-    SlugField,
+    CommentField, ContentTypeChoiceField, DynamicModelChoiceField, DynamicModelMultipleChoiceField, SlugField,
 )
 from utilities.forms.mixins import DistanceValidationMixin
-from utilities.forms.rendering import FieldSet, InlineFields, M2MAddRemoveFields
+from utilities.forms.rendering import FieldSet, InlineFields
 from utilities.forms.widgets import DatePicker, HTMXSelect, NumberWithOptions
 from utilities.templatetags.builtins.filters import bettertitle
 
@@ -32,8 +27,8 @@ __all__ = (
     'CircuitGroupForm',
     'CircuitTerminationForm',
     'CircuitTypeForm',
-    'ProviderAccountForm',
     'ProviderForm',
+    'ProviderAccountForm',
     'ProviderNetworkForm',
     'VirtualCircuitForm',
     'VirtualCircuitTerminationForm',
@@ -41,76 +36,50 @@ __all__ = (
 )
 
 
-class ProviderForm(PrimaryModelForm):
+class ProviderForm(NetBoxModelForm):
     slug = SlugField()
     asns = DynamicModelMultipleChoiceField(
         queryset=ASN.objects.all(),
         label=_('ASNs'),
         required=False
     )
-    add_asns = DynamicModelMultipleChoiceField(
-        queryset=ASN.objects.all(),
-        label=_('Add ASNs'),
-        required=False
-    )
-    remove_asns = DynamicModelMultipleChoiceField(
-        queryset=ASN.objects.all(),
-        label=_('Remove ASNs'),
-        required=False
-    )
+    comments = CommentField()
 
     fieldsets = (
-        FieldSet('name', 'slug', M2MAddRemoveFields('asns'), 'description', 'tags'),
+        FieldSet('name', 'slug', 'asns', 'description', 'tags'),
     )
 
     class Meta:
         model = Provider
         fields = [
-            'name', 'slug', 'description', 'owner', 'comments', 'tags',
+            'name', 'slug', 'asns', 'description', 'comments', 'tags',
         ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if self.instance.pk and (count := self.instance.asns.count()) >= M2MAddRemoveFields.THRESHOLD:
-            # Add/remove mode for large M2M sets
-            self.fields.pop('asns')
-            self.fields['add_asns'].widget.add_query_param('provider_id__n', self.instance.pk)
-            self.fields['remove_asns'].widget.add_query_param('provider_id', self.instance.pk)
-            self.fields['remove_asns'].help_text = _("{count} ASNs currently assigned").format(count=count)
-        else:
-            # Simple mode for new objects or small M2M sets
-            self.fields.pop('add_asns')
-            self.fields.pop('remove_asns')
-            if self.instance.pk:
-                self.initial['asns'] = list(self.instance.asns.values_list('pk', flat=True))
 
-
-class ProviderAccountForm(PrimaryModelForm):
+class ProviderAccountForm(NetBoxModelForm):
     provider = DynamicModelChoiceField(
         label=_('Provider'),
         queryset=Provider.objects.all(),
         selector=True,
         quick_add=True
     )
-
-    fieldsets = (
-        FieldSet('provider', 'account', 'name', 'description', 'tags'),
-    )
+    comments = CommentField()
 
     class Meta:
         model = ProviderAccount
         fields = [
-            'provider', 'account', 'name', 'description', 'owner', 'comments', 'tags',
+            'provider', 'name', 'account', 'description', 'comments', 'tags',
         ]
 
 
-class ProviderNetworkForm(PrimaryModelForm):
+class ProviderNetworkForm(NetBoxModelForm):
     provider = DynamicModelChoiceField(
         label=_('Provider'),
         queryset=Provider.objects.all(),
         selector=True,
         quick_add=True
     )
+    comments = CommentField()
 
     fieldsets = (
         FieldSet('provider', 'name', 'service_id', 'description', 'tags'),
@@ -119,11 +88,13 @@ class ProviderNetworkForm(PrimaryModelForm):
     class Meta:
         model = ProviderNetwork
         fields = [
-            'provider', 'name', 'service_id', 'description', 'owner', 'comments', 'tags',
+            'provider', 'name', 'service_id', 'description', 'comments', 'tags',
         ]
 
 
-class CircuitTypeForm(OrganizationalModelForm):
+class CircuitTypeForm(NetBoxModelForm):
+    slug = SlugField()
+
     fieldsets = (
         FieldSet('name', 'slug', 'color', 'description', 'tags'),
     )
@@ -131,11 +102,11 @@ class CircuitTypeForm(OrganizationalModelForm):
     class Meta:
         model = CircuitType
         fields = [
-            'name', 'slug', 'color', 'description', 'owner', 'comments', 'tags',
+            'name', 'slug', 'color', 'description', 'tags',
         ]
 
 
-class CircuitForm(DistanceValidationMixin, TenancyForm, PrimaryModelForm):
+class CircuitForm(DistanceValidationMixin, TenancyForm, NetBoxModelForm):
     provider = DynamicModelChoiceField(
         label=_('Provider'),
         queryset=Provider.objects.all(),
@@ -154,6 +125,7 @@ class CircuitForm(DistanceValidationMixin, TenancyForm, PrimaryModelForm):
         queryset=CircuitType.objects.all(),
         quick_add=True
     )
+    comments = CommentField()
 
     fieldsets = (
         FieldSet(
@@ -175,7 +147,7 @@ class CircuitForm(DistanceValidationMixin, TenancyForm, PrimaryModelForm):
         model = Circuit
         fields = [
             'cid', 'type', 'provider', 'provider_account', 'status', 'install_date', 'termination_date', 'commit_rate',
-            'distance', 'distance_unit', 'description', 'tenant_group', 'tenant', 'owner', 'comments', 'tags',
+            'distance', 'distance_unit', 'description', 'tenant_group', 'tenant', 'comments', 'tags',
         ]
         widgets = {
             'install_date': DatePicker(),
@@ -261,7 +233,9 @@ class CircuitTerminationForm(NetBoxModelForm):
         self.instance.termination = self.cleaned_data.get('termination')
 
 
-class CircuitGroupForm(TenancyForm, OrganizationalModelForm):
+class CircuitGroupForm(TenancyForm, NetBoxModelForm):
+    slug = SlugField()
+
     fieldsets = (
         FieldSet('name', 'slug', 'description', 'tags', name=_('Circuit Group')),
         FieldSet('tenant_group', 'tenant', name=_('Tenancy')),
@@ -270,7 +244,7 @@ class CircuitGroupForm(TenancyForm, OrganizationalModelForm):
     class Meta:
         model = CircuitGroup
         fields = [
-            'name', 'slug', 'description', 'tenant_group', 'tenant', 'owner', 'comments', 'tags',
+            'name', 'slug', 'description', 'tenant_group', 'tenant', 'tags',
         ]
 
 
@@ -333,7 +307,9 @@ class CircuitGroupAssignmentForm(NetBoxModelForm):
         self.instance.member = self.cleaned_data.get('member')
 
 
-class VirtualCircuitTypeForm(OrganizationalModelForm):
+class VirtualCircuitTypeForm(NetBoxModelForm):
+    slug = SlugField()
+
     fieldsets = (
         FieldSet('name', 'slug', 'color', 'description', 'tags'),
     )
@@ -341,11 +317,11 @@ class VirtualCircuitTypeForm(OrganizationalModelForm):
     class Meta:
         model = VirtualCircuitType
         fields = [
-            'name', 'slug', 'color', 'description', 'owner', 'comments', 'tags',
+            'name', 'slug', 'color', 'description', 'tags',
         ]
 
 
-class VirtualCircuitForm(TenancyForm, PrimaryModelForm):
+class VirtualCircuitForm(TenancyForm, NetBoxModelForm):
     provider_network = DynamicModelChoiceField(
         label=_('Provider network'),
         queryset=ProviderNetwork.objects.all(),
@@ -360,6 +336,7 @@ class VirtualCircuitForm(TenancyForm, PrimaryModelForm):
         queryset=VirtualCircuitType.objects.all(),
         quick_add=True
     )
+    comments = CommentField()
 
     fieldsets = (
         FieldSet(
@@ -373,7 +350,7 @@ class VirtualCircuitForm(TenancyForm, PrimaryModelForm):
         model = VirtualCircuit
         fields = [
             'cid', 'provider_network', 'provider_account', 'type', 'status', 'description', 'tenant_group', 'tenant',
-            'owner', 'comments', 'tags',
+            'comments', 'tags',
         ]
 
 

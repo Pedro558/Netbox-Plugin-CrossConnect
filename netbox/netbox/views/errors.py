@@ -13,9 +13,9 @@ from django.views.generic import View
 from netbox.plugins.utils import get_installed_plugins
 
 __all__ = (
-    'StaticMediaFailureView',
     'handler_404',
     'handler_500',
+    'StaticMediaFailureView',
 )
 
 
@@ -52,7 +52,6 @@ def handler_500(request, template_name=ERROR_500_TEMPLATE_NAME):
     type_, error = sys.exc_info()[:2]
 
     return HttpResponseServerError(template.render({
-        'request': request,
         'error': error,
         'exception': str(type_),
         'netbox_version': settings.RELEASE.full_version,

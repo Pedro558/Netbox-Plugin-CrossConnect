@@ -20,10 +20,6 @@ PLUGINS = [
     'netbox.tests.dummy_plugin',
 ]
 
-RQ = {
-    'COMMIT_MODE': 'auto',
-}
-
 REDIS = {
     'tasks': {
         'HOST': 'localhost',
@@ -47,9 +43,7 @@ SECRET_KEY = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 
 DEFAULT_PERMISSIONS = {}
 
-API_TOKEN_PEPPERS = {
-    1: 'TEST-VALUE-DO-NOT-USE-TEST-VALUE-DO-NOT-USE-TEST-VALUE-DO-NOT-USE',
-}
+ALLOW_TOKEN_RETRIEVAL = True
 
 LOGGING = {
     'version': 1,

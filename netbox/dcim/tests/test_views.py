@@ -1,22 +1,16 @@
-import csv
 import json
 from decimal import Decimal
-from io import StringIO
 from zoneinfo import ZoneInfo
 
 import yaml
-from django.contrib.contenttypes.models import ContentType
-from django.http import StreamingHttpResponse
 from django.test import override_settings, tag
 from django.urls import reverse
 from netaddr import EUI
 
-from core.choices import ObjectChangeActionChoices
-from core.models import ObjectChange, ObjectType
+from core.models import ObjectType
 from dcim.choices import *
 from dcim.constants import *
 from dcim.models import *
-from extras.models import ConfigTemplate
 from ipam.models import ASN, RIR, VLAN, VRF
 from netbox.choices import CSVDelimiterChoices, ImportFormatChoices, WeightUnitChoices
 from tenancy.models import Tenant
@@ -199,28 +193,6 @@ class SiteTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'description': 'New description',
         }
 
-    def test_get_object_with_only_site_view_permission_hides_unauthorized_embedded_panels(self):
-        site = self._get_queryset().first()
-
-        obj_perm = ObjectPermission(
-            name='Test permission',
-            actions=['view'],
-        )
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        response = self.client.get(site.get_absolute_url())
-        self.assertHttpStatus(response, 200)
-
-        for panel, url in (
-            ('locations', reverse('dcim:location_list')),
-            ('devices', reverse('dcim:device_list')),
-            ('image attachments', reverse('extras:imageattachment_list')),
-        ):
-            with self.subTest(panel=panel):
-                self.assertNotContains(response, url)
-
 
 class LocationTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
     model = Location
@@ -291,47 +263,6 @@ class LocationTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
         cls.bulk_edit_data = {
             'description': 'New description',
             'comments': 'This comment is also really boring',
-        }
-
-
-class RackGroupTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
-    model = RackGroup
-
-    @classmethod
-    def setUpTestData(cls):
-
-        rack_groups = (
-            RackGroup(name='Rack Group 1', slug='rack-group-1'),
-            RackGroup(name='Rack Group 2', slug='rack-group-2'),
-            RackGroup(name='Rack Group 3', slug='rack-group-3'),
-        )
-        RackGroup.objects.bulk_create(rack_groups)
-
-        tags = create_tags('Alpha', 'Bravo', 'Charlie')
-
-        cls.form_data = {
-            'name': 'Rack Group X',
-            'slug': 'rack-group-x',
-            'description': 'New group',
-            'tags': [t.pk for t in tags],
-        }
-
-        cls.csv_data = (
-            "name,slug,description",
-            "Rack Group 4,rack-group-4,Fourth group",
-            "Rack Group 5,rack-group-5,Fifth group",
-            "Rack Group 6,rack-group-6,",
-        )
-
-        cls.csv_update_data = (
-            "id,name,description",
-            f"{rack_groups[0].pk},Rack Group 7,New description7",
-            f"{rack_groups[1].pk},Rack Group 8,New description8",
-            f"{rack_groups[2].pk},Rack Group 9,New description9",
-        )
-
-        cls.bulk_edit_data = {
-            'description': 'New description',
         }
 
 
@@ -540,12 +471,6 @@ class RackTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         for location in locations:
             location.save()
 
-        rack_groups = (
-            RackGroup(name='Rack Group 1', slug='rack-group-1'),
-            RackGroup(name='Rack Group 2', slug='rack-group-2'),
-        )
-        RackGroup.objects.bulk_create(rack_groups)
-
         rackroles = (
             RackRole(name='Rack Role 1', slug='rack-role-1'),
             RackRole(name='Rack Role 2', slug='rack-role-2'),
@@ -553,8 +478,8 @@ class RackTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         RackRole.objects.bulk_create(rackroles)
 
         racks = (
-            Rack(name='Rack 1', site=sites[0], group=rack_groups[0], role=rackroles[0]),
-            Rack(name='Rack 2', site=sites[0], group=rack_groups[1]),
+            Rack(name='Rack 1', site=sites[0]),
+            Rack(name='Rack 2', site=sites[0]),
             Rack(name='Rack 3', site=sites[0]),
         )
         Rack.objects.bulk_create(racks)
@@ -566,7 +491,6 @@ class RackTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'facility_id': 'Facility X',
             'site': sites[1].pk,
             'location': locations[1].pk,
-            'group': rack_groups[1].pk,
             'tenant': None,
             'status': RackStatusChoices.STATUS_PLANNED,
             'role': rackroles[1].pk,
@@ -588,10 +512,10 @@ class RackTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         }
 
         cls.csv_data = (
-            "site,location,group,name,status,width,u_height,weight,max_weight,weight_unit",
-            "Site 1,,,Rack 4,active,19,42,100,2000,kg",
-            "Site 1,Location 1,Rack Group 1,Rack 5,active,19,42,100,2000,kg",
-            "Site 2,Location 2,Rack Group 2,Rack 6,active,19,42,100,2000,kg",
+            "site,location,name,status,width,u_height,weight,max_weight,weight_unit",
+            "Site 1,,Rack 4,active,19,42,100,2000,kg",
+            "Site 1,Location 1,Rack 5,active,19,42,100,2000,kg",
+            "Site 2,Location 2,Rack 6,active,19,42,100,2000,kg",
         )
 
         cls.csv_update_data = (
@@ -604,7 +528,6 @@ class RackTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         cls.bulk_edit_data = {
             'site': sites[1].pk,
             'location': locations[1].pk,
-            'group': rack_groups[1].pk,
             'tenant': None,
             'status': RackStatusChoices.STATUS_DEPRECATED,
             'role': rackroles[1].pk,
@@ -622,11 +545,11 @@ class RackTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'comments': 'New comments',
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_list_rack_elevations(self):
         """
         Test viewing the list of rack elevations.
         """
-        self.add_permissions('dcim.view_rack')
         response = self.client.get(reverse('dcim:rack_elevation_list'))
         self.assertHttpStatus(response, 200)
 
@@ -730,8 +653,8 @@ class DeviceTypeTestCase(
             'is_full_depth': False,
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_consoleports(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_consoleporttemplate')
         devicetype = DeviceType.objects.first()
         console_ports = (
             ConsolePortTemplate(device_type=devicetype, name='Console Port 1'),
@@ -743,8 +666,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_consoleports', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_consoleserverports(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_consoleserverporttemplate')
         devicetype = DeviceType.objects.first()
         console_server_ports = (
             ConsoleServerPortTemplate(device_type=devicetype, name='Console Server Port 1'),
@@ -756,8 +679,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_consoleserverports', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_powerports(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_powerporttemplate')
         devicetype = DeviceType.objects.first()
         power_ports = (
             PowerPortTemplate(device_type=devicetype, name='Power Port 1'),
@@ -769,8 +692,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_powerports', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_poweroutlets(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_poweroutlettemplate')
         devicetype = DeviceType.objects.first()
         power_outlets = (
             PowerOutletTemplate(device_type=devicetype, name='Power Outlet 1'),
@@ -782,8 +705,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_poweroutlets', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_interfaces(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_interfacetemplate')
         devicetype = DeviceType.objects.first()
         interfaces = (
             InterfaceTemplate(device_type=devicetype, name='Interface 1'),
@@ -795,8 +718,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_interfaces', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_rearports(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_rearporttemplate')
         devicetype = DeviceType.objects.first()
         rear_ports = (
             RearPortTemplate(device_type=devicetype, name='Rear Port 1'),
@@ -808,12 +731,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_rearports', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_frontports(self):
-        self.add_permissions(
-            'dcim.view_devicetype',
-            'dcim.view_frontporttemplate',
-            'dcim.view_rearporttemplate',
-        )
         devicetype = DeviceType.objects.first()
         rear_ports = (
             RearPortTemplate(device_type=devicetype, name='Rear Port 1'),
@@ -822,22 +741,23 @@ class DeviceTypeTestCase(
         )
         RearPortTemplate.objects.bulk_create(rear_ports)
         front_ports = (
-            FrontPortTemplate(device_type=devicetype, name='Front Port 1'),
-            FrontPortTemplate(device_type=devicetype, name='Front Port 2'),
-            FrontPortTemplate(device_type=devicetype, name='Front Port 3'),
+            FrontPortTemplate(
+                device_type=devicetype, name='Front Port 1', rear_port=rear_ports[0], rear_port_position=1
+            ),
+            FrontPortTemplate(
+                device_type=devicetype, name='Front Port 2', rear_port=rear_ports[1], rear_port_position=1
+            ),
+            FrontPortTemplate(
+                device_type=devicetype, name='Front Port 3', rear_port=rear_ports[2], rear_port_position=1
+            ),
         )
         FrontPortTemplate.objects.bulk_create(front_ports)
-        PortTemplateMapping.objects.bulk_create([
-            PortTemplateMapping(device_type=devicetype, front_port=front_ports[0], rear_port=rear_ports[0]),
-            PortTemplateMapping(device_type=devicetype, front_port=front_ports[1], rear_port=rear_ports[1]),
-            PortTemplateMapping(device_type=devicetype, front_port=front_ports[2], rear_port=rear_ports[2]),
-        ])
 
         url = reverse('dcim:devicetype_frontports', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_modulebays(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_modulebaytemplate')
         devicetype = DeviceType.objects.first()
         module_bays = (
             ModuleBayTemplate(device_type=devicetype, name='Module Bay 1'),
@@ -849,8 +769,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_modulebays', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_devicebays(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_devicebaytemplate')
         devicetype = DeviceType.objects.first()
         device_bays = (
             DeviceBayTemplate(device_type=devicetype, name='Device Bay 1'),
@@ -862,8 +782,8 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_devicebays', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_devicetype_inventoryitems(self):
-        self.add_permissions('dcim.view_devicetype', 'dcim.view_inventoryitemtemplate')
         devicetype = DeviceType.objects.first()
         inventory_items = (
             DeviceBayTemplate(device_type=devicetype, name='Device Bay 1'),
@@ -876,11 +796,11 @@ class DeviceTypeTestCase(
         url = reverse('dcim:devicetype_inventoryitems', kwargs={'pk': devicetype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_import_objects(self):
         """
         Custom import test for YAML-based imports (versus CSV)
         """
-        self.add_permissions('dcim.view_manufacturer', 'dcim.view_platform')
         IMPORT_DATA = """
 manufacturer: Generic
 model: TEST-1000
@@ -946,16 +866,12 @@ rear-ports:
 front-ports:
   - name: Front Port 1
     type: 8p8c
+    rear_port: Rear Port 1
   - name: Front Port 2
     type: 8p8c
+    rear_port: Rear Port 2
   - name: Front Port 3
     type: 8p8c
-port-mappings:
-  - front_port: Front Port 1
-    rear_port: Rear Port 1
-  - front_port: Front Port 2
-    rear_port: Rear Port 2
-  - front_port: Front Port 3
     rear_port: Rear Port 3
 module-bays:
   - name: Module Bay 1
@@ -1055,12 +971,8 @@ inventory-items:
         self.assertEqual(device_type.frontporttemplates.count(), 3)
         fp1 = FrontPortTemplate.objects.first()
         self.assertEqual(fp1.name, 'Front Port 1')
-
-        self.assertEqual(device_type.port_mappings.count(), 3)
-        mapping1 = PortTemplateMapping.objects.first()
-        self.assertEqual(mapping1.device_type, device_type)
-        self.assertEqual(mapping1.front_port, fp1)
-        self.assertEqual(mapping1.rear_port, rp1)
+        self.assertEqual(fp1.rear_port, rp1)
+        self.assertEqual(fp1.rear_port_position, 1)
 
         self.assertEqual(device_type.modulebaytemplates.count(), 3)
         mb1 = ModuleBayTemplate.objects.first()
@@ -1074,12 +986,12 @@ inventory-items:
         ii1 = InventoryItemTemplate.objects.first()
         self.assertEqual(ii1.name, 'Inventory Item 1')
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_import_error_numbering(self):
         # Add all required permissions to the test user
         self.add_permissions(
             'dcim.view_devicetype',
             'dcim.add_devicetype',
-            'dcim.view_manufacturer',
             'dcim.add_consoleporttemplate',
             'dcim.add_consoleserverporttemplate',
             'dcim.add_powerporttemplate',
@@ -1126,12 +1038,12 @@ module-bays:
         self.assertHttpStatus(response, 200)
         self.assertContains(response, "Record 2 module-bays[3].name: This field is required.")
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_import_nolist(self):
         # Add all required permissions to the test user
         self.add_permissions(
             'dcim.view_devicetype',
             'dcim.add_devicetype',
-            'dcim.view_manufacturer',
             'dcim.add_consoleporttemplate',
             'dcim.add_consoleserverporttemplate',
             'dcim.add_powerporttemplate',
@@ -1162,12 +1074,12 @@ console-ports: {value}
                 self.assertHttpStatus(response, 200)
                 self.assertContains(response, "Record 1 console-ports: Must be a list.")
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_import_nodict(self):
         # Add all required permissions to the test user
         self.add_permissions(
             'dcim.view_devicetype',
             'dcim.add_devicetype',
-            'dcim.view_manufacturer',
             'dcim.add_consoleporttemplate',
             'dcim.add_consoleserverporttemplate',
             'dcim.add_powerporttemplate',
@@ -1199,7 +1111,6 @@ console-ports:
                 self.assertHttpStatus(response, 200)
                 self.assertContains(response, "Record 1 console-ports[1]: Must be a dictionary.")
 
-    @override_settings(STREAMING_EXPORTS=True)
     def test_export_objects(self):
         url = reverse('dcim:devicetype_list')
         self.add_permissions('dcim.view_devicetype')
@@ -1212,15 +1123,10 @@ console-ports:
         self.assertEqual(data[0]['manufacturer'], 'Manufacturer 1')
         self.assertEqual(data[0]['model'], 'Device Type 1')
 
-        # Test table-based export (streams row-by-row)
+        # Test table-based export
         response = self.client.get(f'{url}?export=table')
         self.assertHttpStatus(response, 200)
         self.assertEqual(response.get('Content-Type'), 'text/csv; charset=utf-8')
-        self.assertIsInstance(response, StreamingHttpResponse)
-        content = b''.join(response.streaming_content).decode('utf-8')
-        rows = list(csv.reader(StringIO(content)))
-        self.assertGreater(len(rows), 1)
-        self.assertEqual(len(rows) - 1, DeviceType.objects.count())
 
 
 class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -1268,6 +1174,7 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             f"{module_types[0].id},test model",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_bulk_update_objects_with_permission(self):
         self.add_permissions(
             'dcim.add_consoleporttemplate',
@@ -1284,6 +1191,7 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         super().test_bulk_update_objects_with_permission()
 
     @tag('regression')
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
     def test_bulk_import_objects_with_permission(self):
         self.add_permissions(
             'dcim.add_consoleporttemplate',
@@ -1305,6 +1213,7 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         # run base test
         super().test_bulk_import_objects_with_permission(post_import_callback=verify_module_type_profile)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
     def test_bulk_import_objects_with_constrained_permission(self):
         self.add_permissions(
             'dcim.add_consoleporttemplate',
@@ -1319,8 +1228,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
 
         super().test_bulk_import_objects_with_constrained_permission()
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_consoleports(self):
-        self.add_permissions('dcim.view_moduletype', 'dcim.view_consoleporttemplate')
         moduletype = ModuleType.objects.first()
         console_ports = (
             ConsolePortTemplate(module_type=moduletype, name='Console Port 1'),
@@ -1332,8 +1241,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:moduletype_consoleports', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_consoleserverports(self):
-        self.add_permissions('dcim.view_moduletype', 'dcim.view_consoleserverporttemplate')
         moduletype = ModuleType.objects.first()
         console_server_ports = (
             ConsoleServerPortTemplate(module_type=moduletype, name='Console Server Port 1'),
@@ -1345,8 +1254,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:moduletype_consoleserverports', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_powerports(self):
-        self.add_permissions('dcim.view_moduletype', 'dcim.view_powerporttemplate')
         moduletype = ModuleType.objects.first()
         power_ports = (
             PowerPortTemplate(module_type=moduletype, name='Power Port 1'),
@@ -1358,8 +1267,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:moduletype_powerports', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_poweroutlets(self):
-        self.add_permissions('dcim.view_moduletype', 'dcim.view_poweroutlettemplate')
         moduletype = ModuleType.objects.first()
         power_outlets = (
             PowerOutletTemplate(module_type=moduletype, name='Power Outlet 1'),
@@ -1371,8 +1280,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:moduletype_poweroutlets', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_interfaces(self):
-        self.add_permissions('dcim.view_moduletype', 'dcim.view_interfacetemplate')
         moduletype = ModuleType.objects.first()
         interfaces = (
             InterfaceTemplate(module_type=moduletype, name='Interface 1'),
@@ -1384,8 +1293,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:moduletype_interfaces', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_rearports(self):
-        self.add_permissions('dcim.view_moduletype', 'dcim.view_rearporttemplate')
         moduletype = ModuleType.objects.first()
         rear_ports = (
             RearPortTemplate(module_type=moduletype, name='Rear Port 1'),
@@ -1397,12 +1306,8 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:moduletype_rearports', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_moduletype_frontports(self):
-        self.add_permissions(
-            'dcim.view_moduletype',
-            'dcim.view_frontporttemplate',
-            'dcim.view_rearporttemplate',
-        )
         moduletype = ModuleType.objects.first()
         rear_ports = (
             RearPortTemplate(module_type=moduletype, name='Rear Port 1'),
@@ -1411,25 +1316,26 @@ class ModuleTypeTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         )
         RearPortTemplate.objects.bulk_create(rear_ports)
         front_ports = (
-            FrontPortTemplate(module_type=moduletype, name='Front Port 1'),
-            FrontPortTemplate(module_type=moduletype, name='Front Port 2'),
-            FrontPortTemplate(module_type=moduletype, name='Front Port 3'),
+            FrontPortTemplate(
+                module_type=moduletype, name='Front Port 1', rear_port=rear_ports[0], rear_port_position=1
+            ),
+            FrontPortTemplate(
+                module_type=moduletype, name='Front Port 2', rear_port=rear_ports[1], rear_port_position=1
+            ),
+            FrontPortTemplate(
+                module_type=moduletype, name='Front Port 3', rear_port=rear_ports[2], rear_port_position=1
+            ),
         )
         FrontPortTemplate.objects.bulk_create(front_ports)
-        PortTemplateMapping.objects.bulk_create([
-            PortTemplateMapping(module_type=moduletype, front_port=front_ports[0], rear_port=rear_ports[0]),
-            PortTemplateMapping(module_type=moduletype, front_port=front_ports[1], rear_port=rear_ports[1]),
-            PortTemplateMapping(module_type=moduletype, front_port=front_ports[2], rear_port=rear_ports[2]),
-        ])
 
         url = reverse('dcim:moduletype_frontports', kwargs={'pk': moduletype.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_import_objects(self):
         """
         Custom import test for YAML-based imports (versus CSV)
         """
-        self.add_permissions('dcim.view_manufacturer')
         IMPORT_DATA = """
 manufacturer: Generic
 model: TEST-1000
@@ -1488,16 +1394,12 @@ rear-ports:
 front-ports:
   - name: Front Port 1
     type: 8p8c
+    rear_port: Rear Port 1
   - name: Front Port 2
     type: 8p8c
+    rear_port: Rear Port 2
   - name: Front Port 3
     type: 8p8c
-port-mappings:
-  - front_port: Front Port 1
-    rear_port: Rear Port 1
-  - front_port: Front Port 2
-    rear_port: Rear Port 2
-  - front_port: Front Port 3
     rear_port: Rear Port 3
 module-bays:
   - name: Module Bay 1
@@ -1575,19 +1477,14 @@ module-bays:
         self.assertEqual(module_type.frontporttemplates.count(), 3)
         fp1 = FrontPortTemplate.objects.first()
         self.assertEqual(fp1.name, 'Front Port 1')
-
-        self.assertEqual(module_type.port_mappings.count(), 3)
-        mapping1 = PortTemplateMapping.objects.first()
-        self.assertEqual(mapping1.module_type, module_type)
-        self.assertEqual(mapping1.front_port, fp1)
-        self.assertEqual(mapping1.rear_port, rp1)
+        self.assertEqual(fp1.rear_port, rp1)
+        self.assertEqual(fp1.rear_port_position, 1)
 
         self.assertEqual(module_type.modulebaytemplates.count(), 3)
         mb1 = ModuleBayTemplate.objects.first()
         self.assertEqual(mb1.name, 'Module Bay 1')
         self.assertEqual(mb1.position, '1')
 
-    @override_settings(STREAMING_EXPORTS=True)
     def test_export_objects(self):
         url = reverse('dcim:moduletype_list')
         self.add_permissions('dcim.view_moduletype')
@@ -1600,15 +1497,10 @@ module-bays:
         self.assertEqual(data[0]['manufacturer'], 'Manufacturer 1')
         self.assertEqual(data[0]['model'], 'Module Type 1')
 
-        # Test table-based export (streams row-by-row)
+        # Test table-based export
         response = self.client.get(f'{url}?export=table')
         self.assertHttpStatus(response, 200)
         self.assertEqual(response.get('Content-Type'), 'text/csv; charset=utf-8')
-        self.assertIsInstance(response, StreamingHttpResponse)
-        content = b''.join(response.streaming_content).decode('utf-8')
-        rows = list(csv.reader(StringIO(content)))
-        self.assertGreater(len(rows), 1)
-        self.assertEqual(len(rows) - 1, ModuleType.objects.count())
 
 
 class ModuleTypeProfileTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
@@ -1878,7 +1770,7 @@ class FrontPortTemplateTestCase(ViewTestCases.DeviceComponentTemplateViewTestCas
         manufacturer = Manufacturer.objects.create(name='Manufacturer 1', slug='manufacturer-1')
         devicetype = DeviceType.objects.create(manufacturer=manufacturer, model='Device Type 1', slug='device-type-1')
 
-        rear_ports = (
+        rearports = (
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 1'),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 2'),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 3'),
@@ -1886,33 +1778,35 @@ class FrontPortTemplateTestCase(ViewTestCases.DeviceComponentTemplateViewTestCas
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 5'),
             RearPortTemplate(device_type=devicetype, name='Rear Port Template 6'),
         )
-        RearPortTemplate.objects.bulk_create(rear_ports)
-        front_ports = (
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 1'),
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 2'),
-            FrontPortTemplate(device_type=devicetype, name='Front Port Template 3'),
+        RearPortTemplate.objects.bulk_create(rearports)
+
+        FrontPortTemplate.objects.bulk_create(
+            (
+                FrontPortTemplate(
+                    device_type=devicetype, name='Front Port Template 1', rear_port=rearports[0], rear_port_position=1
+                ),
+                FrontPortTemplate(
+                    device_type=devicetype, name='Front Port Template 2', rear_port=rearports[1], rear_port_position=1
+                ),
+                FrontPortTemplate(
+                    device_type=devicetype, name='Front Port Template 3', rear_port=rearports[2], rear_port_position=1
+                ),
+            )
         )
-        FrontPortTemplate.objects.bulk_create(front_ports)
-        PortTemplateMapping.objects.bulk_create([
-            PortTemplateMapping(device_type=devicetype, front_port=front_ports[0], rear_port=rear_ports[0]),
-            PortTemplateMapping(device_type=devicetype, front_port=front_ports[1], rear_port=rear_ports[1]),
-            PortTemplateMapping(device_type=devicetype, front_port=front_ports[2], rear_port=rear_ports[2]),
-        ])
 
         cls.form_data = {
             'device_type': devicetype.pk,
             'name': 'Front Port X',
             'type': PortTypeChoices.TYPE_8P8C,
-            'positions': 1,
-            'rear_ports': [f'{rear_ports[3].pk}:1'],
+            'rear_port': rearports[3].pk,
+            'rear_port_position': 1,
         }
 
         cls.bulk_create_data = {
             'device_type': devicetype.pk,
             'name': 'Front Port [4-6]',
             'type': PortTypeChoices.TYPE_8P8C,
-            'positions': 1,
-            'rear_ports': [f'{rp.pk}:1' for rp in rear_ports[3:6]],
+            'rear_port': [f'{rp.pk}:1' for rp in rearports[3:6]],
         }
 
         cls.bulk_edit_data = {
@@ -2294,8 +2188,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'status': DeviceStatusChoices.STATUS_DECOMMISSIONING,
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_consoleports(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_consoleport')
         device = Device.objects.first()
         console_ports = (
             ConsolePort(device=device, name='Console Port 1'),
@@ -2307,8 +2201,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_consoleports', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_consoleserverports(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_consoleserverport')
         device = Device.objects.first()
         console_server_ports = (
             ConsoleServerPort(device=device, name='Console Server Port 1'),
@@ -2320,8 +2214,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_consoleserverports', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_powerports(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_powerport')
         device = Device.objects.first()
         power_ports = (
             PowerPort(device=device, name='Power Port 1'),
@@ -2333,8 +2227,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_powerports', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_poweroutlets(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_poweroutlet')
         device = Device.objects.first()
         power_outlets = (
             PowerOutlet(device=device, name='Power Outlet 1'),
@@ -2346,8 +2240,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_poweroutlets', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_interfaces(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_interface')
         device = Device.objects.first()
         interfaces = (
             Interface(device=device, name='Interface 1'),
@@ -2359,8 +2253,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_interfaces', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_rearports(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_rearport')
         device = Device.objects.first()
         rear_ports = (
             RearPort(device=device, name='Rear Port 1'),
@@ -2372,8 +2266,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_rearports', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_frontports(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_frontport', 'dcim.view_rearport')
         device = Device.objects.first()
         rear_ports = (
             RearPort(device=device, name='Rear Port 1'),
@@ -2382,22 +2276,17 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         )
         RearPort.objects.bulk_create(rear_ports)
         front_ports = (
-            FrontPort(device=device, name='Front Port Template 1'),
-            FrontPort(device=device, name='Front Port Template 2'),
-            FrontPort(device=device, name='Front Port Template 3'),
+            FrontPort(device=device, name='Front Port 1', rear_port=rear_ports[0], rear_port_position=1),
+            FrontPort(device=device, name='Front Port 2', rear_port=rear_ports[1], rear_port_position=1),
+            FrontPort(device=device, name='Front Port 3', rear_port=rear_ports[2], rear_port_position=1),
         )
         FrontPort.objects.bulk_create(front_ports)
-        PortMapping.objects.bulk_create([
-            PortMapping(device=device, front_port=front_ports[0], rear_port=rear_ports[0]),
-            PortMapping(device=device, front_port=front_ports[1], rear_port=rear_ports[1]),
-            PortMapping(device=device, front_port=front_ports[2], rear_port=rear_ports[2]),
-        ])
 
         url = reverse('dcim:device_frontports', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_modulebays(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_modulebay')
         device = Device.objects.first()
         ModuleBay.objects.create(device=device, name='Module Bay 1')
         ModuleBay.objects.create(device=device, name='Module Bay 2')
@@ -2406,8 +2295,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_modulebays', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_devicebays(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_devicebay')
         device = Device.objects.first()
         device_bays = (
             DeviceBay(device=device, name='Device Bay 1'),
@@ -2419,8 +2308,8 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         url = reverse('dcim:device_devicebays', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_device_inventory(self):
-        self.add_permissions('dcim.view_device', 'dcim.view_inventoryitem')
         device = Device.objects.first()
         inventory_items = (
             InventoryItem(device=device, name='Inventory Item 1'),
@@ -2432,112 +2321,6 @@ class DeviceTestCase(ViewTestCases.PrimaryObjectViewTestCase):
 
         url = reverse('dcim:device_inventory', kwargs={'pk': device.pk})
         self.assertHttpStatus(self.client.get(url), 200)
-
-    def test_device_renderconfig(self):
-        configtemplate = ConfigTemplate.objects.create(
-            name='Test Config Template',
-            template_code='Config for device {{ device.name }}'
-        )
-        device = Device.objects.first()
-        device.config_template = configtemplate
-        device.save()
-        url = reverse('dcim:device_render-config', kwargs={'pk': device.pk})
-
-        # User with only view permission should NOT be able to render config
-        self.add_permissions('dcim.view_device')
-        self.assertHttpStatus(self.client.get(url), 403)
-
-        # With render_config permission added should be able to render config
-        self.add_permissions('dcim.render_config_device')
-        self.assertHttpStatus(self.client.get(url), 200)
-
-        # With view permission removed should NOT be able to render config
-        self.remove_permissions('dcim.view_device')
-        self.assertHttpStatus(self.client.get(url), 403)
-
-    def test_device_renderconfig_with_config_template_id(self):
-        default_template = ConfigTemplate.objects.create(
-            name='Default Template',
-            template_code='Default config for {{ device.name }}'
-        )
-        override_template = ConfigTemplate.objects.create(
-            name='Override Template',
-            template_code='Override config for {{ device.name }}'
-        )
-        device = Device.objects.first()
-        device.config_template = default_template
-        device.save()
-
-        self.add_permissions('dcim.view_device', 'dcim.render_config_device', 'extras.view_configtemplate')
-        url = reverse('dcim:device_render-config', kwargs={'pk': device.pk})
-
-        # Render with override config_template_id
-        response = self.client.get(url, {'config_template_id': override_template.pk})
-        self.assertHttpStatus(response, 200)
-        self.assertIn(b'Override config for', response.content)
-
-        # Render with nonexistent config_template_id still returns 200 with error message
-        response = self.client.get(url, {'config_template_id': 999999})
-        self.assertHttpStatus(response, 200)
-        self.assertIn(b'Error rendering template', response.content)
-
-        # Render with non-integer config_template_id still returns 200 with error message
-        response = self.client.get(url, {'config_template_id': 'abc'})
-        self.assertHttpStatus(response, 200)
-        self.assertIn(b'Error rendering template', response.content)
-
-        # Without view_configtemplate permission, override template should not be accessible
-        self.remove_permissions('extras.view_configtemplate')
-        response = self.client.get(url, {'config_template_id': override_template.pk})
-        self.assertHttpStatus(response, 200)
-        self.assertIn(b'Error rendering template', response.content)
-
-    def test_device_role_display_colored(self):
-        parent_role = DeviceRole.objects.create(name='Parent Role', slug='parent-role', color='111111')
-        child_role = DeviceRole.objects.create(name='Child Role', slug='child-role', parent=parent_role, color='aa00bb')
-
-        device = Device.objects.first()
-        device.role = child_role
-        device.save()
-
-        self.add_permissions('dcim.view_device')
-        response = self.client.get(device.get_absolute_url())
-
-        self.assertHttpStatus(response, 200)
-        self.assertContains(response, 'Parent Role')
-        self.assertContains(response, 'Child Role')
-        self.assertContains(response, 'background-color: #aa00bb')
-        self.assertNotContains(response, 'background-color: #111111')
-
-    def test_bulk_import_duplicate_ids_error_message(self):
-        device = Device.objects.first()
-        csv_data = (
-            "id,role",
-            f"{device.pk},Device Role 1",
-            f"{device.pk},Device Role 2",
-        )
-
-        self.add_permissions(
-            'dcim.view_device',
-            'dcim.add_device',
-            'dcim.change_device',
-            'dcim.view_devicerole',
-        )
-        response = self.client.post(
-            self._get_url('bulk_import'),
-            {
-                'data': '\n'.join(csv_data),
-                'format': ImportFormatChoices.CSV,
-                'csv_delimiter': CSVDelimiterChoices.AUTO,
-            },
-            follow=True
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(
-            f'Duplicate objects found: Device with ID(s) {device.pk} appears multiple times',
-            response.content.decode('utf-8')
-        )
 
 
 class ModuleTestCase(
@@ -2558,14 +2341,13 @@ class ModuleTestCase(
     @classmethod
     def setUpTestData(cls):
         manufacturer = Manufacturer.objects.create(name='Generic', slug='generic')
-        module_type_profile = ModuleTypeProfile.objects.create(name='Module Type Profile 1')
         devices = (
             create_test_device('Device 1'),
             create_test_device('Device 2'),
         )
 
         module_types = (
-            ModuleType(manufacturer=manufacturer, model='Module Type 1', profile=module_type_profile),
+            ModuleType(manufacturer=manufacturer, model='Module Type 1'),
             ModuleType(manufacturer=manufacturer, model='Module Type 2'),
             ModuleType(manufacturer=manufacturer, model='Module Type 3'),
             ModuleType(manufacturer=manufacturer, model='Module Type 4'),
@@ -2624,26 +2406,9 @@ class ModuleTestCase(
             f"{modules[2].pk},offline,Serial 1",
         )
 
-    def test_module_detail_includes_module_type_profile(self):
-        self.add_permissions(
-            'dcim.view_module',
-            'dcim.view_moduletype',
-            'dcim.view_moduletypeprofile',
-        )
-        response = self.client.get(self._get_queryset().first().get_absolute_url())
-
-        self.assertContains(response, 'Module Type Profile 1')
-
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_module_component_replication(self):
-        self.add_permissions(
-            'dcim.view_module',
-            'dcim.add_module',
-            'dcim.view_moduletype',
-            'dcim.view_device',
-            'dcim.view_modulebay',
-            'dcim.view_interface',
-            'extras.view_tag',
-        )
+        self.add_permissions('dcim.add_module')
 
         # Add 5 InterfaceTemplates to a ModuleType
         module_type = ModuleType.objects.first()
@@ -2674,15 +2439,9 @@ class ModuleTestCase(
         self.assertHttpStatus(self.client.post(**request), 302)
         self.assertEqual(Interface.objects.filter(device=device).count(), 5)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_module_bulk_replication(self):
-        self.add_permissions(
-            'dcim.view_module',
-            'dcim.add_module',
-            'dcim.view_moduletype',
-            'dcim.view_device',
-            'dcim.view_modulebay',
-            'dcim.view_interface',
-        )
+        self.add_permissions('dcim.add_module')
 
         # Add 5 InterfaceTemplates to a ModuleType
         module_type = ModuleType.objects.first()
@@ -2730,17 +2489,9 @@ class ModuleTestCase(
         self.assertEqual(Module.objects.count(), initial_count + len(csv_data) - 1)
         self.assertEqual(Interface.objects.filter(device=device).count(), 5)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_module_component_adoption(self):
-        self.add_permissions(
-            'dcim.view_module',
-            'dcim.add_module',
-            'dcim.view_moduletype',
-            'dcim.view_device',
-            'dcim.view_modulebay',
-            'dcim.view_interface',
-            'dcim.change_interface',
-            'extras.view_tag',
-        )
+        self.add_permissions('dcim.add_module')
 
         interface_name = "Interface-1"
 
@@ -2775,16 +2526,9 @@ class ModuleTestCase(
         # Check that the Interface now has a module
         self.assertIsNotNone(interface.module)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_module_bulk_adoption(self):
-        self.add_permissions(
-            'dcim.view_module',
-            'dcim.add_module',
-            'dcim.view_moduletype',
-            'dcim.view_device',
-            'dcim.view_modulebay',
-            'dcim.view_interface',
-            'dcim.change_interface',
-        )
+        self.add_permissions('dcim.add_module')
 
         interface_name = "Interface-1"
 
@@ -2882,57 +2626,8 @@ class ConsolePortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{console_ports[2].pk},Console Port 9,New description9",
         )
 
-    def test_bulk_add_components_with_changelog_message(self):
-        self.add_permissions('dcim.view_consoleport', 'dcim.view_device')
-        device1 = Device.objects.get(name='Device 1')
-        device2 = create_test_device('Device 2')
-        changelog_message = 'Bulk-created console ports'
-
-        obj_perm = ObjectPermission(
-            name='Test permission',
-            actions=['add'],
-        )
-        obj_perm.save()
-        obj_perm.users.add(self.user)
-        obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-        request = {
-            'path': reverse('dcim:device_bulk_add_consoleport'),
-            'data': post_data({
-                'pk': [device1.pk, device2.pk],
-                'name': 'Console Port Bulk',
-                'type': ConsolePortTypeChoices.TYPE_RJ45,
-                'description': 'Bulk-created console port',
-                'changelog_message': changelog_message,
-                '_create': True,
-            }),
-        }
-
-        initial_count = self._get_queryset().count()
-        response = self.client.post(**request)
-        self.assertHttpStatus(response, 302)
-        self.assertEqual(initial_count + 2, self._get_queryset().count())
-
-        created_ports = list(ConsolePort.objects.filter(name='Console Port Bulk').order_by('device_id'))
-        self.assertEqual(len(created_ports), 2)
-        self.assertEqual([port.device_id for port in created_ports], [device1.pk, device2.pk])
-
-        objectchanges = ObjectChange.objects.filter(
-            action=ObjectChangeActionChoices.ACTION_CREATE,
-            changed_object_type=ContentType.objects.get_for_model(ConsolePort),
-            changed_object_id__in=[port.pk for port in created_ports],
-        )
-        self.assertEqual(objectchanges.count(), 2)
-        for objectchange in objectchanges:
-            self.assertEqual(objectchange.message, changelog_message)
-
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_consoleport',
-            'dcim.view_consoleserverport',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         consoleport = ConsolePort.objects.first()
         consoleserverport = ConsoleServerPort.objects.create(
             device=consoleport.device,
@@ -2996,13 +2691,8 @@ class ConsoleServerPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{console_server_ports[2].pk},Console Server Port 9,New description 9",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_consoleserverport',
-            'dcim.view_consoleport',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         consoleserverport = ConsoleServerPort.objects.first()
         consoleport = ConsolePort.objects.create(
             device=consoleserverport.device,
@@ -3072,13 +2762,8 @@ class PowerPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{power_ports[2].pk},Power Port 9,New description9",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_powerport',
-            'dcim.view_poweroutlet',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         powerport = PowerPort.objects.first()
         poweroutlet = PowerOutlet.objects.create(
             device=powerport.device,
@@ -3157,13 +2842,8 @@ class PowerOutletTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{power_outlets[2].pk},Power Outlet 9,New description9",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_poweroutlet',
-            'dcim.view_powerport',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         poweroutlet = PowerOutlet.objects.first()
         powerport = PowerPort.objects.first()
         Cable(a_terminations=[poweroutlet], b_terminations=[powerport]).save()
@@ -3215,13 +2895,13 @@ class InterfaceTestCase(ViewTestCases.DeviceComponentViewTestCase):
         cls.form_data = {
             'device': device.pk,
             'name': 'Interface X',
-            'type': InterfaceTypeChoices.TYPE_OTHER,
+            'type': InterfaceTypeChoices.TYPE_1GE_GBIC,
             'enabled': False,
             'bridge': interfaces[4].pk,
             'lag': interfaces[3].pk,
             'wwn': EUI('01:02:03:04:05:06:07:08', version=64),
             'mtu': 65000,
-            'speed': 16_000_000_000,
+            'speed': 1000000,
             'duplex': 'full',
             'mgmt_only': True,
             'description': 'A front port',
@@ -3239,13 +2919,13 @@ class InterfaceTestCase(ViewTestCases.DeviceComponentViewTestCase):
         cls.bulk_create_data = {
             'device': device.pk,
             'name': 'Interface [4-6]',
-            'type': InterfaceTypeChoices.TYPE_OTHER,
+            'type': InterfaceTypeChoices.TYPE_1GE_GBIC,
             'enabled': False,
             'bridge': interfaces[4].pk,
             'lag': interfaces[3].pk,
             'wwn': EUI('01:02:03:04:05:06:07:08', version=64),
             'mtu': 2000,
-            'speed': 16_000_000_000,
+            'speed': 100000,
             'duplex': 'half',
             'mgmt_only': True,
             'description': 'A front port',
@@ -3301,12 +2981,8 @@ class InterfaceTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{interfaces[2].pk},Interface 9,New description9",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_interface',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         interface1, interface2 = Interface.objects.all()[:2]
         Cable(a_terminations=[interface1], b_terminations=[interface2]).save()
 
@@ -3389,7 +3065,7 @@ class FrontPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
     def setUpTestData(cls):
         device = create_test_device('Device 1')
 
-        rear_ports = (
+        rearports = (
             RearPort(device=device, name='Rear Port 1'),
             RearPort(device=device, name='Rear Port 2'),
             RearPort(device=device, name='Rear Port 3'),
@@ -3397,19 +3073,14 @@ class FrontPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             RearPort(device=device, name='Rear Port 5'),
             RearPort(device=device, name='Rear Port 6'),
         )
-        RearPort.objects.bulk_create(rear_ports)
+        RearPort.objects.bulk_create(rearports)
 
         front_ports = (
-            FrontPort(device=device, name='Front Port 1'),
-            FrontPort(device=device, name='Front Port 2'),
-            FrontPort(device=device, name='Front Port 3'),
+            FrontPort(device=device, name='Front Port 1', rear_port=rearports[0]),
+            FrontPort(device=device, name='Front Port 2', rear_port=rearports[1]),
+            FrontPort(device=device, name='Front Port 3', rear_port=rearports[2]),
         )
         FrontPort.objects.bulk_create(front_ports)
-        PortMapping.objects.bulk_create([
-            PortMapping(device=device, front_port=front_ports[0], rear_port=rear_ports[0]),
-            PortMapping(device=device, front_port=front_ports[1], rear_port=rear_ports[1]),
-            PortMapping(device=device, front_port=front_ports[2], rear_port=rear_ports[2]),
-        ])
 
         tags = create_tags('Alpha', 'Bravo', 'Charlie')
 
@@ -3417,8 +3088,8 @@ class FrontPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             'device': device.pk,
             'name': 'Front Port X',
             'type': PortTypeChoices.TYPE_8P8C,
-            'positions': 1,
-            'rear_ports': [f'{rear_ports[3].pk}:1'],
+            'rear_port': rearports[3].pk,
+            'rear_port_position': 1,
             'description': 'New description',
             'tags': [t.pk for t in tags],
         }
@@ -3427,8 +3098,7 @@ class FrontPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             'device': device.pk,
             'name': 'Front Port [4-6]',
             'type': PortTypeChoices.TYPE_8P8C,
-            'positions': 1,
-            'rear_ports': [f'{rp.pk}:1' for rp in rear_ports[3:6]],
+            'rear_port': [f'{rp.pk}:1' for rp in rearports[3:6]],
             'description': 'New description',
             'tags': [t.pk for t in tags],
         }
@@ -3439,10 +3109,10 @@ class FrontPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
         }
 
         cls.csv_data = (
-            "device,name,type,positions",
-            "Device 1,Front Port 4,8p8c,1",
-            "Device 1,Front Port 5,8p8c,1",
-            "Device 1,Front Port 6,8p8c,1",
+            "device,name,type,rear_port,rear_port_position",
+            "Device 1,Front Port 4,8p8c,Rear Port 4,1",
+            "Device 1,Front Port 5,8p8c,Rear Port 5,1",
+            "Device 1,Front Port 6,8p8c,Rear Port 6,1",
         )
 
         cls.csv_update_data = (
@@ -3452,14 +3122,8 @@ class FrontPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{front_ports[2].pk},Front Port 9,New description9",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_frontport',
-            'dcim.view_rearport',
-            'dcim.view_interface',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         frontport = FrontPort.objects.first()
         interface = Interface.objects.create(
             device=frontport.device,
@@ -3525,14 +3189,8 @@ class RearPortTestCase(ViewTestCases.DeviceComponentViewTestCase):
             f"{rear_ports[2].pk},Rear Port 9,New description9",
         )
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_rearport',
-            'dcim.view_frontport',
-            'dcim.view_interface',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         rearport = RearPort.objects.first()
         interface = Interface.objects.create(
             device=rearport.device,
@@ -3768,45 +3426,6 @@ class InventoryItemRoleTestCase(ViewTestCases.OrganizationalObjectViewTestCase):
         }
 
 
-class CableBundleTestCase(ViewTestCases.PrimaryObjectViewTestCase):
-    model = CableBundle
-
-    @classmethod
-    def setUpTestData(cls):
-        cable_bundles = (
-            CableBundle(name='Cable Bundle 1'),
-            CableBundle(name='Cable Bundle 2'),
-            CableBundle(name='Cable Bundle 3'),
-        )
-        CableBundle.objects.bulk_create(cable_bundles)
-
-        tags = create_tags('Alpha', 'Bravo', 'Charlie')
-
-        cls.form_data = {
-            'name': 'Cable Bundle X',
-            'description': 'A test bundle',
-            'tags': [t.pk for t in tags],
-        }
-
-        cls.csv_data = (
-            "name,description",
-            "Cable Bundle 4,Fourth bundle",
-            "Cable Bundle 5,Fifth bundle",
-            "Cable Bundle 6,",
-        )
-
-        cls.csv_update_data = (
-            "id,name,description",
-            f"{cable_bundles[0].pk},Cable Bundle 7,New description7",
-            f"{cable_bundles[1].pk},Cable Bundle 8,New description8",
-            f"{cable_bundles[2].pk},Cable Bundle 9,New description9",
-        )
-
-        cls.bulk_edit_data = {
-            'description': 'New description',
-        }
-
-
 # TODO: Change base class to PrimaryObjectViewTestCase
 # Blocked by lack of common creation view for cables (termination A must be initialized)
 class CableTestCase(
@@ -3895,21 +3514,6 @@ class CableTestCase(
         cable3 = Cable(a_terminations=[interfaces[2]], b_terminations=[interfaces[5]], type=CableTypeChoices.TYPE_CAT6)
         cable3.save()
 
-        # Power panel, power feeds, and power ports for powerfeed-to-powerport cable import tests
-        power_panel = PowerPanel.objects.create(site=sites[0], name='Power Panel 1')
-        power_feeds = (
-            PowerFeed(name='Power Feed 1', power_panel=power_panel),
-            PowerFeed(name='Power Feed 2', power_panel=power_panel),
-            PowerFeed(name='Power Feed 3', power_panel=power_panel),
-        )
-        PowerFeed.objects.bulk_create(power_feeds)
-        power_ports = (
-            PowerPort(device=devices[3], name='Power Port 1'),
-            PowerPort(device=devices[3], name='Power Port 2'),
-            PowerPort(device=devices[3], name='Power Port 3'),
-        )
-        PowerPort.objects.bulk_create(power_ports)
-
         tags = create_tags('Alpha', 'Bravo', 'Charlie')
 
         cls.form_data = {
@@ -3919,7 +3523,7 @@ class CableTestCase(
             'b_terminations': [interfaces[3].pk],
             'type': CableTypeChoices.TYPE_CAT6,
             'status': LinkStatusChoices.STATUS_PLANNED,
-            'label': 'ID-CBL1-00001',
+            'label': 'Label',
             'color': 'c0c0c0',
             'length': 100,
             'length_unit': CableLengthUnitChoices.UNIT_FOOT,
@@ -3928,10 +3532,10 @@ class CableTestCase(
 
         cls.csv_data = {
             'default': (
-                "side_a_device,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name,label",
-                "Device 4,dcim.interface,Interface 1,Device 5,dcim.interface,Interface 1,ID-CBL4-00004",
-                "Device 3,dcim.interface,Interface 2,Device 4,dcim.interface,Interface 2,ID-CBL5-00005",
-                "Device 3,dcim.interface,Interface 3,Device 4,dcim.interface,Interface 3,ID-CBL6-00006",
+                "side_a_device,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name",
+                "Device 4,dcim.interface,Interface 1,Device 5,dcim.interface,Interface 1",
+                "Device 3,dcim.interface,Interface 2,Device 4,dcim.interface,Interface 2",
+                "Device 3,dcim.interface,Interface 3,Device 4,dcim.interface,Interface 3",
 
                 # The following is no longer possible in this scenario, because there are multiple
                 # devices named "Device 1" across multiple sites. See the "site-filtering" scenario
@@ -3941,42 +3545,26 @@ class CableTestCase(
             'site-filtering': (
                 # Ensure that CSV bulk import supports assigning terminations from parent devices
                 # that share the same device name, provided those devices belong to different sites.
-                (
-                    "side_a_site,side_a_device,side_a_type,side_a_name,side_b_site,side_b_device,"
-                    "side_b_type,side_b_name,label"
-                ),
-                "Site 1,Device 3,dcim.interface,Interface 1,Site 2,Device 1,dcim.interface,Interface 1,ID-CBL7-00007",
-                "Site 1,Device 3,dcim.interface,Interface 2,Site 2,Device 1,dcim.interface,Interface 2,ID-CBL8-00008",
-                "Site 1,Device 3,dcim.interface,Interface 3,Site 2,Device 1,dcim.interface,Interface 3,ID-CBL9-00009",
-                (
-                    "Site 1,Device 1,dcim.interface,Device 2 Interface,Site 2,Device 1,"
-                    "dcim.interface,Interface 4,ID-CBL1-00010"
-                ),
-                (
-                    "Site 1,Device 1,dcim.interface,Device 3 Interface,Site 2,Device 1,"
-                    "dcim.interface,Interface 5,ID-CBL1-00011"
-                ),
-            ),
-            'powerfeed-to-powerport': (
-                # Ensure that powerfeed-to-powerport cables can be imported via CSV using side_a_power_panel
-                "side_a_power_panel,side_a_type,side_a_name,side_b_device,side_b_type,side_b_name,label",
-                "Power Panel 1,dcim.powerfeed,Power Feed 1,Device 4,dcim.powerport,Power Port 1,ID-CBL1-00012",
-                "Power Panel 1,dcim.powerfeed,Power Feed 2,Device 4,dcim.powerport,Power Port 2,ID-CBL1-00013",
-                "Power Panel 1,dcim.powerfeed,Power Feed 3,Device 4,dcim.powerport,Power Port 3,ID-CBL1-00014",
-            ),
+                "side_a_site,side_a_device,side_a_type,side_a_name,side_b_site,side_b_device,side_b_type,side_b_name",
+                "Site 1,Device 3,dcim.interface,Interface 1,Site 2,Device 1,dcim.interface,Interface 1",
+                "Site 1,Device 3,dcim.interface,Interface 2,Site 2,Device 1,dcim.interface,Interface 2",
+                "Site 1,Device 3,dcim.interface,Interface 3,Site 2,Device 1,dcim.interface,Interface 3",
+                "Site 1,Device 1,dcim.interface,Device 2 Interface,Site 2,Device 1,dcim.interface,Interface 4",
+                "Site 1,Device 1,dcim.interface,Device 3 Interface,Site 2,Device 1,dcim.interface,Interface 5",
+            )
         }
 
         cls.csv_update_data = (
             "id,label,color",
-            f"{cable1.pk},ID-CBL7-00015,00ff00",
-            f"{cable2.pk},ID-CBL8-00016,00ff00",
-            f"{cable3.pk},ID-CBL9-00017,00ff00",
+            f"{cable1.pk},New label7,00ff00",
+            f"{cable2.pk},New label8,00ff00",
+            f"{cable3.pk},New label9,00ff00",
         )
 
         cls.bulk_edit_data = {
             'type': CableTypeChoices.TYPE_CAT5E,
             'status': LinkStatusChoices.STATUS_CONNECTED,
-            'label': 'ID-CBL1-00018',
+            'label': 'New label',
             'color': '00ff00',
             'length': 50,
             'length_unit': CableLengthUnitChoices.UNIT_METER,
@@ -4194,13 +3782,8 @@ class PowerFeedTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'comments': 'New comments',
         }
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_trace(self):
-        self.add_permissions(
-            'dcim.view_powerfeed',
-            'dcim.view_powerport',
-            'dcim.view_cable',
-            'dcim.view_device',
-        )
         manufacturer = Manufacturer.objects.create(name='Manufacturer', slug='manufacturer-1')
         device_type = DeviceType.objects.create(
             manufacturer=manufacturer, model='Device Type 1', slug='device-type-1'
@@ -4267,33 +3850,6 @@ class VirtualDeviceContextTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'status': VirtualDeviceContextStatusChoices.STATUS_OFFLINE,
         }
 
-    def test_bulk_edit_device_context_preserves_device(self):
-        """
-        Regression test: Bulk editing VDCs from the Device's VDCs tab (URL contains
-        ?device=<id>) must not clear the device field on those VDCs.
-        """
-        self.add_permissions('dcim.view_virtualdevicecontext', 'dcim.change_virtualdevicecontext')
-
-        device = VirtualDeviceContext.objects.filter(device__isnull=False).first().device
-        vdcs = list(VirtualDeviceContext.objects.filter(device=device)[:3])
-        pk_list = [vdc.pk for vdc in vdcs]
-
-        data = {
-            'pk': pk_list,
-            '_apply': True,
-            # Only change status — device is intentionally omitted
-            'status': VirtualDeviceContextStatusChoices.STATUS_PLANNED,
-        }
-
-        # Simulate navigation from Device -> VDCs tab by passing ?device=<id> as GET param
-        url = reverse('dcim:virtualdevicecontext_bulk_edit') + f'?device={device.pk}'
-        response = self.client.post(url, data)
-        self.assertHttpStatus(response, 302)
-
-        for vdc in VirtualDeviceContext.objects.filter(pk__in=pk_list):
-            self.assertEqual(vdc.device, device, msg=f"Device was unexpectedly cleared on VDC '{vdc.name}'")
-            self.assertEqual(vdc.status, VirtualDeviceContextStatusChoices.STATUS_PLANNED)
-
 
 class MACAddressTestCase(ViewTestCases.PrimaryObjectViewTestCase):
     model = MACAddress
@@ -4346,12 +3902,12 @@ class MACAddressTestCase(ViewTestCases.PrimaryObjectViewTestCase):
         }
 
     @tag('regression')  # Issue #20542
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
     def test_create_macaddress_via_quickadd(self):
         """
         Test creating a MAC address via quick-add modal (e.g., from Interface form).
         Regression test for issue #20542 where form prefix was missing in POST handler.
         """
-        self.add_permissions('dcim.view_macaddress', 'dcim.view_interface', 'extras.view_tag')
         obj_perm = ObjectPermission(name='Test permission', actions=['add'])
         obj_perm.save()
         obj_perm.users.add(self.user)

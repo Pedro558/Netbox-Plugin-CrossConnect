@@ -1,9 +1,9 @@
 import logging
-from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from django import template
 from django.templatetags.static import static
 from django.utils.safestring import mark_safe
+from urllib.parse import urlparse, urlunparse, parse_qs, urlencode
 
 from extras.choices import CustomFieldTypeChoices
 from utilities.querydict import dict_to_querydict
@@ -13,8 +13,8 @@ __all__ = (
     'checkmark',
     'copy_content',
     'customfield_value',
-    'formaction',
     'htmx_table',
+    'formaction',
     'static_with_params',
     'tag',
 )
@@ -46,43 +46,30 @@ def customfield_value(customfield, value):
         customfield: A CustomField instance
         value: The custom field value applied to an object
     """
-    color = None
-    value_has_colors = False
-
     if value:
         if customfield.type == CustomFieldTypeChoices.TYPE_SELECT:
-            color = customfield.get_choice_color(value)
             value = customfield.get_choice_label(value)
         elif customfield.type == CustomFieldTypeChoices.TYPE_MULTISELECT:
-            value = [(customfield.get_choice_label(v), customfield.get_choice_color(v)) for v in value]
-            value_has_colors = any(choice_color for _, choice_color in value)
-            if not value_has_colors:
-                value = [choice_label for choice_label, _ in value]
+            value = [customfield.get_choice_label(v) for v in value]
     return {
         'customfield': customfield,
         'value': value,
-        'color': color,
-        'value_has_colors': value_has_colors,
     }
 
 
 @register.inclusion_tag('builtins/badge.html')
-def badge(value, bg_color=None, hex_color=None, url=None, show_empty=False):
+def badge(value, bg_color=None, show_empty=False):
     """
-    Display the specified value as a badge.
+    Display the specified number as a badge.
 
     Args:
         value: The value to be displayed within the badge
         bg_color: Background color CSS name
-        hex_color: Background color in hexadecimal RRGGBB format
-        url: If provided, wrap the badge in a hyperlink
         show_empty: If true, display the badge even if value is None or zero
     """
     return {
         'value': value,
         'bg_color': bg_color or 'secondary',
-        'hex_color': hex_color.lstrip('#') if hex_color else None,
-        'url': url,
         'show_empty': show_empty,
     }
 
@@ -139,9 +126,11 @@ def htmx_table(context, viewname, return_url=None, **kwargs):
 @register.simple_tag(takes_context=True)
 def formaction(context):
     """
-    A hook for overriding the 'formaction' attribute on an HTML element, for example to replace
-    with 'hx-push-url="true" hx-post' for HTMX navigation.
+    Replace the 'formaction' attribute on an HTML element with the appropriate HTMX attributes
+    if HTMX navigation is enabled (per the user's preferences).
     """
+    if context.get('htmx_navigation', False):
+        return mark_safe('hx-push-url="true" hx-post')
     return 'formaction'
 
 
@@ -193,11 +182,3 @@ def static_with_params(path, **params):
     # Reconstruct the URL with the new query string
     new_parsed = parsed._replace(query=new_query)
     return urlunparse(new_parsed)
-
-
-@register.simple_tag(takes_context=True)
-def render(context, component):
-    """
-    Render a UI component (e.g. a Panel) by calling its render() method and passing the current template context.
-    """
-    return mark_safe(component.render(context))

@@ -5,16 +5,7 @@ from circuits.filtersets import *
 from circuits.models import *
 from dcim.choices import InterfaceTypeChoices, LocationStatusChoices
 from dcim.models import (
-    Cable,
-    Device,
-    DeviceRole,
-    DeviceType,
-    Interface,
-    Location,
-    Manufacturer,
-    Region,
-    Site,
-    SiteGroup,
+    Cable, Device, DeviceRole, DeviceType, Interface, Location, Manufacturer, Region, Site, SiteGroup
 )
 from ipam.models import ASN, RIR
 from netbox.choices import DistanceUnitChoices
@@ -442,7 +433,7 @@ class CircuitTestCase(TestCase, ChangeLoggedFilterSetTests):
 class CircuitTerminationTestCase(TestCase, ChangeLoggedFilterSetTests):
     queryset = CircuitTermination.objects.all()
     filterset = CircuitTerminationFilterSet
-    ignore_fields = ('cable', 'cable_positions')
+    ignore_fields = ('cable',)
 
     @classmethod
     def setUpTestData(cls):

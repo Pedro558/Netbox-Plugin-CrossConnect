@@ -15,113 +15,23 @@ from extras.querysets import ConfigContextModelQuerySet
 from netbox.config import get_config
 from netbox.models import NetBoxModel, PrimaryModel
 from netbox.models.features import ContactsMixin, ImageAttachmentsMixin
-from netbox.models.mixins import OwnerMixin
 from utilities.fields import CounterCacheField, NaturalOrderingField
 from utilities.ordering import naturalize_interface
 from utilities.query_functions import CollateAsChar
 from utilities.tracking import TrackingModelMixin
-
-from ..choices import *
+from virtualization.choices import *
 
 __all__ = (
-    'VMInterface',
     'VirtualDisk',
     'VirtualMachine',
-    'VirtualMachineType',
+    'VMInterface',
 )
 
 
-class VirtualMachineType(ImageAttachmentsMixin, PrimaryModel):
+class VirtualMachine(ContactsMixin, ImageAttachmentsMixin, RenderConfigMixin, ConfigContextModel, PrimaryModel):
     """
-    A type defining default attributes (platform, vCPUs, memory, etc.) for virtual machines.
+    A virtual machine which runs inside a Cluster.
     """
-
-    name = models.CharField(
-        verbose_name=_('name'),
-        max_length=100,
-    )
-    slug = models.SlugField(
-        verbose_name=_('slug'),
-        max_length=100,
-        unique=True,
-    )
-    default_platform = models.ForeignKey(
-        to='dcim.Platform',
-        on_delete=models.SET_NULL,
-        related_name='+',
-        blank=True,
-        null=True,
-        verbose_name=_('default platform'),
-    )
-    default_vcpus = models.DecimalField(
-        verbose_name=_('default vCPUs'),
-        max_digits=6,
-        decimal_places=2,
-        blank=True,
-        null=True,
-        validators=(MinValueValidator(decimal.Decimal('0.01')),),
-    )
-    default_memory = models.PositiveIntegerField(
-        verbose_name=_('default memory (MB)'),
-        blank=True,
-        null=True,
-    )
-
-    # Counter fields
-    virtual_machine_count = CounterCacheField(
-        to_model='virtualization.VirtualMachine',
-        to_field='virtual_machine_type',
-    )
-
-    clone_fields = (
-        'default_platform',
-        'default_vcpus',
-        'default_memory',
-    )
-
-    class Meta:
-        ordering = ('name',)
-        constraints = (
-            models.UniqueConstraint(
-                Lower('name'),
-                name='%(app_label)s_%(class)s_unique_name',
-                violation_error_message=_('Virtual machine type name must be unique.'),
-            ),
-        )
-        indexes = (
-            models.Index(fields=('name',)),  # Default ordering
-        )
-        verbose_name = _('virtual machine type')
-        verbose_name_plural = _('virtual machine types')
-
-    def __str__(self):
-        return self.name
-
-
-class VirtualMachine(
-    ContactsMixin, ImageAttachmentsMixin, RenderConfigMixin, ConfigContextModel, TrackingModelMixin, PrimaryModel
-):
-    """
-    A virtual machine which runs on a Cluster or a standalone Device.
-
-    Each VM must be placed in at least one of three ways:
-
-    1. Assigned to a Site alone (e.g. for logical grouping without a specific host).
-    2. Assigned to a Cluster and optionally pinned to a host Device within that cluster.
-    3. Assigned directly to a standalone Device (one that does not belong to any cluster).
-
-    When a Cluster or Device is set, the Site is automatically inherited if not explicitly provided.
-    If a Device belongs to a Cluster, the Cluster must also be specified on the VM.
-    """
-
-    virtual_machine_type = models.ForeignKey(
-        to='virtualization.VirtualMachineType',
-        on_delete=models.PROTECT,
-        related_name='instances',
-        verbose_name=_('type'),
-        blank=True,
-        null=True,
-    )
     site = models.ForeignKey(
         to='dcim.Site',
         on_delete=models.PROTECT,
@@ -168,12 +78,6 @@ class VirtualMachine(
         default=VirtualMachineStatusChoices.STATUS_ACTIVE,
         verbose_name=_('status')
     )
-    start_on_boot = models.CharField(
-        max_length=32,
-        choices=VirtualMachineStartOnBootChoices,
-        default=VirtualMachineStartOnBootChoices.STATUS_OFF,
-        verbose_name=_('start on boot'),
-    )
     role = models.ForeignKey(
         to='dcim.DeviceRole',
         on_delete=models.PROTECT,
@@ -210,12 +114,12 @@ class VirtualMachine(
     memory = models.PositiveIntegerField(
         blank=True,
         null=True,
-        verbose_name=_('memory')
+        verbose_name=_('memory (MB)')
     )
     disk = models.PositiveIntegerField(
         blank=True,
         null=True,
-        verbose_name=_('disk')
+        verbose_name=_('disk (MB)')
     )
     serial = models.CharField(
         verbose_name=_('serial number'),
@@ -242,45 +146,28 @@ class VirtualMachine(
     objects = ConfigContextModelQuerySet.as_manager()
 
     clone_fields = (
-        'virtual_machine_type', 'site', 'cluster', 'device', 'tenant', 'platform', 'status', 'role', 'vcpus', 'memory',
-        'disk',
+        'site', 'cluster', 'device', 'tenant', 'platform', 'status', 'role', 'vcpus', 'memory', 'disk',
+    )
+    prerequisite_models = (
+        'virtualization.Cluster',
     )
 
     class Meta:
         ordering = ('name', 'pk')  # Name may be non-unique
-        indexes = (
-            models.Index(fields=('name', 'id')),  # Default ordering
-        )
         constraints = (
             models.UniqueConstraint(
                 Lower('name'), 'cluster', 'tenant',
-                name='%(app_label)s_%(class)s_unique_name_cluster_tenant',
-                violation_error_message=_('Virtual machine name must be unique per cluster and tenant.')
+                name='%(app_label)s_%(class)s_unique_name_cluster_tenant'
             ),
             models.UniqueConstraint(
                 Lower('name'), 'cluster',
                 name='%(app_label)s_%(class)s_unique_name_cluster',
                 condition=Q(tenant__isnull=True),
-                violation_error_message=_('Virtual machine name must be unique per cluster.')
-            ),
-            models.UniqueConstraint(
-                Lower('name'), 'device', 'tenant',
-                name='%(app_label)s_%(class)s_unique_name_device_tenant',
-                condition=Q(cluster__isnull=True, device__isnull=False),
-                violation_error_message=_('Virtual machine name must be unique per device and tenant.')
-            ),
-            models.UniqueConstraint(
-                Lower('name'), 'device',
-                name='%(app_label)s_%(class)s_unique_name_device',
-                condition=Q(cluster__isnull=True, device__isnull=False, tenant__isnull=True),
-                violation_error_message=_('Virtual machine name must be unique per device.')
+                violation_error_message=_("Virtual machine name must be unique per cluster.")
             ),
         )
         verbose_name = _('virtual machine')
         verbose_name_plural = _('virtual machines')
-        permissions = [
-            ('render_config', 'Render configuration'),
-        ]
 
     def __str__(self):
         return self.name
@@ -288,11 +175,11 @@ class VirtualMachine(
     def clean(self):
         super().clean()
 
-        # Must be assigned to a site, cluster, and/or device
-        if not self.site and not self.cluster and not self.device:
-            raise ValidationError(
-                _('A virtual machine must be assigned to a site, cluster, or device.')
-            )
+        # Must be assigned to a site and/or cluster
+        if not self.site and not self.cluster:
+            raise ValidationError({
+                'cluster': _('A virtual machine must be assigned to a site and/or cluster.')
+            })
 
         # Validate site for cluster & VM
         if self.cluster and self.site and self.cluster._site and self.cluster._site != self.site:
@@ -302,25 +189,12 @@ class VirtualMachine(
                 ).format(cluster=self.cluster, site=self.site)
             })
 
-        # Validate site for the device & VM (when the device is standalone)
-        if self.device and self.site and self.device.site and self.device.site != self.site:
-            raise ValidationError({
-                'site': _(
-                    'The selected device ({device}) is not assigned to this site ({site}).'
-                ).format(device=self.device, site=self.site)
-            })
-
-        # Direct device assignment is only for standalone hosts. If the selected
-        # device already belongs to a cluster, require that cluster explicitly.
-        if self.device and not self.cluster and self.device.cluster:
-            raise ValidationError({
-                'cluster': _(
-                    "Must specify the assigned device's cluster ({cluster}) when assigning host device {device}."
-                ).format(cluster=self.device.cluster, device=self.device)
-            })
-
         # Validate assigned cluster device
-        if self.device and self.cluster and self.device.cluster_id != self.cluster_id:
+        if self.device and not self.cluster:
+            raise ValidationError({
+                'device': _('Must specify a cluster when assigning a host device.')
+            })
+        if self.device and self.device not in self.cluster.devices.all():
             raise ValidationError({
                 'device': _(
                     "The selected device ({device}) is not assigned to this cluster ({cluster})."
@@ -362,51 +236,26 @@ class VirtualMachine(
                     })
 
     def save(self, *args, **kwargs):
-        # Assign a site from a cluster or device if not set
-        if not self.site:
-            if self.cluster and self.cluster._site:
-                self.site = self.cluster._site
-            elif self.device and self.device.site:
-                self.site = self.device.site
 
-        if self._state.adding:
-            self.apply_type_defaults()
+        # Assign site from cluster if not set
+        if self.cluster and not self.site:
+            self.site = self.cluster._site
 
         super().save(*args, **kwargs)
 
-    def apply_type_defaults(self):
-        """
-        Populate any empty fields with defaults from the assigned VirtualMachineType.
-        """
-        if not self.virtual_machine_type_id:
-            return
-
-        defaults = {
-            'platform_id': 'default_platform_id',
-            'vcpus': 'default_vcpus',
-            'memory': 'default_memory',
-        }
-        for field, default_field in defaults.items():
-            if getattr(self, field) is None:
-                default_value = getattr(self.virtual_machine_type, default_field)
-                if default_value is not None:
-                    setattr(self, field, default_value)
-
     def get_status_color(self):
         return VirtualMachineStatusChoices.colors.get(self.status)
-
-    def get_start_on_boot_color(self):
-        return VirtualMachineStartOnBootChoices.colors.get(self.start_on_boot)
 
     @property
     def primary_ip(self):
         if get_config().PREFER_IPV4 and self.primary_ip4:
             return self.primary_ip4
-        if self.primary_ip6:
+        elif self.primary_ip6:
             return self.primary_ip6
-        if self.primary_ip4:
+        elif self.primary_ip4:
             return self.primary_ip4
-        return None
+        else:
+            return None
 
 
 #
@@ -414,7 +263,7 @@ class VirtualMachine(
 #
 
 
-class ComponentModel(OwnerMixin, NetBoxModel):
+class ComponentModel(NetBoxModel):
     """
     An abstract model inherited by any model which has a parent VirtualMachine.
     """
@@ -567,7 +416,7 @@ class VMInterface(ComponentModel, BaseInterface, TrackingModelMixin):
 
 class VirtualDisk(ComponentModel, TrackingModelMixin):
     size = models.PositiveIntegerField(
-        verbose_name=_('size'),
+        verbose_name=_('size (MB)'),
     )
 
     class Meta(ComponentModel.Meta):

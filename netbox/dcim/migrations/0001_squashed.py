@@ -1,16 +1,15 @@
-import django.contrib.postgres.fields
-import django.core.validators
-import django.db.models.deletion
-import timezone_field.fields
-from django.db import migrations, models
-
 import dcim.fields
 import ipam.fields
+import django.contrib.postgres.fields
+from utilities.json import CustomFieldJSONEncoder
+import django.core.validators
+from django.db import migrations, models
+import django.db.models.deletion
+import timezone_field.fields
 import utilities.fields
 import utilities.ordering
 import utilities.query_functions
 import utilities.validators
-from utilities.json import CustomFieldJSONEncoder
 
 
 class Migration(migrations.Migration):

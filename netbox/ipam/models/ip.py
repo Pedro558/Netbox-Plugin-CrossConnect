@@ -12,7 +12,7 @@ from django.utils.translation import gettext_lazy as _
 from dcim.models.mixins import CachedScopeMixin
 from ipam.choices import *
 from ipam.constants import *
-from ipam.fields import IPAddressField, IPNetworkField
+from ipam.fields import IPNetworkField, IPAddressField
 from ipam.lookups import Host
 from ipam.managers import IPAddressManager
 from ipam.querysets import PrefixQuerySet
@@ -22,11 +22,11 @@ from netbox.models import OrganizationalModel, PrimaryModel
 from netbox.models.features import ContactsMixin
 
 __all__ = (
-    'RIR',
     'Aggregate',
     'IPAddress',
     'IPRange',
     'Prefix',
+    'RIR',
     'Role',
 )
 
@@ -110,9 +110,6 @@ class Aggregate(ContactsMixin, GetAvailablePrefixesMixin, PrimaryModel):
 
     class Meta:
         ordering = ('prefix', 'pk')  # prefix may be non-unique
-        indexes = (
-            models.Index(fields=('prefix', 'id')),  # Default ordering
-        )
         verbose_name = _('aggregate')
         verbose_name_plural = _('aggregates')
 
@@ -162,17 +159,14 @@ class Aggregate(ContactsMixin, GetAvailablePrefixesMixin, PrimaryModel):
 
     @property
     def family(self):
-        if not self.prefix:
-            return None
-        if isinstance(self.prefix, str):
-            return netaddr.IPNetwork(self.prefix).version
-        return self.prefix.version
+        if self.prefix:
+            return self.prefix.version
+        return None
 
     @property
     def ipv6_full(self):
         if self.prefix and self.prefix.version == 6:
             return netaddr.IPAddress(self.prefix).format(netaddr.ipv6_full)
-        return None
 
     def get_child_prefixes(self):
         """
@@ -203,9 +197,6 @@ class Role(OrganizationalModel):
 
     class Meta:
         ordering = ('weight', 'name')
-        indexes = (
-            models.Index(fields=('weight', 'name')),  # Default ordering
-        )
         verbose_name = _('role')
         verbose_name_plural = _('roles')
 
@@ -291,10 +282,13 @@ class Prefix(ContactsMixin, GetAvailablePrefixesMixin, CachedScopeMixin, Primary
         ordering = (F('vrf').asc(nulls_first=True), 'prefix', 'pk')  # (vrf, prefix) may be non-unique
         verbose_name = _('prefix')
         verbose_name_plural = _('prefixes')
-        indexes = (
-            models.Index(fields=('scope_type', 'scope_id')),
-            GistIndex(fields=['prefix'], name='ipam_prefix_gist_idx', opclasses=['inet_ops']),
-        )
+        indexes = [
+            GistIndex(
+                fields=['prefix'],
+                name='ipam_prefix_gist_idx',
+                opclasses=['inet_ops'],
+            ),
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -343,25 +337,16 @@ class Prefix(ContactsMixin, GetAvailablePrefixesMixin, CachedScopeMixin, Primary
 
     @property
     def family(self):
-        if not self.prefix:
-            return None
-        if isinstance(self.prefix, str):
-            return netaddr.IPNetwork(self.prefix).version
-        return self.prefix.version
+        return self.prefix.version if self.prefix else None
 
     @property
     def mask_length(self):
-        if not self.prefix:
-            return None
-        if isinstance(self.prefix, str):
-            return netaddr.IPNetwork(self.prefix).prefixlen
-        return self.prefix.prefixlen
+        return self.prefix.prefixlen if self.prefix else None
 
     @property
     def ipv6_full(self):
         if self.prefix and self.prefix.version == 6:
             return netaddr.IPAddress(self.prefix).format(netaddr.ipv6_full)
-        return None
 
     @property
     def depth(self):
@@ -382,16 +367,6 @@ class Prefix(ContactsMixin, GetAvailablePrefixesMixin, CachedScopeMixin, Primary
 
     def get_status_color(self):
         return PrefixStatusChoices.colors.get(self.status)
-
-    @cached_property
-    def aggregate(self):
-        """
-        Return the containing Aggregate for this Prefix, if any.
-        """
-        try:
-            return Aggregate.objects.get(prefix__net_contains_or_equals=str(self.prefix))
-        except Aggregate.DoesNotExist:
-            return None
 
     def get_parents(self, include_self=False):
         """
@@ -423,7 +398,8 @@ class Prefix(ContactsMixin, GetAvailablePrefixesMixin, CachedScopeMixin, Primary
         """
         if self.vrf is None and self.status == PrefixStatusChoices.STATUS_CONTAINER:
             return Prefix.objects.filter(prefix__net_contained=str(self.prefix))
-        return Prefix.objects.filter(prefix__net_contained=str(self.prefix), vrf=self.vrf)
+        else:
+            return Prefix.objects.filter(prefix__net_contained=str(self.prefix), vrf=self.vrf)
 
     def get_child_ranges(self, **kwargs):
         """
@@ -443,7 +419,8 @@ class Prefix(ContactsMixin, GetAvailablePrefixesMixin, CachedScopeMixin, Primary
         """
         if self.vrf is None and self.status == PrefixStatusChoices.STATUS_CONTAINER:
             return IPAddress.objects.filter(address__net_host_contained=str(self.prefix))
-        return IPAddress.objects.filter(address__net_host_contained=str(self.prefix), vrf=self.vrf)
+        else:
+            return IPAddress.objects.filter(address__net_host_contained=str(self.prefix), vrf=self.vrf)
 
     def get_available_ips(self):
         """
@@ -458,11 +435,9 @@ class Prefix(ContactsMixin, GetAvailablePrefixesMixin, CachedScopeMixin, Primary
         ])
         available_ips = prefix - child_ips - child_ranges
 
-        # Pool, IPv4 /31-/32 or IPv6 /127-/128 sets are fully usable
-        if (
-            self.is_pool
-            or (self.family == 4 and self.prefix.prefixlen >= 31)
-            or (self.family == 6 and self.prefix.prefixlen >= 127)
+        # IPv6 /127's, pool, or IPv4 /31-/32 sets are fully usable
+        if (self.family == 6 and self.prefix.prefixlen >= 127) or self.is_pool or (
+                self.family == 4 and self.prefix.prefixlen >= 31
         ):
             return available_ips
 
@@ -605,12 +580,11 @@ class IPRange(ContactsMixin, PrimaryModel):
                     'end_address': _("Starting and ending IP address masks must match")
                 })
 
-            # Equal start/end addresses are permitted for single-address ranges.
-            # Use .ip (host portion) rather than the IPNetwork object to avoid comparing prefix lengths again.
-            if self.end_address.ip < self.start_address.ip:
+            # Check that the ending address is greater than the starting address
+            if not self.end_address > self.start_address:
                 raise ValidationError({
                     'end_address': _(
-                        "Ending address must be greater than or equal to the starting address ({start_address})"
+                        "Ending address must be greater than the starting address ({start_address})"
                     ).format(start_address=self.start_address)
                 })
 
@@ -659,11 +633,7 @@ class IPRange(ContactsMixin, PrimaryModel):
 
     @property
     def family(self):
-        if not self.start_address:
-            return None
-        if isinstance(self.start_address, str):
-            return netaddr.IPAddress(self.start_address.split('/')[0]).version
-        return self.start_address.version
+        return self.start_address.version if self.start_address else None
 
     @property
     def range(self):
@@ -678,10 +648,6 @@ class IPRange(ContactsMixin, PrimaryModel):
         """
         Return an efficient string representation of the IP range.
         """
-        # Single-address ranges render both endpoints to stay distinct from IPAddress rows.
-        if self.start_address.ip == self.end_address.ip:
-            return f'{self.start_address.ip}-{self.end_address.ip}/{self.start_address.prefixlen}'
-
         separator = ':' if self.family == 6 else '.'
         start_chunks = str(self.start_address.ip).split(separator)
         end_chunks = str(self.end_address.ip).split(separator)
@@ -844,7 +810,6 @@ class IPAddress(ContactsMixin, PrimaryModel):
     class Meta:
         ordering = ('address', 'pk')  # address may be non-unique
         indexes = (
-            models.Index(fields=('address', 'id')),  # Default ordering
             models.Index(Cast(Host('address'), output_field=IPAddressField()), name='ipam_ipaddress_host'),
             models.Index(fields=('assigned_object_type', 'assigned_object_id')),
         )
@@ -865,7 +830,6 @@ class IPAddress(ContactsMixin, PrimaryModel):
     def ipv6_full(self):
         if self.address and self.address.version == 6:
             return netaddr.IPAddress(self.address).format(netaddr.ipv6_full)
-        return None
 
     def get_duplicates(self):
         return IPAddress.objects.filter(
@@ -891,7 +855,6 @@ class IPAddress(ContactsMixin, PrimaryModel):
                 ])
                 if available_ips:
                     return next(iter(available_ips))
-        return None
 
     def get_related_ips(self):
         """
@@ -947,13 +910,13 @@ class IPAddress(ContactsMixin, PrimaryModel):
                     })
 
             # Disallow the creation of IPAddresses within an IPRange with mark_populated=True
-            parent_range_qs = IPRange.objects.filter(
+            parent_range = IPRange.objects.filter(
                 start_address__lte=self.address,
                 end_address__gte=self.address,
                 vrf=self.vrf,
                 mark_populated=True
-            )
-            if not self.pk and (parent_range := parent_range_qs.first()):
+            ).first()
+            if parent_range:
                 raise ValidationError({
                     'address': _(
                         "Cannot create IP address {ip} inside range {range}."
@@ -979,13 +942,6 @@ class IPAddress(ContactsMixin, PrimaryModel):
                 raise ValidationError(
                     _("Cannot reassign IP address while it is designated as the primary IP for the parent object")
                 )
-
-            # can't use is_oob_ip as self.assigned_object might be changed
-            if hasattr(original_parent, 'oob_ip') and original_parent.oob_ip_id == self.pk:
-                if parent != original_parent:
-                    raise ValidationError(
-                        _("Cannot reassign IP address while it is designated as the OOB IP for the parent object")
-                    )
 
         # Validate IP status selection
         if self.status == IPAddressStatusChoices.STATUS_SLAAC and self.family != 6:
@@ -1016,11 +972,9 @@ class IPAddress(ContactsMixin, PrimaryModel):
 
     @property
     def family(self):
-        if not self.address:
-            return None
-        if isinstance(self.address, str):
-            return netaddr.IPNetwork(self.address).version
-        return self.address.version
+        if self.address:
+            return self.address.version
+        return None
 
     @property
     def is_oob_ip(self):

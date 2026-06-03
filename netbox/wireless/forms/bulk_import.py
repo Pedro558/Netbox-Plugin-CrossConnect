@@ -5,20 +5,20 @@ from dcim.forms.mixins import ScopedImportForm
 from dcim.models import Device, Interface, Site
 from ipam.models import VLAN
 from netbox.choices import *
-from netbox.forms import NestedGroupModelImportForm, PrimaryModelImportForm
+from netbox.forms import NetBoxModelImportForm
 from tenancy.models import Tenant
-from utilities.forms.fields import CSVChoiceField, CSVModelChoiceField
+from utilities.forms.fields import CSVChoiceField, CSVModelChoiceField, SlugField
 from wireless.choices import *
 from wireless.models import *
 
 __all__ = (
-    'WirelessLANGroupImportForm',
     'WirelessLANImportForm',
+    'WirelessLANGroupImportForm',
     'WirelessLinkImportForm',
 )
 
 
-class WirelessLANGroupImportForm(NestedGroupModelImportForm):
+class WirelessLANGroupImportForm(NetBoxModelImportForm):
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=WirelessLANGroup.objects.all(),
@@ -26,13 +26,14 @@ class WirelessLANGroupImportForm(NestedGroupModelImportForm):
         to_field_name='name',
         help_text=_('Parent group')
     )
+    slug = SlugField()
 
     class Meta:
         model = WirelessLANGroup
-        fields = ('name', 'slug', 'parent', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'parent', 'description', 'tags', 'comments')
 
 
-class WirelessLANImportForm(ScopedImportForm, PrimaryModelImportForm):
+class WirelessLANImportForm(ScopedImportForm, NetBoxModelImportForm):
     group = CSVModelChoiceField(
         label=_('Group'),
         queryset=WirelessLANGroup.objects.all(),
@@ -76,14 +77,14 @@ class WirelessLANImportForm(ScopedImportForm, PrimaryModelImportForm):
         model = WirelessLAN
         fields = (
             'ssid', 'group', 'status', 'vlan', 'tenant', 'auth_type', 'auth_cipher', 'auth_psk', 'scope_type',
-            'scope_name', 'scope_id', 'description', 'owner', 'comments', 'tags',
+            'scope_id', 'description', 'comments', 'tags',
         )
         labels = {
             'scope_id': _('Scope ID'),
         }
 
 
-class WirelessLinkImportForm(PrimaryModelImportForm):
+class WirelessLinkImportForm(NetBoxModelImportForm):
     # Termination A
     site_a = CSVModelChoiceField(
         label=_('Site A'),
@@ -162,8 +163,7 @@ class WirelessLinkImportForm(PrimaryModelImportForm):
         model = WirelessLink
         fields = (
             'site_a', 'device_a', 'interface_a', 'site_b', 'device_b', 'interface_b', 'status', 'ssid', 'tenant',
-            'auth_type', 'auth_cipher', 'auth_psk', 'distance', 'distance_unit', 'description', 'owner', 'comments',
-            'tags',
+            'auth_type', 'auth_cipher', 'auth_psk', 'distance', 'distance_unit', 'description', 'comments', 'tags',
         )
 
     def __init__(self, data=None, *args, **kwargs):

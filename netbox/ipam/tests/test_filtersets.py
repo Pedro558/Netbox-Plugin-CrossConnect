@@ -114,13 +114,6 @@ class ASNTestCase(TestCase, ChangeLoggedFilterSetTests):
         ]
         RIR.objects.bulk_create(rirs)
 
-        roles = [
-            Role(name='Role 1', slug='role-1'),
-            Role(name='Role 2', slug='role-2'),
-            Role(name='Role 3', slug='role-3'),
-        ]
-        Role.objects.bulk_create(roles)
-
         tenants = [
             Tenant(name='Tenant 1', slug='tenant-1'),
             Tenant(name='Tenant 2', slug='tenant-2'),
@@ -131,12 +124,12 @@ class ASNTestCase(TestCase, ChangeLoggedFilterSetTests):
         Tenant.objects.bulk_create(tenants)
 
         asns = (
-            ASN(asn=65001, rir=rirs[0], role=roles[0], tenant=tenants[0], description='foobar1'),
-            ASN(asn=65002, rir=rirs[1], role=roles[1], tenant=tenants[1], description='foobar2'),
-            ASN(asn=65003, rir=rirs[2], role=roles[2], tenant=tenants[2], description='foobar3'),
-            ASN(asn=4200000000, rir=rirs[0], role=roles[0], tenant=tenants[0]),
-            ASN(asn=4200000001, rir=rirs[1], role=roles[1], tenant=tenants[1]),
-            ASN(asn=4200000002, rir=rirs[2], role=roles[2], tenant=tenants[2]),
+            ASN(asn=65001, rir=rirs[0], tenant=tenants[0], description='foobar1'),
+            ASN(asn=65002, rir=rirs[1], tenant=tenants[1], description='foobar2'),
+            ASN(asn=65003, rir=rirs[2], tenant=tenants[2], description='foobar3'),
+            ASN(asn=4200000000, rir=rirs[0], tenant=tenants[0]),
+            ASN(asn=4200000001, rir=rirs[1], tenant=tenants[1]),
+            ASN(asn=4200000002, rir=rirs[2], tenant=tenants[2]),
         )
         ASN.objects.bulk_create(asns)
 
@@ -191,13 +184,6 @@ class ASNTestCase(TestCase, ChangeLoggedFilterSetTests):
         params = {'rir_id': [rirs[0].pk, rirs[1].pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
         params = {'rir': [rirs[0].slug, rirs[1].slug]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
-
-    def test_role(self):
-        roles = Role.objects.all()[:2]
-        params = {'role_id': [roles[0].pk, roles[1].pk]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
-        params = {'role': [roles[0].slug, roles[1].slug]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
 
     def test_site_group(self):
@@ -1110,25 +1096,6 @@ class IPRangeTestCase(TestCase, ChangeLoggedFilterSetTests):
         params = {'mark_populated': 'false'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 6)
 
-    def test_single_address_range(self):
-        # A range with start_address == end_address must be discoverable by the
-        # start, end, and contains filters.
-        iprange = IPRange(
-            start_address=IPNetwork('10.0.5.1/24'),
-            end_address=IPNetwork('10.0.5.1/24'),
-        )
-        iprange.clean()
-        iprange.save()
-
-        params = {'start_address': ['10.0.5.1']}
-        self.assertIn(iprange, self.filterset(params, self.queryset).qs)
-
-        params = {'end_address': ['10.0.5.1']}
-        self.assertIn(iprange, self.filterset(params, self.queryset).qs)
-
-        params = {'contains': '10.0.5.1/24'}
-        self.assertIn(iprange, self.filterset(params, self.queryset).qs)
-
 
 class IPAddressTestCase(TestCase, ChangeLoggedFilterSetTests):
     queryset = IPAddress.objects.all()
@@ -1307,10 +1274,6 @@ class IPAddressTestCase(TestCase, ChangeLoggedFilterSetTests):
         )
         IPAddress.objects.bulk_create(ipaddresses)
 
-        IPAddress.objects.filter(pk__in=[ipaddresses[1].pk, ipaddresses[2].pk]).update(
-            nat_inside=ipaddresses[0]
-        )
-
         services = (
             Service(
                 parent=devices[0],
@@ -1480,11 +1443,6 @@ class IPAddressTestCase(TestCase, ChangeLoggedFilterSetTests):
         params = {'service_id': [services[0].pk, services[1].pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
-    def test_nat_inside(self):
-        inside = IPAddress.objects.filter(nat_outside__isnull=False).distinct().first()
-        params = {'nat_inside_id': [inside.pk]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
-
 
 class FHRPGroupTestCase(TestCase, ChangeLoggedFilterSetTests):
     queryset = FHRPGroup.objects.all()
@@ -1614,12 +1572,12 @@ class FHRPGroupAssignmentTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 4)
 
     def test_interface_type(self):
-        params = {'interface_type': ['dcim.interface']}
+        params = {'interface_type': 'dcim.interface'}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 3)
 
     def test_interface(self):
         interfaces = Interface.objects.all()[:2]
-        params = {'interface_type': ['dcim.interface'], 'interface_id': [interfaces[0].pk, interfaces[1].pk]}
+        params = {'interface_type': 'dcim.interface', 'interface_id': [interfaces[0].pk, interfaces[1].pk]}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_priority(self):
@@ -1742,9 +1700,7 @@ class VLANGroupTestCase(TestCase, ChangeLoggedFilterSetTests):
                 slug='vlan-group-8'
             ),
         )
-        # Ensure the total_vlan_ids field is populated
-        for vlan_group in vlan_groups:
-            vlan_group.save()
+        VLANGroup.objects.bulk_create(vlan_groups)
 
     def test_q(self):
         params = {'q': 'foobar1'}
@@ -1771,12 +1727,6 @@ class VLANGroupTestCase(TestCase, ChangeLoggedFilterSetTests):
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
         params = {'contains_vid': 4095}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 0)
-
-    def test_total_vlan_ids(self):
-        params = {'total_vlan_ids': [110]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 7)
-        params = {'total_vlan_ids': [4094]}
-        self.assertEqual(self.filterset(params, self.queryset).qs.count(), 1)
 
     def test_region(self):
         params = {'region': Region.objects.first().pk}

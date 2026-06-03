@@ -23,31 +23,6 @@ ALLOWED_HOSTS = ['*']
 
 ---
 
-## API_TOKEN_PEPPERS
-
-!!! info "This parameter was introduced in NetBox v4.5."
-
-[Cryptographic peppers](https://en.wikipedia.org/wiki/Pepper_(cryptography)) are employed to generate hashes of sensitive values on the server. This parameter defines the peppers used to hash v2 API tokens in NetBox. You must define at least one pepper before creating a v2 API token. See the [API documentation](../integrations/rest-api.md#authentication) for further information about how peppers are used.
-
-```python
-API_TOKEN_PEPPERS = {
-    # DO NOT USE THIS EXAMPLE PEPPER IN PRODUCTION
-    1: 'kp7ht*76fiQAhUi5dHfASLlYUE_S^gI^(7J^K5M!LfoH@vl&b_',
-}
-```
-
-!!! warning "Peppers are sensitive"
-    Treat pepper values as extremely sensitive. Consider populating peppers from environment variables at initialization time rather than defining them in the configuration file, if feasible. 
-
-Peppers must be at least 50 characters in length and should comprise a random string with a diverse character set. Consider using the Python script at `$INSTALL_ROOT/netbox/generate_secret_key.py` to generate a pepper value.
-
-It is recommended to start with a pepper ID of `1`. Additional peppers can be introduced later as needed to begin rotating token hashes.
-
-!!! tip
-    Although NetBox will run without `API_TOKEN_PEPPERS` defined, the use of v2 API tokens will be unavailable.
-
----
-
 ## DATABASE
 
 !!! warning "Legacy Configuration Parameter"
@@ -59,7 +34,7 @@ See the [`DATABASES`](#databases) configuration below for usage.
 
 ## DATABASES
 
-NetBox requires access to a PostgreSQL 14 or later database service to store data. Note that support for PostgreSQL 14 is deprecated and will be removed in NetBox v4.7; PostgreSQL 15 or later will be required. This service can run locally on the NetBox server or on a remote system. Databases are defined as named dictionaries:
+NetBox requires access to a PostgreSQL 14 or later database service to store data. This service can run locally on the NetBox server or on a remote system. Databases are defined as named dictionaries:
 
 ```python
 DATABASES = {
@@ -199,48 +174,6 @@ REDIS = {
 
 !!! note
     It is permissible to use Sentinel for only one database and not the other.
-
-### SSL Configuration
-
-If you need to configure SSL/TLS for Redis beyond the basic `SSL`, `CA_CERT_PATH`, and `INSECURE_SKIP_TLS_VERIFY` options (for example, client certificates, a specific TLS version, or custom ciphers), you can pass additional parameters via the `KWARGS` key in either the `tasks` or `caching` subsection.
-
-NetBox already maps `CA_CERT_PATH` to `ssl_ca_certs` and (for caching) `INSECURE_SKIP_TLS_VERIFY` to `ssl_cert_reqs`; only add `KWARGS` when you need to override or extend those settings (for example, to supply client certificates or restrict TLS version or ciphers).
-
-* `KWARGS` - Optional dictionary of additional SSL/TLS (or other) parameters passed to the Redis client. These are passed directly to the underlying Redis client: for `tasks` to [redis-py](https://redis-py.readthedocs.io/en/stable/connections.html), and for `caching` to the [django-redis](https://github.com/jazzband/django-redis#configure-as-cache-backend) connection pool.
-
-Example:
-
-```python
-REDIS = {
-    'tasks': {
-        'HOST': 'redis.example.com',
-        'PORT': 1234,
-        'SSL': True,
-        'CA_CERT_PATH': '/etc/ssl/certs/ca.crt',
-        'KWARGS': {
-            'ssl_certfile': '/path/to/client-cert.pem',
-            'ssl_keyfile': '/path/to/client-key.pem',
-            'ssl_min_version': ssl.TLSVersion.TLSv1_2,
-            'ssl_ciphers': 'HIGH:!aNULL',
-        },
-    },
-    'caching': {
-        'HOST': 'redis.example.com',
-        'PORT': 1234,
-        'SSL': True,
-        'CA_CERT_PATH': '/etc/ssl/certs/ca.crt',
-        'KWARGS': {
-            'ssl_certfile': '/path/to/client-cert.pem',
-            'ssl_keyfile': '/path/to/client-key.pem',
-            'ssl_min_version': ssl.TLSVersion.TLSv1_2,
-            'ssl_ciphers': 'HIGH:!aNULL',
-        },
-    }
-}
-```
-
-!!! note
-    If you use `ssl.TLSVersion` in your configuration (e.g. `ssl_min_version`), add `import ssl` at the top of your configuration file.
 
 ---
 

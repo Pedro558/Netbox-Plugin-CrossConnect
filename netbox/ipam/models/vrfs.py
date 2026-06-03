@@ -5,8 +5,8 @@ from ipam.constants import *
 from netbox.models import PrimaryModel
 
 __all__ = (
-    'VRF',
     'RouteTarget',
+    'VRF',
 )
 
 
@@ -58,9 +58,6 @@ class VRF(PrimaryModel):
 
     class Meta:
         ordering = ('name', 'rd', 'pk')  # (name, rd) may be non-unique
-        indexes = (
-            models.Index(fields=('name', 'rd', 'id')),  # Default ordering
-        )
         verbose_name = _('VRF')
         verbose_name_plural = _('VRFs')
 

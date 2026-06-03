@@ -2,7 +2,7 @@ from django.contrib.contenttypes.prefetch import GenericPrefetch
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import OpenApiParameter, extend_schema
+from drf_spectacular.utils import extend_schema, OpenApiParameter
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.routers import APIRootView
@@ -16,13 +16,11 @@ from extras.api.mixins import ConfigContextQuerySetMixin, RenderConfigMixin
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.metadata import ContentTypeMetadata
 from netbox.api.pagination import StripCountAnnotationsPaginator
-from netbox.api.viewsets import MPTTLockedMixin, NetBoxModelViewSet, NetBoxReadOnlyModelViewSet
+from netbox.api.viewsets import NetBoxModelViewSet, MPTTLockedMixin
 from netbox.api.viewsets.mixins import SequentialBulkCreatesMixin
 from utilities.api import get_serializer_for_model
-from utilities.query import count_related
 from utilities.query_functions import CollateAsChar
 from virtualization.models import VirtualMachine
-
 from . import serializers
 from .exceptions import MissingFilterException
 
@@ -37,7 +35,7 @@ class DCIMRootView(APIRootView):
 
 # Mixins
 
-class PathEndpointMixin:
+class PathEndpointMixin(object):
 
     @action(detail=True, url_path='trace')
     def trace(self, request, pk):
@@ -77,7 +75,7 @@ class PathEndpointMixin:
         return Response(path)
 
 
-class PassThroughPortMixin:
+class PassThroughPortMixin(object):
 
     @action(detail=True, url_path='paths')
     def paths(self, request, pk):
@@ -156,17 +154,6 @@ class LocationViewSet(MPTTLockedMixin, NetBoxModelViewSet):
 
 
 #
-# Rack groups
-#
-
-
-class RackGroupViewSet(NetBoxModelViewSet):
-    queryset = RackGroup.objects.all()
-    serializer_class = serializers.RackGroupSerializer
-    filterset_class = filtersets.RackGroupFilterSet
-
-
-#
 # Rack roles
 #
 
@@ -234,26 +221,24 @@ class RackViewSet(NetBoxModelViewSet):
             )
             return HttpResponse(drawing.tostring(), content_type='image/svg+xml')
 
-        # Return a JSON representation of the rack units in the elevation
-        elevation = rack.get_rack_units(
-            face=data['face'],
-            user=request.user,
-            exclude=data['exclude'],
-            expand_devices=data['expand_devices']
-        )
+        else:
+            # Return a JSON representation of the rack units in the elevation
+            elevation = rack.get_rack_units(
+                face=data['face'],
+                user=request.user,
+                exclude=data['exclude'],
+                expand_devices=data['expand_devices']
+            )
 
-        # Enable filtering rack units by ID
-        if q := data['q']:
-            q = q.lower()
-            elevation = [u for u in elevation if q in str(u['id']) or q in str(u['name']).lower()]
+            # Enable filtering rack units by ID
+            if q := data['q']:
+                q = q.lower()
+                elevation = [u for u in elevation if q in str(u['id']) or q in str(u['name']).lower()]
 
-        page = self.paginate_queryset(elevation)
-        if page is not None:
-            rack_units = serializers.RackUnitSerializer(page, many=True, context={'request': request})
-            return self.get_paginated_response(rack_units.data)
-
-        # TODO: This endpoint should always return an HttpResponse/DRF Response; `None` is not a meaningful result.
-        return None
+            page = self.paginate_queryset(elevation)
+            if page is not None:
+                rack_units = serializers.RackUnitSerializer(page, many=True, context={'request': request})
+                return self.get_paginated_response(rack_units.data)
 
 
 #
@@ -417,7 +402,6 @@ class DeviceViewSet(
     NetBoxModelViewSet
 ):
     queryset = Device.objects.prefetch_related(
-        'device_type__manufacturer',  # Referenced by Device.__str__() for unnamed devices
         'parent_bay',  # Referenced by DeviceSerializer.get_parent_device()
     )
     filterset_class = filtersets.DeviceFilterSet
@@ -579,19 +563,11 @@ class CableViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.CableFilterSet
 
 
-class CableTerminationViewSet(NetBoxReadOnlyModelViewSet):
+class CableTerminationViewSet(NetBoxModelViewSet):
     metadata_class = ContentTypeMetadata
     queryset = CableTermination.objects.all()
     serializer_class = serializers.CableTerminationSerializer
     filterset_class = filtersets.CableTerminationFilterSet
-
-
-class CableBundleViewSet(NetBoxModelViewSet):
-    queryset = CableBundle.objects.annotate(
-        cable_count=count_related(Cable, 'bundle')
-    )
-    serializer_class = serializers.CableBundleSerializer
-    filterset_class = filtersets.CableBundleFilterSet
 
 
 #

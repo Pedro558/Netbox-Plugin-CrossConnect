@@ -6,8 +6,8 @@ This section of the documentation discusses installing and configuring the NetBo
 
 Begin by installing all system packages required by NetBox and its dependencies.
 
-!!! warning "Python 3.12 or later required"
-    NetBox supports only Python 3.12 or later.
+!!! warning "Python 3.10 or later required"
+    NetBox supports Python 3.10, 3.11, and 3.12.
 
 ```no-highlight
 sudo apt install -y python3 python3-pip python3-venv python3-dev \
@@ -15,7 +15,7 @@ build-essential libxml2-dev libxslt1-dev libffi-dev libpq-dev \
 libssl-dev zlib1g-dev
 ```
 
-Before continuing, check that your installed Python version is at least 3.12:
+Before continuing, check that your installed Python version is at least 3.10:
 
 ```no-highlight
 python3 -V
@@ -36,7 +36,7 @@ sudo ln -s /opt/netbox-X.Y.Z/ /opt/netbox
 ```
 
 !!! note
-    It is recommended to install NetBox in a directory named for its version number. For example, NetBox v4.0.0 would be installed into `/opt/netbox-4.0.0`, and a symlink from `/opt/netbox/` would point to this location. (You can verify this configuration with the command `ls -l /opt | grep netbox`.) This allows for future releases to be installed in parallel without interrupting the current installation. When changing to the new release, only the symlink needs to be updated.
+    It is recommended to install NetBox in a directory named for its version number. For example, NetBox v3.0.0 would be installed into `/opt/netbox-3.0.0`, and a symlink from `/opt/netbox/` would point to this location. (You can verify this configuration with the command `ls -l /opt | grep netbox`.) This allows for future releases to be installed in parallel without interrupting the current installation. When changing to the new release, only the symlink needs to be updated.
 
 ### Option B: Clone the Git Repository
 
@@ -63,12 +63,12 @@ This command should generate output similar to the following:
 
 ```
 Cloning into '.'...
-remote: Enumerating objects: 148317, done.
-remote: Counting objects: 100% (183/183), done.
-remote: Compressing objects: 100% (115/115), done.
-remote: Total 148317 (delta 127), reused 68 (delta 68), pack-reused 148134 (from 3)
-Receiving objects: 100% (148317/148317), 165.12 MiB | 28.71 MiB/s, done.
-Resolving deltas: 100% (116428/116428), done.
+remote: Enumerating objects: 996, done.
+remote: Counting objects: 100% (996/996), done.
+remote: Compressing objects: 100% (935/935), done.
+remote: Total 996 (delta 148), reused 386 (delta 34), pack-reused 0
+Receiving objects: 100% (996/996), 4.26 MiB | 9.81 MiB/s, done.
+Resolving deltas: 100% (148/148), done.
 ```
 
 Finally, check out the tag for the desired release. You can find these on our [releases page](https://github.com/netbox-community/netbox/releases). Replace `vX.Y.Z` with your selected release tag below.
@@ -102,8 +102,7 @@ sudo cp configuration_example.py configuration.py
 Open `configuration.py` with your preferred editor to begin configuring NetBox. NetBox offers [many configuration parameters](../configuration/index.md), but only the following four are required for new installations:
 
 * `ALLOWED_HOSTS`
-* `API_TOKEN_PEPPERS`
-* `DATABASES`
+* `DATABASES` (or `DATABASE`)
 * `REDIS`
 * `SECRET_KEY`
 
@@ -120,23 +119,6 @@ If you are not yet sure what the domain name and/or IP address of the NetBox ins
 ```python
 ALLOWED_HOSTS = ['*']
 ```
-
-### API_TOKEN_PEPPERS
-
-Define at least one random cryptographic pepper, identified by a numeric ID starting at 1. This will be used to generate SHA256 checksums for API tokens.
-
-```python
-API_TOKEN_PEPPERS = {
-    # DO NOT USE THIS EXAMPLE PEPPER IN PRODUCTION
-    1: 'kp7ht*76fiQAhUi5dHfASLlYUE_S^gI^(7J^K5M!LfoH@vl&b_',
-}
-```
-
-!!! tip
-    As with [`SECRET_KEY`](#secret_key) below, you can use the `generate_secret_key.py` script to generate a random pepper:
-    ```no-highlight
-    python3 ../generate_secret_key.py
-    ```
 
 ### DATABASES
 
@@ -159,7 +141,7 @@ DATABASES = {
 
 ### REDIS
 
-Redis is an in-memory key-value store used by NetBox for caching and background task queuing. Redis typically requires minimal configuration; the values below should suffice for most installations. See the [configuration documentation](../configuration/required-parameters.md#redis) for more detail on individual parameters.
+Redis is a in-memory key-value store used by NetBox for caching and background task queuing. Redis typically requires minimal configuration; the values below should suffice for most installations. See the [configuration documentation](../configuration/required-parameters.md#redis) for more detail on individual parameters.
 
 Note that NetBox requires the specification of two separate Redis databases: `tasks` and `caching`. These may both be provided by the same Redis service, however each should have a unique numeric database ID.
 
@@ -253,10 +235,10 @@ Once NetBox has been configured, we're ready to proceed with the actual installa
 sudo /opt/netbox/upgrade.sh
 ```
 
-Note that **Python 3.12 or later is required** for NetBox v4.5 and later releases. If the default Python installation on your server is set to a lesser version, pass the path to the supported installation as an environment variable named `PYTHON`. (Note that the environment variable must be passed _after_ the `sudo` command.)
+Note that **Python 3.10 or later is required** for NetBox v4.0 and later releases. If the default Python installation on your server is set to a lesser version,  pass the path to the supported installation as an environment variable named `PYTHON`. (Note that the environment variable must be passed _after_ the `sudo` command.)
 
 ```no-highlight
-sudo PYTHON=/usr/bin/python3.12 /opt/netbox/upgrade.sh
+sudo PYTHON=/usr/bin/python3.10 /opt/netbox/upgrade.sh
 ```
 
 !!! note
@@ -296,12 +278,13 @@ python3 manage.py runserver 0.0.0.0:8000 --insecure
 If successful, you should see output similar to the following:
 
 ```no-highlight
+Watching for file changes with StatReloader
 Performing system checks...
 
 System check identified no issues (0 silenced).
-January 26, 2026 - 17:00:00
-Django version 5.2.10, using settings 'netbox.settings'
-Starting development server at http://0.0.0.0:8000/
+August 30, 2021 - 18:02:23
+Django version 3.2.6, using settings 'netbox.settings'
+Starting development server at http://127.0.0.1:8000/
 Quit the server with CONTROL-C.
 ```
 

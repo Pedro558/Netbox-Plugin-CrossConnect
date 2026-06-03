@@ -1,12 +1,11 @@
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated, List, TYPE_CHECKING
 
 import strawberry
 import strawberry_django
 
-from extras.graphql.mixins import ContactsMixin, CustomFieldsMixin, TagsMixin
-from netbox.graphql.types import BaseObjectType, NestedGroupObjectType, OrganizationalObjectType, PrimaryObjectType
+from extras.graphql.mixins import CustomFieldsMixin, TagsMixin, ContactsMixin
+from netbox.graphql.types import BaseObjectType, OrganizationalObjectType, NetBoxObjectType
 from tenancy import models
-
 from .filters import *
 from .mixins import ContactAssignmentsMixin
 
@@ -17,15 +16,15 @@ if TYPE_CHECKING:
         DeviceType,
         LocationType,
         PowerFeedType,
-        RackReservationType,
         RackType,
+        RackReservationType,
         SiteType,
         VirtualDeviceContextType,
     )
     from ipam.graphql.types import (
         AggregateType,
-        ASNRangeType,
         ASNType,
+        ASNRangeType,
         IPAddressType,
         IPRangeType,
         PrefixType,
@@ -34,17 +33,17 @@ if TYPE_CHECKING:
         VRFType,
     )
     from netbox.graphql.types import ContentTypeType
+    from wireless.graphql.types import WirelessLANType, WirelessLinkType
     from virtualization.graphql.types import ClusterType, VirtualMachineType
     from vpn.graphql.types import L2VPNType, TunnelType
-    from wireless.graphql.types import WirelessLANType, WirelessLinkType
 
 __all__ = (
     'ContactAssignmentType',
     'ContactGroupType',
     'ContactRoleType',
     'ContactType',
-    'TenantGroupType',
     'TenantType',
+    'TenantGroupType',
 )
 
 
@@ -58,32 +57,32 @@ __all__ = (
     filters=TenantFilter,
     pagination=True
 )
-class TenantType(ContactsMixin, PrimaryObjectType):
+class TenantType(ContactsMixin, NetBoxObjectType):
     group: Annotated['TenantGroupType', strawberry.lazy('tenancy.graphql.types')] | None
-    asns: list[Annotated['ASNType', strawberry.lazy('ipam.graphql.types')]]
-    circuits: list[Annotated['CircuitType', strawberry.lazy('circuits.graphql.types')]]
-    sites: list[Annotated['SiteType', strawberry.lazy('dcim.graphql.types')]]
-    vlans: list[Annotated['VLANType', strawberry.lazy('ipam.graphql.types')]]
-    wireless_lans: list[Annotated['WirelessLANType', strawberry.lazy('wireless.graphql.types')]]
-    route_targets: list[Annotated['RouteTargetType', strawberry.lazy('ipam.graphql.types')]]
-    locations: list[Annotated['LocationType', strawberry.lazy('dcim.graphql.types')]]
-    ip_ranges: list[Annotated['IPRangeType', strawberry.lazy('ipam.graphql.types')]]
-    rackreservations: list[Annotated['RackReservationType', strawberry.lazy('dcim.graphql.types')]]
-    racks: list[Annotated['RackType', strawberry.lazy('dcim.graphql.types')]]
-    vdcs: list[Annotated['VirtualDeviceContextType', strawberry.lazy('dcim.graphql.types')]]
-    prefixes: list[Annotated['PrefixType', strawberry.lazy('ipam.graphql.types')]]
-    cables: list[Annotated['CableType', strawberry.lazy('dcim.graphql.types')]]
-    virtual_machines: list[Annotated['VirtualMachineType', strawberry.lazy('virtualization.graphql.types')]]
-    vrfs: list[Annotated['VRFType', strawberry.lazy('ipam.graphql.types')]]
-    asn_ranges: list[Annotated['ASNRangeType', strawberry.lazy('ipam.graphql.types')]]
-    wireless_links: list[Annotated['WirelessLinkType', strawberry.lazy('wireless.graphql.types')]]
-    aggregates: list[Annotated['AggregateType', strawberry.lazy('ipam.graphql.types')]]
-    power_feeds: list[Annotated['PowerFeedType', strawberry.lazy('dcim.graphql.types')]]
-    devices: list[Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')]]
-    tunnels: list[Annotated['TunnelType', strawberry.lazy('vpn.graphql.types')]]
-    ip_addresses: list[Annotated['IPAddressType', strawberry.lazy('ipam.graphql.types')]]
-    clusters: list[Annotated['ClusterType', strawberry.lazy('virtualization.graphql.types')]]
-    l2vpns: list[Annotated['L2VPNType', strawberry.lazy('vpn.graphql.types')]]
+    asns: List[Annotated['ASNType', strawberry.lazy('ipam.graphql.types')]]
+    circuits: List[Annotated['CircuitType', strawberry.lazy('circuits.graphql.types')]]
+    sites: List[Annotated['SiteType', strawberry.lazy('dcim.graphql.types')]]
+    vlans: List[Annotated['VLANType', strawberry.lazy('ipam.graphql.types')]]
+    wireless_lans: List[Annotated['WirelessLANType', strawberry.lazy('wireless.graphql.types')]]
+    route_targets: List[Annotated['RouteTargetType', strawberry.lazy('ipam.graphql.types')]]
+    locations: List[Annotated['LocationType', strawberry.lazy('dcim.graphql.types')]]
+    ip_ranges: List[Annotated['IPRangeType', strawberry.lazy('ipam.graphql.types')]]
+    rackreservations: List[Annotated['RackReservationType', strawberry.lazy('dcim.graphql.types')]]
+    racks: List[Annotated['RackType', strawberry.lazy('dcim.graphql.types')]]
+    vdcs: List[Annotated['VirtualDeviceContextType', strawberry.lazy('dcim.graphql.types')]]
+    prefixes: List[Annotated['PrefixType', strawberry.lazy('ipam.graphql.types')]]
+    cables: List[Annotated['CableType', strawberry.lazy('dcim.graphql.types')]]
+    virtual_machines: List[Annotated['VirtualMachineType', strawberry.lazy('virtualization.graphql.types')]]
+    vrfs: List[Annotated['VRFType', strawberry.lazy('ipam.graphql.types')]]
+    asn_ranges: List[Annotated['ASNRangeType', strawberry.lazy('ipam.graphql.types')]]
+    wireless_links: List[Annotated['WirelessLinkType', strawberry.lazy('wireless.graphql.types')]]
+    aggregates: List[Annotated['AggregateType', strawberry.lazy('ipam.graphql.types')]]
+    power_feeds: List[Annotated['PowerFeedType', strawberry.lazy('dcim.graphql.types')]]
+    devices: List[Annotated['DeviceType', strawberry.lazy('dcim.graphql.types')]]
+    tunnels: List[Annotated['TunnelType', strawberry.lazy('vpn.graphql.types')]]
+    ip_addresses: List[Annotated['IPAddressType', strawberry.lazy('ipam.graphql.types')]]
+    clusters: List[Annotated['ClusterType', strawberry.lazy('virtualization.graphql.types')]]
+    l2vpns: List[Annotated['L2VPNType', strawberry.lazy('vpn.graphql.types')]]
 
 
 @strawberry_django.type(
@@ -92,11 +91,11 @@ class TenantType(ContactsMixin, PrimaryObjectType):
     filters=TenantGroupFilter,
     pagination=True
 )
-class TenantGroupType(NestedGroupObjectType):
+class TenantGroupType(OrganizationalObjectType):
     parent: Annotated['TenantGroupType', strawberry.lazy('tenancy.graphql.types')] | None
 
-    tenants: list[TenantType]
-    children: list[Annotated['TenantGroupType', strawberry.lazy('tenancy.graphql.types')]]
+    tenants: List[TenantType]
+    children: List[Annotated['TenantGroupType', strawberry.lazy('tenancy.graphql.types')]]
 
 
 #
@@ -109,8 +108,8 @@ class TenantGroupType(NestedGroupObjectType):
     filters=ContactFilter,
     pagination=True
 )
-class ContactType(ContactAssignmentsMixin, PrimaryObjectType):
-    groups: list[Annotated['ContactGroupType', strawberry.lazy('tenancy.graphql.types')]]
+class ContactType(ContactAssignmentsMixin, NetBoxObjectType):
+    groups: List[Annotated['ContactGroupType', strawberry.lazy('tenancy.graphql.types')]]
 
 
 @strawberry_django.type(
@@ -129,11 +128,11 @@ class ContactRoleType(ContactAssignmentsMixin, OrganizationalObjectType):
     filters=ContactGroupFilter,
     pagination=True
 )
-class ContactGroupType(NestedGroupObjectType):
+class ContactGroupType(OrganizationalObjectType):
     parent: Annotated['ContactGroupType', strawberry.lazy('tenancy.graphql.types')] | None
 
-    contacts: list[ContactType]
-    children: list[Annotated['ContactGroupType', strawberry.lazy('tenancy.graphql.types')]]
+    contacts: List[ContactType]
+    children: List[Annotated['ContactGroupType', strawberry.lazy('tenancy.graphql.types')]]
 
 
 @strawberry_django.type(

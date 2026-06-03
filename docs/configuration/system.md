@@ -57,7 +57,7 @@ In order to send email, NetBox needs an email server configured. The following i
 Email is sent from NetBox only for critical events or if configured for [logging](#logging). If you would like to test the email server configuration, Django provides a convenient [send_mail()](https://docs.djangoproject.com/en/stable/topics/email/#send-mail) function accessible within the NetBox shell:
 
 ```no-highlight
-(venv) $ python3 ./manage.py nbshell
+# python ./manage.py nbshell
 >>> from django.core.mail import send_mail
 >>> send_mail(
   'Test Email Subject',
@@ -77,26 +77,6 @@ Email is sent from NetBox only for critical events or if configured for [logging
 Default: System hostname
 
 The hostname displayed in the user interface identifying the system on which NetBox is running. If not defined, this defaults to the system hostname as reported by Python's `platform.node()`.
-
----
-
-## HTTP_CLIENT_IP_HEADERS
-
-!!! info "This parameter was introduced in NetBox v4.6.1."
-
-Default:
-
-```python
-(
-    'HTTP_X_REAL_IP',
-    'HTTP_X_FORWARDED_FOR',
-    'REMOTE_ADDR',
-)
-```
-
-An ordered list of HTTP request headers inspected to determine the source IP address of a client request. The first header in the list which is present on the request is used; if none are found, the client IP cannot be determined. This is most commonly required when NetBox is deployed behind a reverse proxy which injects a proprietary client IP header (e.g. `HTTP_CF_CONNECTING_IP` for Cloudflare).
-
-The client IP is used for source-address restrictions on API tokens and for logging failed login attempts.
 
 ---
 
@@ -124,13 +104,6 @@ Default: `('127.0.0.1', '::1')`
 A list of IP addresses recognized as internal to the system, used to control the display of debugging output. For
 example, the debugging toolbar will be viewable only when a client is accessing NetBox from one of the listed IP
 addresses (and [`DEBUG`](./development.md#debug) is `True`).
-
-!!! info "New in NetBox v4.6"
-    Setting this parameter to an empty list will enable the toolbar for all requests provided debugging is enabled:
-
-    ```python
-    INTERNAL_IPS = []
-    ```
 
 ---
 
@@ -268,48 +241,20 @@ STORAGES = {
 
 Within the `STORAGES` dictionary, `"default"` is used for image uploads, "staticfiles" is for static files and `"scripts"` is used for custom scripts.
 
-If using a remote storage such as S3 or an S3-compatible service, define the configuration as `STORAGES[key]["OPTIONS"]` for each storage item as needed. For example:
+If using a remote storage like S3, define the config as `STORAGES[key]["OPTIONS"]` for each storage item as needed. For example:
 
 ```python
-STORAGES = {
-    'default': {
-        'BACKEND': 'storages.backends.s3.S3Storage',
-        'OPTIONS': {
-            'bucket_name': 'netbox',
-            'access_key': 'access key',
+STORAGES = { 
+    "scripts": { 
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage", 
+        "OPTIONS": { 
+            'access_key': 'access key', 
             'secret_key': 'secret key',
-            'region_name': 'us-east-1',
-            'endpoint_url': 'https://s3.example.com',
-            'location': 'media/',
-        },
-    },
-    'staticfiles': {
-        'BACKEND': 'storages.backends.s3.S3Storage',
-        'OPTIONS': {
-            'bucket_name': 'netbox',
-            'access_key': 'access key',
-            'secret_key': 'secret key',
-            'region_name': 'us-east-1',
-            'endpoint_url': 'https://s3.example.com',
-            'location': 'static/',
-        },
-    },
-    'scripts': {
-        'BACKEND': 'storages.backends.s3.S3Storage',
-        'OPTIONS': {
-            'bucket_name': 'netbox',
-            'access_key': 'access key',
-            'secret_key': 'secret key',
-            'region_name': 'us-east-1',
-            'endpoint_url': 'https://s3.example.com',
-            'location': 'scripts/',
-            'file_overwrite': True,
-        },
-    },
+            "allow_overwrite": True,
+        }
+    }, 
 }
 ```
-
-`bucket_name` is required for `S3Storage`. When using an S3-compatible service, set `region_name` and `endpoint_url` according to your provider.
 
 The specific configuration settings for each storage backend can be found in the [django-storages documentation](https://django-storages.readthedocs.io/en/latest/index.html).
 
@@ -334,7 +279,6 @@ STORAGES = {
             'bucket_name': os.environ.get('AWS_STORAGE_BUCKET_NAME'),
             'access_key': os.environ.get('AWS_S3_ACCESS_KEY_ID'),
             'secret_key': os.environ.get('AWS_S3_SECRET_ACCESS_KEY'),
-            'region_name': os.environ.get('AWS_S3_REGION_NAME'),
             'endpoint_url': os.environ.get('AWS_S3_ENDPOINT_URL'),
             'location': 'media/',
         }
@@ -345,7 +289,6 @@ STORAGES = {
             'bucket_name': os.environ.get('AWS_STORAGE_BUCKET_NAME'),
             'access_key': os.environ.get('AWS_S3_ACCESS_KEY_ID'),
             'secret_key': os.environ.get('AWS_S3_SECRET_ACCESS_KEY'),
-            'region_name': os.environ.get('AWS_S3_REGION_NAME'),
             'endpoint_url': os.environ.get('AWS_S3_ENDPOINT_URL'),
             'location': 'static/',
         }

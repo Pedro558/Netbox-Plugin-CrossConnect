@@ -7,7 +7,7 @@ Getting started with NetBox development is pretty straightforward, and should fe
 * A Linux system or compatible environment
 * A PostgreSQL server, which can be installed locally [per the documentation](../installation/1-postgresql.md)
 * A Redis server, which can also be [installed locally](../installation/2-redis.md)
-* Python 3.12 or later
+* Python 3.10 or later
 
 ### 1. Fork the Repo
 
@@ -97,7 +97,7 @@ NetBox uses [`pre-commit`](https://pre-commit.com/) to automatically validate co
 * Run the `ruff` Python linter
 * Run Django's internal system check
 * Check for missing database migrations
-* Validate any changes to the documentation with `zensical`
+* Validate any changes to the documentation with `mkdocs`
 * Validate Typescript & Sass styling with `yarn`
 * Ensure that any modified static front end assets have been recompiled
 

@@ -2,17 +2,14 @@ import importlib.abc
 import importlib.util
 import os
 import sys
-from collections import defaultdict
 
-from django.core.exceptions import ValidationError
 from django.core.files.storage import storages
 from django.db import models
 from django.http import HttpResponse
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
-from core.models import ObjectType
-from extras.constants import DEFAULT_MIME_TYPE, JINJA_ENV_PARAMS_ALLOWED
+from extras.constants import DEFAULT_MIME_TYPE, JINJA_ENV_PARAMS_WITH_PATH_IMPORT
 from extras.utils import filename_from_model, filename_from_object
 from utilities.jinja2 import render_jinja2
 
@@ -61,7 +58,8 @@ class PythonModuleMixin:
         if name == '__init__':
             # File is a package
             return os.path.basename(path)
-        return name
+        else:
+            return name
 
     def get_module(self):
         """
@@ -123,96 +121,18 @@ class RenderTemplateMixin(models.Model):
         abstract = True
 
     def get_context(self, context=None, queryset=None):
-        _context = defaultdict(dict)
-
-        # Populate all public models for reference within the template
-        for object_type in ObjectType.objects.public():
-            if model := object_type.model_class():
-                _context[object_type.app_label][model.__name__] = model
-
-        if context is not None:
-            _context.update(context)
-
-        return _context
-
-    def clean(self):
-        super().clean()
-
-        params = self.environment_params or {}
-        for key, value in params.items():
-            # finalize is deprecated: block new use but preserve existing stored values
-            if key == 'finalize':
-                raise ValidationError({
-                    'environment_params': _(
-                        'The "{key}" parameter is deprecated and may not be set on new or modified templates.'
-                    ).format(key=key)
-                })
-            if key not in JINJA_ENV_PARAMS_ALLOWED:
-                raise ValidationError({
-                    'environment_params': _(
-                        '"{key}" is not a permitted Jinja2 environment parameter.'
-                    ).format(key=key)
-                })
-            allowed = JINJA_ENV_PARAMS_ALLOWED[key]
-            if type(allowed) is dict:
-                if value not in allowed:
-                    raise ValidationError({
-                        'environment_params': _(
-                            'Invalid value "{value}" for parameter "{key}". '
-                            'Allowed values are: {allowed}'
-                        ).format(
-                            value=value,
-                            key=key,
-                            allowed=', '.join(sorted(allowed.keys()))
-                        )
-                    })
-
-    @staticmethod
-    def _filter_environment_params(params):
-        """
-        Return a copy of params with only permitted keys. Keys not in the allowlist are
-        stripped, except 'finalize' which is a deprecated legacy carve-out.
-        """
-        return {
-            key: value for key, value in params.items()
-            if key in JINJA_ENV_PARAMS_ALLOWED or key == 'finalize'
-        }
-
-    @staticmethod
-    def _resolve_mapped_params(params):
-        """
-        Resolve allowlisted params that have a value mapping (e.g. undefined class names)
-        to their Python objects via direct dict lookup. Returns a new dict with resolved values;
-        unresolved params are passed through unchanged.
-        """
-        resolved = {}
-        for name, value in params.items():
-            allowed = JINJA_ENV_PARAMS_ALLOWED.get(name)
-            if type(allowed) is dict and value in allowed:
-                resolved[name] = allowed[value]
-            else:
-                resolved[name] = value
-        return resolved
-
-    @staticmethod
-    def _resolve_finalize(params):
-        """
-        Legacy carve-out: resolve the deprecated 'finalize' parameter via import_string().
-        Existing templates with finalize continue to work; new use is blocked by clean().
-        """
-        if 'finalize' in params and type(params['finalize']) is str:
-            return {**params, 'finalize': import_string(params['finalize'])}
-        return params
+        raise NotImplementedError(_("{class_name} must implement a get_context() method.").format(
+            class_name=self.__class__
+        ))
 
     def get_environment_params(self):
         """
-        Pre-processing of any defined Jinja environment parameters.
+        Pre-processing of any defined Jinja environment parameters (e.g. to support path resolution).
         """
-        # Shallow-copy so resolved values don't replace the strings on the model field.
-        params = dict(self.environment_params or {})
-        params = self._filter_environment_params(params)
-        params = self._resolve_mapped_params(params)
-        params = self._resolve_finalize(params)
+        params = self.environment_params or {}
+        for name, value in params.items():
+            if name in JINJA_ENV_PARAMS_WITH_PATH_IMPORT and type(value) is str:
+                params[name] = import_string(value)
         return params
 
     def render(self, context=None, queryset=None):
@@ -221,8 +141,7 @@ class RenderTemplateMixin(models.Model):
         """
         context = self.get_context(context=context, queryset=queryset)
         env_params = self.get_environment_params()
-        debug = getattr(self, 'debug', False)
-        output = render_jinja2(self.template_code, context, env_params, getattr(self, 'data_file', None), debug=debug)
+        output = render_jinja2(self.template_code, context, env_params, getattr(self, 'data_file', None))
 
         # Replace CRLF-style line terminators
         output = output.replace('\r\n', '\n')

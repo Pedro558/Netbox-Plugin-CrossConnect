@@ -1,18 +1,12 @@
 from django.test import TestCase
 
 from dcim.choices import (
-    DeviceFaceChoices,
-    DeviceStatusChoices,
-    InterfaceModeChoices,
-    InterfaceTypeChoices,
-    PortTypeChoices,
+    DeviceFaceChoices, DeviceStatusChoices, InterfaceModeChoices, InterfaceTypeChoices, PortTypeChoices,
     PowerOutletStatusChoices,
 )
 from dcim.forms import *
 from dcim.models import *
-from ipam.models import ASN, RIR, VLAN
-from utilities.exceptions import AbortRequest
-from utilities.forms.rendering import M2MAddRemoveFields
+from ipam.models import VLAN
 from utilities.testing import create_test_device
 from virtualization.models import Cluster, ClusterGroup, ClusterType
 
@@ -177,88 +171,6 @@ class DeviceTestCase(TestCase):
         self.assertIn('position', form.errors)
 
 
-class VCPositionTokenFormTestCase(TestCase):
-
-    @classmethod
-    def setUpTestData(cls):
-        Site.objects.create(name='Site VC 1', slug='site-vc-1')
-        manufacturer = Manufacturer.objects.create(name='Manufacturer VC 1', slug='manufacturer-vc-1')
-        device_type = DeviceType.objects.create(
-            manufacturer=manufacturer, model='Device Type VC 1', slug='device-type-vc-1'
-        )
-        DeviceRole.objects.create(name='Device Role VC 1', slug='device-role-vc-1', color='ff0000')
-        InterfaceTemplate.objects.create(
-            device_type=device_type,
-            name='ge-{vc_position:0}/0/0',
-            type='1000base-t',
-        )
-        VirtualChassis.objects.create(name='VC 1')
-
-    def test_device_creation_in_vc_resolves_vc_position(self):
-        form = DeviceForm(data={
-            'name': 'Device VC Form 1',
-            'role': DeviceRole.objects.first().pk,
-            'tenant': None,
-            'manufacturer': Manufacturer.objects.first().pk,
-            'device_type': DeviceType.objects.first().pk,
-            'site': Site.objects.first().pk,
-            'rack': None,
-            'face': None,
-            'position': None,
-            'platform': None,
-            'status': DeviceStatusChoices.STATUS_ACTIVE,
-            'virtual_chassis': VirtualChassis.objects.first().pk,
-            'vc_position': 2,
-        })
-        self.assertTrue(form.is_valid())
-        device = form.save()
-        self.assertTrue(device.interfaces.filter(name='ge-2/0/0').exists())
-
-    def test_device_creation_not_in_vc_uses_fallback(self):
-        form = DeviceForm(data={
-            'name': 'Device VC Form 2',
-            'role': DeviceRole.objects.first().pk,
-            'tenant': None,
-            'manufacturer': Manufacturer.objects.first().pk,
-            'device_type': DeviceType.objects.first().pk,
-            'site': Site.objects.first().pk,
-            'rack': None,
-            'face': None,
-            'position': None,
-            'platform': None,
-            'status': DeviceStatusChoices.STATUS_ACTIVE,
-        })
-        self.assertTrue(form.is_valid())
-        device = form.save()
-        self.assertTrue(device.interfaces.filter(name='ge-0/0/0').exists())
-
-    def test_device_creation_duplicate_name_conflict(self):
-        # With conflict
-        device_type = DeviceType.objects.first()
-        # to generate conflicts create an interface that will exist
-        InterfaceTemplate.objects.create(
-            device_type=device_type,
-            name='ge-0/0/0',
-            type='1000base-t',
-        )
-        form = DeviceForm(data={
-            'name': 'Device VC Form 3',
-            'role': DeviceRole.objects.first().pk,
-            'tenant': None,
-            'manufacturer': Manufacturer.objects.first().pk,
-            'device_type': device_type.pk,
-            'site': Site.objects.first().pk,
-            'rack': None,
-            'face': None,
-            'position': None,
-            'platform': None,
-            'status': DeviceStatusChoices.STATUS_ACTIVE,
-        })
-        self.assertTrue(form.is_valid())
-        with self.assertRaises(AbortRequest):
-            form.save()
-
-
 class FrontPortTestCase(TestCase):
 
     @classmethod
@@ -281,8 +193,7 @@ class FrontPortTestCase(TestCase):
             'name': 'FrontPort[1-4]',
             'label': 'Port[1-4]',
             'type': PortTypeChoices.TYPE_8P8C,
-            'positions': 1,
-            'rear_ports': [f'{rear_port.pk}:1' for rear_port in self.rear_ports],
+            'rear_port': [f'{rear_port.pk}:1' for rear_port in self.rear_ports],
         }
         form = FrontPortCreateForm(front_port_data)
 
@@ -297,8 +208,7 @@ class FrontPortTestCase(TestCase):
             'name': 'FrontPort[1-4]',
             'label': 'Port[1-2]',
             'type': PortTypeChoices.TYPE_8P8C,
-            'positions': 1,
-            'rear_ports': [f'{rear_port.pk}:1' for rear_port in self.rear_ports],
+            'rear_port': [f'{rear_port.pk}:1' for rear_port in self.rear_ports],
         }
         form = FrontPortCreateForm(bad_front_port_data)
 
@@ -501,211 +411,3 @@ class InterfaceTestCase(TestCase):
         self.assertNotIn('untagged_vlan', form.cleaned_data.keys())
         self.assertNotIn('tagged_vlans', form.cleaned_data.keys())
         self.assertNotIn('qinq_svlan', form.cleaned_data.keys())
-
-
-class SiteFormTestCase(TestCase):
-    """
-    Tests for M2MAddRemoveFields using Site ASN assignments as the test case.
-    Covers both simple mode (single multi-select field) and add/remove mode (dual fields).
-    """
-
-    @classmethod
-    def setUpTestData(cls):
-        cls.rir = RIR.objects.create(name='RIR 1', slug='rir-1')
-        # Create 110 ASNs: 100 to pre-assign (triggering add/remove mode) plus 10 extras
-        ASN.objects.bulk_create([ASN(asn=i, rir=cls.rir) for i in range(1, 111)])
-        cls.asns = list(ASN.objects.order_by('asn'))
-
-    def _site_data(self, **kwargs):
-        data = {'name': 'Test Site', 'slug': 'test-site', 'status': 'active'}
-        data.update(kwargs)
-        return data
-
-    def test_new_site_uses_simple_mode(self):
-        """A form for a new site uses the single 'asns' field (simple mode)."""
-        form = SiteForm(data=self._site_data())
-        self.assertIn('asns', form.fields)
-        self.assertNotIn('add_asns', form.fields)
-        self.assertNotIn('remove_asns', form.fields)
-
-    def test_existing_site_below_threshold_uses_simple_mode(self):
-        """A form for an existing site with fewer than THRESHOLD ASNs uses simple mode."""
-        site = Site.objects.create(name='Site 1', slug='site-1')
-        site.asns.set(self.asns[:5])
-        form = SiteForm(instance=site)
-        self.assertIn('asns', form.fields)
-        self.assertNotIn('add_asns', form.fields)
-        self.assertNotIn('remove_asns', form.fields)
-
-    def test_existing_site_at_threshold_uses_add_remove_mode(self):
-        """A form for an existing site with THRESHOLD or more ASNs uses add/remove mode."""
-        site = Site.objects.create(name='Site 2', slug='site-2')
-        site.asns.set(self.asns[:M2MAddRemoveFields.THRESHOLD])
-        form = SiteForm(instance=site)
-        self.assertNotIn('asns', form.fields)
-        self.assertIn('add_asns', form.fields)
-        self.assertIn('remove_asns', form.fields)
-
-    def test_simple_mode_assigns_asns_on_create(self):
-        """Saving a new site via simple mode assigns the selected ASNs."""
-        asn_pks = [asn.pk for asn in self.asns[:3]]
-        form = SiteForm(data=self._site_data(asns=asn_pks))
-        self.assertTrue(form.is_valid(), form.errors)
-        site = form.save()
-        self.assertEqual(set(site.asns.values_list('pk', flat=True)), set(asn_pks))
-
-    def test_simple_mode_replaces_asns_on_edit(self):
-        """Saving an existing site via simple mode replaces the current ASN assignments."""
-        site = Site.objects.create(name='Site 3', slug='site-3')
-        site.asns.set(self.asns[:3])
-        new_asn_pks = [asn.pk for asn in self.asns[3:6]]
-        form = SiteForm(
-            data=self._site_data(name='Site 3', slug='site-3', asns=new_asn_pks),
-            instance=site
-        )
-        self.assertTrue(form.is_valid(), form.errors)
-        site = form.save()
-        self.assertEqual(set(site.asns.values_list('pk', flat=True)), set(new_asn_pks))
-
-    def test_add_remove_mode_adds_asns(self):
-        """In add/remove mode, specifying 'add_asns' appends to current assignments."""
-        site = Site.objects.create(name='Site 4', slug='site-4')
-        site.asns.set(self.asns[:M2MAddRemoveFields.THRESHOLD])
-        new_asn_pks = [asn.pk for asn in self.asns[M2MAddRemoveFields.THRESHOLD:]]
-        form = SiteForm(
-            data=self._site_data(name='Site 4', slug='site-4', add_asns=new_asn_pks),
-            instance=site
-        )
-        self.assertTrue(form.is_valid(), form.errors)
-        site = form.save()
-        self.assertEqual(site.asns.count(), len(self.asns))
-
-    def test_add_remove_mode_removes_asns(self):
-        """In add/remove mode, specifying 'remove_asns' drops those assignments."""
-        site = Site.objects.create(name='Site 5', slug='site-5')
-        site.asns.set(self.asns[:M2MAddRemoveFields.THRESHOLD])
-        remove_pks = [asn.pk for asn in self.asns[:5]]
-        form = SiteForm(
-            data=self._site_data(name='Site 5', slug='site-5', remove_asns=remove_pks),
-            instance=site
-        )
-        self.assertTrue(form.is_valid(), form.errors)
-        site = form.save()
-        self.assertEqual(site.asns.count(), M2MAddRemoveFields.THRESHOLD - 5)
-        self.assertFalse(site.asns.filter(pk__in=remove_pks).exists())
-
-    def test_add_remove_mode_simultaneous_add_and_remove(self):
-        """In add/remove mode, add and remove operations are applied together."""
-        site = Site.objects.create(name='Site 6', slug='site-6')
-        site.asns.set(self.asns[:M2MAddRemoveFields.THRESHOLD])
-        add_pks = [asn.pk for asn in self.asns[M2MAddRemoveFields.THRESHOLD:M2MAddRemoveFields.THRESHOLD + 3]]
-        remove_pks = [asn.pk for asn in self.asns[:3]]
-        form = SiteForm(
-            data=self._site_data(name='Site 6', slug='site-6', add_asns=add_pks, remove_asns=remove_pks),
-            instance=site
-        )
-        self.assertTrue(form.is_valid(), form.errors)
-        site = form.save()
-        self.assertEqual(site.asns.count(), M2MAddRemoveFields.THRESHOLD)
-        self.assertTrue(site.asns.filter(pk__in=add_pks).count() == 3)
-        self.assertFalse(site.asns.filter(pk__in=remove_pks).exists())
-
-
-class CableFormTestCase(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.device_a = create_test_device('Cable Form Device A')
-        cls.device_b = create_test_device('Cable Form Device B')
-        cls.interface_a = Interface.objects.create(
-            device=cls.device_a,
-            name='eth0',
-            type=InterfaceTypeChoices.TYPE_1GE_FIXED,
-        )
-        cls.interface_b = Interface.objects.create(
-            device=cls.device_b,
-            name='eth0',
-            type=InterfaceTypeChoices.TYPE_1GE_FIXED,
-        )
-
-    def test_label_is_required(self):
-        form = get_cable_form(Interface, Interface)(data={
-            'a_terminations_type': 'dcim.interface',
-            'b_terminations_type': 'dcim.interface',
-            'a_terminations': [self.interface_a.pk],
-            'b_terminations': [self.interface_b.pk],
-            'status': LinkStatusChoices.STATUS_CONNECTED,
-        })
-
-        self.assertFalse(form.is_valid())
-        self.assertIn('label', form.errors)
-
-    def test_label_must_match_cross_connect_pattern(self):
-        form = get_cable_form(Interface, Interface)(data={
-            'a_terminations_type': 'dcim.interface',
-            'b_terminations_type': 'dcim.interface',
-            'a_terminations': [self.interface_a.pk],
-            'b_terminations': [self.interface_b.pk],
-            'status': LinkStatusChoices.STATUS_CONNECTED,
-            'label': 'bad-label',
-        })
-
-        self.assertFalse(form.is_valid())
-        self.assertIn('label', form.errors)
-
-
-class CableImportFormTestCase(TestCase):
-    @classmethod
-    def setUpTestData(cls):
-        cls.site = Site.objects.create(name='Cable Import Site', slug='cable-import-site')
-        manufacturer = Manufacturer.objects.create(name='Cable Import Manufacturer', slug='cable-import-manufacturer')
-        device_type = DeviceType.objects.create(
-            manufacturer=manufacturer,
-            model='Cable Import Device Type',
-            slug='cable-import-device-type',
-        )
-        role = DeviceRole.objects.create(name='Cable Import Role', slug='cable-import-role', color='ff0000')
-        cls.device_a = Device.objects.create(
-            name='Cable Import Device A',
-            site=cls.site,
-            device_type=device_type,
-            role=role,
-        )
-        cls.device_b = Device.objects.create(
-            name='Cable Import Device B',
-            site=cls.site,
-            device_type=device_type,
-            role=role,
-        )
-        Interface.objects.create(device=cls.device_a, name='eth0', type=InterfaceTypeChoices.TYPE_1GE_FIXED)
-        Interface.objects.create(device=cls.device_b, name='eth0', type=InterfaceTypeChoices.TYPE_1GE_FIXED)
-
-    def test_label_is_required(self):
-        form = CableImportForm(data={
-            'side_a_site': self.site.name,
-            'side_a_device': self.device_a.name,
-            'side_a_type': 'dcim.interface',
-            'side_a_name': 'eth0',
-            'side_b_site': self.site.name,
-            'side_b_device': self.device_b.name,
-            'side_b_type': 'dcim.interface',
-            'side_b_name': 'eth0',
-        })
-
-        self.assertFalse(form.is_valid())
-        self.assertIn('label', form.errors)
-
-    def test_label_must_match_cross_connect_pattern(self):
-        form = CableImportForm(data={
-            'side_a_site': self.site.name,
-            'side_a_device': self.device_a.name,
-            'side_a_type': 'dcim.interface',
-            'side_a_name': 'eth0',
-            'side_b_site': self.site.name,
-            'side_b_device': self.device_b.name,
-            'side_b_type': 'dcim.interface',
-            'side_b_name': 'eth0',
-            'label': 'bad-label',
-        })
-
-        self.assertFalse(form.is_valid())
-        self.assertIn('label', form.errors)

@@ -1,18 +1,18 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
-
-from netbox.tables import OrganizationalModelTable, PrimaryModelTable, columns
+import django_tables2 as tables
 from tenancy.tables import ContactsColumnMixin, TenancyColumnsMixin
 from virtualization.models import Cluster, ClusterGroup, ClusterType
 
+from netbox.tables import NetBoxTable, columns
+
 __all__ = (
-    'ClusterGroupTable',
     'ClusterTable',
+    'ClusterGroupTable',
     'ClusterTypeTable',
 )
 
 
-class ClusterTypeTable(OrganizationalModelTable):
+class ClusterTypeTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -26,16 +26,15 @@ class ClusterTypeTable(OrganizationalModelTable):
         url_name='virtualization:clustertype_list'
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = ClusterType
         fields = (
-            'pk', 'id', 'name', 'slug', 'cluster_count', 'description', 'comments', 'created', 'last_updated', 'tags',
-            'actions',
+            'pk', 'id', 'name', 'slug', 'cluster_count', 'description', 'created', 'last_updated', 'tags', 'actions',
         )
         default_columns = ('pk', 'name', 'cluster_count', 'description')
 
 
-class ClusterGroupTable(ContactsColumnMixin, OrganizationalModelTable):
+class ClusterGroupTable(ContactsColumnMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -49,16 +48,16 @@ class ClusterGroupTable(ContactsColumnMixin, OrganizationalModelTable):
         url_name='virtualization:clustergroup_list'
     )
 
-    class Meta(OrganizationalModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = ClusterGroup
         fields = (
-            'pk', 'id', 'name', 'slug', 'cluster_count', 'description', 'comments', 'contacts', 'tags', 'created',
-            'last_updated', 'actions',
+            'pk', 'id', 'name', 'slug', 'cluster_count', 'description', 'contacts', 'tags', 'created', 'last_updated',
+            'actions',
         )
         default_columns = ('pk', 'name', 'cluster_count', 'description')
 
 
-class ClusterTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+class ClusterTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -92,11 +91,14 @@ class ClusterTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         url_params={'cluster_id': 'pk'},
         verbose_name=_('VMs')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='virtualization:cluster_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Cluster
         fields = (
             'pk', 'id', 'name', 'type', 'group', 'status', 'tenant', 'tenant_group', 'scope', 'scope_type',

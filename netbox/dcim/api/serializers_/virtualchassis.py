@@ -1,8 +1,7 @@
 from rest_framework import serializers
 
 from dcim.models import VirtualChassis
-from netbox.api.serializers import PrimaryModelSerializer
-
+from netbox.api.serializers import NetBoxModelSerializer
 from .nested import NestedDeviceSerializer
 
 __all__ = (
@@ -10,7 +9,7 @@ __all__ = (
 )
 
 
-class VirtualChassisSerializer(PrimaryModelSerializer):
+class VirtualChassisSerializer(NetBoxModelSerializer):
     master = NestedDeviceSerializer(required=False, allow_null=True, default=None)
     members = NestedDeviceSerializer(many=True, read_only=True)
 
@@ -20,7 +19,7 @@ class VirtualChassisSerializer(PrimaryModelSerializer):
     class Meta:
         model = VirtualChassis
         fields = [
-            'id', 'url', 'display_url', 'display', 'name', 'domain', 'master', 'description', 'owner', 'comments',
-            'tags', 'custom_fields', 'created', 'last_updated', 'member_count', 'members',
+            'id', 'url', 'display_url', 'display', 'name', 'domain', 'master', 'description', 'comments', 'tags',
+            'custom_fields', 'created', 'last_updated', 'member_count', 'members',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'master', 'description', 'member_count')

@@ -22,7 +22,6 @@ from utilities.proxy import resolve_proxies
 from utilities.querydict import dict_to_querydict
 from utilities.templatetags.builtins.filters import render_markdown
 from utilities.views import get_action_url
-
 from .utils import register_widget
 
 __all__ = (
@@ -76,11 +75,10 @@ def get_bookmarks_object_type_choices():
 def get_models_from_content_types(content_types):
     """
     Return a list of models corresponding to the given content types, identified by natural key.
-    Accepts both lowercase (e.g. "dcim.site") and PascalCase (e.g. "dcim.Site") model names.
     """
     models = []
     for content_type_id in content_types:
-        app_label, model_name = content_type_id.lower().split('.')
+        app_label, model_name = content_type_id.split('.')
         try:
             content_type = ObjectType.objects.get_by_natural_key(app_label, model_name)
             if content_type.model_class():
@@ -278,7 +276,7 @@ class ObjectListWidget(DashboardWidget):
         model = ObjectType.objects.get_by_natural_key(app_label, model_name).model_class()
         if not model:
             logger.debug(f"Dashboard Widget model_class not found: {app_label}:{model_name}")
-            return None
+            return
 
         # Evaluate user's permission. Note that this controls only whether the HTMX element is
         # embedded on the page: The view itself will also evaluate permissions separately.

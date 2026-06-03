@@ -5,13 +5,12 @@ from django.template.defaultfilters import filesizeformat
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Job
-from core.tables import JobTable
 from extras.models import *
+from core.tables import JobTable
+from core.models import Job
 from netbox.constants import EMPTY_TABLE_TEXT
 from netbox.events import get_event_text
-from netbox.tables import BaseTable, NetBoxTable, PrimaryModelTable, columns
-
+from netbox.tables import BaseTable, NetBoxTable, columns
 from .columns import NotificationActionsColumn
 
 __all__ = (
@@ -28,34 +27,23 @@ __all__ = (
     'JournalEntryTable',
     'NotificationGroupTable',
     'NotificationTable',
-    'ReportResultsTable',
     'SavedFilterTable',
-    'ScriptJobTable',
+    'ReportResultsTable',
     'ScriptResultsTable',
+    'ScriptJobTable',
     'SubscriptionTable',
     'TableConfigTable',
-    'TagTable',
     'TaggedItemTable',
+    'TagTable',
     'WebhookTable',
 )
 
 IMAGEATTACHMENT_IMAGE = """
-{% load thumbnail %}
 {% if record.image %}
-  {% thumbnail record.image "400x400" as tn %}
-    <a href="{{ record.get_absolute_url }}"
-       class="image-preview"
-       data-preview-url="{{ tn.url }}"
-       data-bs-placement="left"
-       title="{{ record.filename }}"
-       rel="noopener noreferrer"
-       target="_blank"
-       aria-label="{{ record.filename }}">
-      <i class="mdi mdi-image"></i>
-    </a>
-  {% endthumbnail %}
+  <a href="{{ record.image.url }}" target="_blank" class="image-preview" data-bs-placement="top">
+    <i class="mdi mdi-image"></i></a>
 {% endif %}
-<a href="{{ record.get_absolute_url }}">{{ record.filename|truncate_middle:16 }}</a>
+<a href="{{ record.get_absolute_url }}">{{ record }}</a>
 """
 
 NOTIFICATION_ICON = """
@@ -121,14 +109,6 @@ class CustomFieldTable(NetBoxTable):
     validation_regex = tables.Column(
         verbose_name=_('Validation Regex'),
     )
-    validation_schema = columns.BooleanColumn(
-        verbose_name=_('Validation Schema'),
-        false_mark=None,
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
-    )
 
     class Meta(NetBoxTable.Meta):
         model = CustomField
@@ -136,7 +116,7 @@ class CustomFieldTable(NetBoxTable):
             'pk', 'id', 'name', 'object_types', 'label', 'type', 'related_object_type', 'group_name', 'required',
             'unique', 'default', 'description', 'search_weight', 'filter_logic', 'ui_visible', 'ui_editable',
             'is_cloneable', 'weight', 'choice_set', 'choices', 'validation_minimum', 'validation_maximum',
-            'validation_regex', 'validation_schema', 'comments', 'created', 'last_updated',
+            'validation_regex', 'comments', 'created', 'last_updated',
         )
         default_columns = (
             'pk', 'name', 'object_types', 'label', 'group_name', 'type', 'required', 'unique', 'description',
@@ -166,10 +146,6 @@ class CustomFieldChoiceSetTable(NetBoxTable):
         verbose_name=_('Order Alphabetically'),
         false_mark=None
     )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
-    )
 
     class Meta(NetBoxTable.Meta):
         model = CustomFieldChoiceSet
@@ -194,10 +170,6 @@ class CustomLinkTable(NetBoxTable):
     new_window = columns.BooleanColumn(
         verbose_name=_('New Window'),
         false_mark=None
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
     )
 
     class Meta(NetBoxTable.Meta):
@@ -241,10 +213,6 @@ class ExportTemplateTable(NetBoxTable):
     is_synced = columns.BooleanColumn(
         orderable=False,
         verbose_name=_('Synced')
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
     )
 
     class Meta(NetBoxTable.Meta):
@@ -325,10 +293,6 @@ class SavedFilterTable(NetBoxTable):
     shared = columns.BooleanColumn(
         verbose_name=_('Shared'),
         false_mark=None
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
     )
 
     def value_parameters(self, value):
@@ -421,7 +385,6 @@ class NotificationTable(NetBoxTable):
     icon = columns.TemplateColumn(
         template_code=NOTIFICATION_ICON,
         accessor=tables.A('event'),
-        orderable=False,
         attrs={
             'td': {'class': 'w-1'},
             'th': {'class': 'w-1'},
@@ -484,12 +447,8 @@ class WebhookTable(NetBoxTable):
         verbose_name=_('Name'),
         linkify=True
     )
-    ssl_verification = columns.BooleanColumn(
-        verbose_name=_('SSL Verification'),
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
+    ssl_validation = columns.BooleanColumn(
+        verbose_name=_('SSL Validation')
     )
     tags = columns.TagColumn(
         url_name='extras:webhook_list'
@@ -515,9 +474,8 @@ class EventRuleTable(NetBoxTable):
         verbose_name=_('Type'),
     )
     action_object = tables.Column(
-        verbose_name=_('Object'),
-        orderable=False,
         linkify=True,
+        verbose_name=_('Object'),
     )
     object_types = columns.ContentTypesColumn(
         verbose_name=_('Object Types'),
@@ -529,10 +487,6 @@ class EventRuleTable(NetBoxTable):
         verbose_name=_('Event Types'),
         func=get_event_text,
         orderable=False
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
     )
     tags = columns.TagColumn(
         url_name='extras:webhook_list'
@@ -559,10 +513,6 @@ class TagTable(NetBoxTable):
     )
     object_types = columns.ContentTypesColumn(
         verbose_name=_('Object Types'),
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
     )
 
     class Meta(NetBoxTable.Meta):
@@ -597,7 +547,7 @@ class TaggedItemTable(NetBoxTable):
         fields = ('id', 'content_type', 'content_object')
 
 
-class ConfigContextProfileTable(PrimaryModelTable):
+class ConfigContextProfileTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -618,7 +568,7 @@ class ConfigContextProfileTable(PrimaryModelTable):
         url_name='extras:configcontextprofile_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = ConfigContextProfile
         fields = (
             'pk', 'id', 'name', 'description', 'comments', 'data_source', 'data_file', 'is_synced', 'tags', 'created',
@@ -650,10 +600,6 @@ class ConfigContextTable(NetBoxTable):
     is_synced = columns.BooleanColumn(
         orderable=False,
         verbose_name=_('Synced')
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
     )
     tags = columns.TagColumn(
         url_name='extras:configcontext_list'
@@ -703,14 +649,6 @@ class ConfigTemplateTable(NetBoxTable):
         verbose_name=_('As Attachment'),
         false_mark=None
     )
-    debug = columns.BooleanColumn(
-        verbose_name=_('Debug'),
-        false_mark=None
-    )
-    owner = tables.Column(
-        linkify=True,
-        verbose_name=_('Owner')
-    )
     tags = columns.TagColumn(
         url_name='extras:configtemplate_list'
     )
@@ -738,7 +676,7 @@ class ConfigTemplateTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = ConfigTemplate
         fields = (
-            'pk', 'id', 'name', 'description', 'data_source', 'data_file', 'data_synced', 'as_attachment', 'debug',
+            'pk', 'id', 'name', 'description', 'data_source', 'data_file', 'data_synced', 'as_attachment',
             'mime_type', 'file_name', 'file_extension', 'role_count', 'platform_count', 'device_count',
             'vm_count', 'created', 'last_updated', 'tags',
         )

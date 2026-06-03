@@ -33,6 +33,7 @@ def preferences(request):
             config.COPILOT_ENABLED and not django_settings.ISOLATED_DEPLOYMENT and
             user_preferences.get('ui.copilot_enabled', False) == 'true'
         ),
+        'htmx_navigation': user_preferences.get('ui.htmx_navigation', False) == 'true',
     }
 
 

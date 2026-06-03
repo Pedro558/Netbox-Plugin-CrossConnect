@@ -1,12 +1,10 @@
-from typing import NewType
+from typing import Union
 
 import strawberry
 
-BigInt = NewType('BigInt', int)
-
-BigIntScalar = strawberry.scalar(
-    name='BigInt',
+BigInt = strawberry.scalar(
+    Union[int, str],  # type: ignore
     serialize=lambda v: int(v),
     parse_value=lambda v: str(v),
-    description='BigInt field',
+    description="BigInt field",
 )

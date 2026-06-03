@@ -1,7 +1,6 @@
 from django.urls import include, path
 
 from utilities.urls import get_model_urls
-
 from . import views
 
 app_name = 'core'
@@ -50,7 +49,6 @@ urlpatterns = (
     path('config-revisions/<int:pk>/', include(get_model_urls('core', 'configrevision'))),
 
     path('system/', views.SystemView.as_view(), name='system'),
-    path('system/db-schema/', views.SystemDBSchemaView.as_view(), name='system_db_schema'),
 
     path('plugins/', views.PluginListView.as_view(), name='plugin_list'),
     path('plugins/<str:name>/', views.PluginView.as_view(), name='plugin'),

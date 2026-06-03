@@ -43,22 +43,16 @@ You should see output similar to the following:
 
 ```no-highlight
 ● netbox.service - NetBox WSGI Service
-     Loaded: loaded (/etc/systemd/system/netbox.service; enabled; preset: enabled)
-     Active: active (running) since Mon 2026-01-26 11:00:00 CST; 7s ago
+     Loaded: loaded (/etc/systemd/system/netbox.service; enabled; vendor preset: enabled)
+     Active: active (running) since Mon 2021-08-30 04:02:36 UTC; 14h ago
        Docs: https://docs.netbox.dev/
-   Main PID: 7283 (gunicorn)
-      Tasks: 6 (limit: 4545)
-     Memory: 556.1M (peak: 556.3M)
-        CPU: 3.387s
+   Main PID: 1140492 (gunicorn)
+      Tasks: 19 (limit: 4683)
+     Memory: 666.2M
      CGroup: /system.slice/netbox.service
-             ├─7283 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox>
-             ├─7285 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox>
-             ├─7286 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox>
-             ├─7287 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox>
-             ├─7288 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox>
-             └─7289 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /var/tmp/netbox.pid --pythonpath /opt/netbox/netbox>
-
-Jan 26 11:00:00 netbox systemd[1]: Started netbox.service - NetBox WSGI Service.
+             ├─1140492 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /va>
+             ├─1140513 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /va>
+             ├─1140514 /opt/netbox/venv/bin/python3 /opt/netbox/venv/bin/gunicorn --pid /va>
 ...
 ```
 
@@ -66,3 +60,6 @@ Jan 26 11:00:00 netbox systemd[1]: Started netbox.service - NetBox WSGI Service.
     If the NetBox service fails to start, issue the command `journalctl -eu netbox` to check for log messages that may indicate the problem.
 
 Once you've verified that the WSGI workers are up and running, move on to HTTP server setup.
+
+!!! note
+    There is a bug in the current stable release of gunicorn (v21.2.0) where automatic restarts of the worker processes can result in 502 errors under heavy load. (See [gunicorn bug #3038](https://github.com/benoitc/gunicorn/issues/3038) for more detail.) Users who encounter this issue may opt to downgrade to an earlier, unaffected release of gunicorn (`pip install gunicorn==20.1.0`). Note, however, that this earlier release does not officially support Python 3.11.

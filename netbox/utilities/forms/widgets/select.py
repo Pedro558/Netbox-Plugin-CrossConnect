@@ -1,12 +1,10 @@
 from django import forms
 
 from netbox.choices import ColorChoices
-
 from ..utils import add_blank_choice
 
 __all__ = (
     'BulkEditNullBooleanSelect',
-    'ClearableSelect',
     'ColorSelect',
     'HTMXSelect',
     'SelectWithPK',
@@ -28,21 +26,6 @@ class BulkEditNullBooleanSelect(forms.NullBooleanSelect):
             ('2', 'Yes'),
             ('3', 'No'),
         )
-
-
-class ClearableSelect(forms.Select):
-    """
-    A Select widget that will be automatically cleared when one or more required fields are cleared.
-
-    Args:
-        requires_fields: A list of field names that this field depends on. When any of these fields
-                        are cleared, this field will also be cleared automatically via JavaScript.
-    """
-
-    def __init__(self, *args, requires_fields=None, **kwargs):
-        super().__init__(*args, **kwargs)
-        if requires_fields:
-            self.attrs['data-requires-fields'] = ','.join(requires_fields)
 
 
 class ColorSelect(forms.Select):
@@ -150,16 +133,14 @@ class SplitMultiSelectWidget(forms.MultiWidget):
                   be enabled only if the order of the selected choices is significant.
     """
     template_name = 'widgets/splitmultiselect.html'
-    available_widget_class = AvailableOptions
-    selected_widget_class = SelectedOptions
 
     def __init__(self, choices, attrs=None, ordering=False):
         widgets = [
-            self.available_widget_class(
+            AvailableOptions(
                 attrs={'size': 8},
                 choices=choices
             ),
-            self.selected_widget_class(
+            SelectedOptions(
                 attrs={'size': 8, 'class': 'select-all'},
                 choices=choices
             ),

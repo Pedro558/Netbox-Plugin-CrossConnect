@@ -1,10 +1,10 @@
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
-from netbox.forms import NetBoxModelBulkEditForm, OrganizationalModelBulkEditForm, PrimaryModelBulkEditForm
+from netbox.forms import NetBoxModelBulkEditForm
 from tenancy.models import Tenant
 from utilities.forms import add_blank_choice
-from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
+from utilities.forms.fields import CommentField, DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
 from vpn.choices import *
 from vpn.models import *
@@ -23,12 +23,18 @@ __all__ = (
 )
 
 
-class TunnelGroupBulkEditForm(OrganizationalModelBulkEditForm):
+class TunnelGroupBulkEditForm(NetBoxModelBulkEditForm):
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+
     model = TunnelGroup
-    nullable_fields = ('description', 'comments')
+    nullable_fields = ('description',)
 
 
-class TunnelBulkEditForm(PrimaryModelBulkEditForm):
+class TunnelBulkEditForm(NetBoxModelBulkEditForm):
     status = forms.ChoiceField(
         label=_('Status'),
         choices=add_blank_choice(TunnelStatusChoices),
@@ -54,10 +60,16 @@ class TunnelBulkEditForm(PrimaryModelBulkEditForm):
         queryset=Tenant.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
     tunnel_id = forms.IntegerField(
         label=_('Tunnel ID'),
         required=False
     )
+    comments = CommentField()
 
     model = Tunnel
     fieldsets = (
@@ -80,7 +92,7 @@ class TunnelTerminationBulkEditForm(NetBoxModelBulkEditForm):
     model = TunnelTermination
 
 
-class IKEProposalBulkEditForm(PrimaryModelBulkEditForm):
+class IKEProposalBulkEditForm(NetBoxModelBulkEditForm):
     authentication_method = forms.ChoiceField(
         label=_('Authentication method'),
         choices=add_blank_choice(AuthenticationMethodChoices),
@@ -105,6 +117,12 @@ class IKEProposalBulkEditForm(PrimaryModelBulkEditForm):
         label=_('SA lifetime'),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = IKEProposal
     fieldsets = (
@@ -118,7 +136,7 @@ class IKEProposalBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class IKEPolicyBulkEditForm(PrimaryModelBulkEditForm):
+class IKEPolicyBulkEditForm(NetBoxModelBulkEditForm):
     version = forms.ChoiceField(
         label=_('Version'),
         choices=add_blank_choice(IKEVersionChoices),
@@ -133,6 +151,12 @@ class IKEPolicyBulkEditForm(PrimaryModelBulkEditForm):
         label=_('Pre-shared key'),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = IKEPolicy
     fieldsets = (
@@ -143,7 +167,7 @@ class IKEPolicyBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class IPSecProposalBulkEditForm(PrimaryModelBulkEditForm):
+class IPSecProposalBulkEditForm(NetBoxModelBulkEditForm):
     encryption_algorithm = forms.ChoiceField(
         label=_('Encryption algorithm'),
         choices=add_blank_choice(EncryptionAlgorithmChoices),
@@ -162,6 +186,12 @@ class IPSecProposalBulkEditForm(PrimaryModelBulkEditForm):
         label=_('SA lifetime (KB)'),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = IPSecProposal
     fieldsets = (
@@ -175,12 +205,18 @@ class IPSecProposalBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class IPSecPolicyBulkEditForm(PrimaryModelBulkEditForm):
+class IPSecPolicyBulkEditForm(NetBoxModelBulkEditForm):
     pfs_group = forms.ChoiceField(
         label=_('PFS group'),
         choices=add_blank_choice(DHGroupChoices),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = IPSecPolicy
     fieldsets = (
@@ -191,7 +227,7 @@ class IPSecPolicyBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class IPSecProfileBulkEditForm(PrimaryModelBulkEditForm):
+class IPSecProfileBulkEditForm(NetBoxModelBulkEditForm):
     mode = forms.ChoiceField(
         label=_('Mode'),
         choices=add_blank_choice(IPSecModeChoices),
@@ -207,6 +243,12 @@ class IPSecProfileBulkEditForm(PrimaryModelBulkEditForm):
         queryset=IPSecPolicy.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = IPSecProfile
     fieldsets = (
@@ -217,7 +259,7 @@ class IPSecProfileBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class L2VPNBulkEditForm(PrimaryModelBulkEditForm):
+class L2VPNBulkEditForm(NetBoxModelBulkEditForm):
     status = forms.ChoiceField(
         label=_('Status'),
         choices=L2VPNStatusChoices,
@@ -232,6 +274,12 @@ class L2VPNBulkEditForm(PrimaryModelBulkEditForm):
         queryset=Tenant.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = L2VPN
     fieldsets = (

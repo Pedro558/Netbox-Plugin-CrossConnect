@@ -68,16 +68,6 @@ REDIS = {
 # https://docs.djangoproject.com/en/stable/ref/settings/#std:setting-SECRET_KEY
 SECRET_KEY = ''
 
-# Define a mapping of cryptographic peppers to use when hashing API tokens. A minimum of one pepper is required to
-# enable v2 API tokens (NetBox v4.5+). Define peppers as a mapping of numeric ID to pepper value, as shown below. Each
-# pepper must be at least 50 characters in length.
-#
-#     API_TOKEN_PEPPERS = {
-#         1: "<random string>",
-#         2: "<random string>",
-#     }
-API_TOKEN_PEPPERS = {}
-
 
 #########################
 #                       #
@@ -90,6 +80,9 @@ API_TOKEN_PEPPERS = {}
 ADMINS = [
     # ('John Doe', 'jdoe@example.com'),
 ]
+
+# Permit the retrieval of API tokens after their creation.
+ALLOW_TOKEN_RETRIEVAL = False
 
 # Enable any desired validators for local account passwords below. For a list of included validators, please see the
 # Django documentation at https://docs.djangoproject.com/en/stable/topics/auth/passwords/#password-validation.
@@ -140,11 +133,6 @@ EMAIL = {
     'FROM_EMAIL': '',
 }
 
-# Return CSV bulk exports as a streaming HTTP response, which avoids buffering the entire dataset in memory before
-# sending it to the client. This is recommended for very large exports, but it alters the response behavior so it is
-# disabled by default.
-STREAMING_EXPORTS = False
-
 # Exempt certain models from the enforcement of view permissions. Models listed here will be viewable by all users and
 # by anonymous users. List models in the form `<app>.<model>`. Add '*' to this list to exempt all models.
 EXEMPT_VIEW_PERMISSIONS = [
@@ -159,6 +147,10 @@ EXEMPT_VIEW_PERMISSIONS = [
 #     'https': 'http://10.10.1.10:1080',
 # }
 
+# IP addresses recognized as internal to the system. The debugging toolbar will be available only to clients accessing
+# NetBox from an internal IP.
+INTERNAL_IPS = ('127.0.0.1', '::1')
+
 # Enable custom logging. Please see the Django documentation for detailed guidance on configuring custom logs:
 #   https://docs.djangoproject.com/en/stable/topics/logging/
 LOGGING = {}
@@ -167,8 +159,11 @@ LOGGING = {}
 # authenticated to NetBox indefinitely.
 LOGIN_PERSISTENCE = False
 
+# Setting this to False will permit unauthenticated users to access most areas of NetBox (but not make any changes).
+LOGIN_REQUIRED = True
+
 # The length of time (in seconds) for which a user will remain logged into the web UI before being prompted to
-# re-authenticate. If set to None (the default), Django's SESSION_COOKIE_AGE is used (two weeks).
+# re-authenticate. (Default: 1209600 [14 days])
 LOGIN_TIMEOUT = None
 
 # Hide the login form. Useful when only allowing SSO authentication.

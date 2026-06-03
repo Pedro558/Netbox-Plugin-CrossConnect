@@ -1,24 +1,23 @@
-from typing import TYPE_CHECKING, Annotated
+from typing import Annotated, TYPE_CHECKING
 
 import strawberry
 import strawberry_django
 from strawberry.scalars import ID
-from strawberry_django import BaseFilterLookup, StrFilterLookup
+from strawberry_django import FilterLookup
 
+from core.graphql.filter_mixins import ChangeLogFilterMixin
 from extras.graphql.filter_mixins import CustomFieldsFilterMixin, TagsFilterMixin
-from netbox.graphql.filters import (
-    ChangeLoggedModelFilter,
-    NestedGroupModelFilter,
-    OrganizationalModelFilter,
-    PrimaryModelFilter,
+from netbox.graphql.filter_mixins import (
+    NestedGroupModelFilterMixin,
+    OrganizationalModelFilterMixin,
+    PrimaryModelFilterMixin,
 )
 from tenancy import models
-
 from .filter_mixins import ContactFilterMixin
 
 if TYPE_CHECKING:
-    from circuits.graphql.filters import CircuitFilter, CircuitGroupFilter, VirtualCircuitFilter
     from core.graphql.filters import ContentTypeFilter
+    from circuits.graphql.filters import CircuitFilter, CircuitGroupFilter, VirtualCircuitFilter
     from dcim.graphql.filters import (
         CableFilter,
         DeviceFilter,
@@ -42,26 +41,25 @@ if TYPE_CHECKING:
         VRFFilter,
     )
     from netbox.graphql.filter_lookups import TreeNodeFilter
+    from wireless.graphql.filters import WirelessLANFilter, WirelessLinkFilter
     from virtualization.graphql.filters import ClusterFilter, VirtualMachineFilter
     from vpn.graphql.filters import L2VPNFilter, TunnelFilter
-    from wireless.graphql.filters import WirelessLANFilter, WirelessLinkFilter
-
     from .enums import *
 
 __all__ = (
-    'ContactAssignmentFilter',
-    'ContactFilter',
-    'ContactGroupFilter',
-    'ContactRoleFilter',
     'TenantFilter',
     'TenantGroupFilter',
+    'ContactFilter',
+    'ContactRoleFilter',
+    'ContactGroupFilter',
+    'ContactAssignmentFilter',
 )
 
 
 @strawberry_django.filter_type(models.Tenant, lookups=True)
-class TenantFilter(ContactFilterMixin, PrimaryModelFilter):
-    name: StrFilterLookup[str] | None = strawberry_django.filter_field()
-    slug: StrFilterLookup[str] | None = strawberry_django.filter_field()
+class TenantFilter(PrimaryModelFilterMixin, ContactFilterMixin):
+    name: FilterLookup[str] | None = strawberry_django.filter_field()
+    slug: FilterLookup[str] | None = strawberry_django.filter_field()
     group: Annotated['TenantGroupFilter', strawberry.lazy('tenancy.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
@@ -138,7 +136,7 @@ class TenantFilter(ContactFilterMixin, PrimaryModelFilter):
 
 
 @strawberry_django.filter_type(models.TenantGroup, lookups=True)
-class TenantGroupFilter(OrganizationalModelFilter):
+class TenantGroupFilter(OrganizationalModelFilterMixin):
     parent: Annotated['TenantGroupFilter', strawberry.lazy('tenancy.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
@@ -152,13 +150,13 @@ class TenantGroupFilter(OrganizationalModelFilter):
 
 
 @strawberry_django.filter_type(models.Contact, lookups=True)
-class ContactFilter(PrimaryModelFilter):
-    name: StrFilterLookup[str] | None = strawberry_django.filter_field()
-    title: StrFilterLookup[str] | None = strawberry_django.filter_field()
-    phone: StrFilterLookup[str] | None = strawberry_django.filter_field()
-    email: StrFilterLookup[str] | None = strawberry_django.filter_field()
-    address: StrFilterLookup[str] | None = strawberry_django.filter_field()
-    link: StrFilterLookup[str] | None = strawberry_django.filter_field()
+class ContactFilter(PrimaryModelFilterMixin):
+    name: FilterLookup[str] | None = strawberry_django.filter_field()
+    title: FilterLookup[str] | None = strawberry_django.filter_field()
+    phone: FilterLookup[str] | None = strawberry_django.filter_field()
+    email: FilterLookup[str] | None = strawberry_django.filter_field()
+    address: FilterLookup[str] | None = strawberry_django.filter_field()
+    link: FilterLookup[str] | None = strawberry_django.filter_field()
     groups: Annotated['ContactGroupFilter', strawberry.lazy('tenancy.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
@@ -168,19 +166,19 @@ class ContactFilter(PrimaryModelFilter):
 
 
 @strawberry_django.filter_type(models.ContactRole, lookups=True)
-class ContactRoleFilter(OrganizationalModelFilter):
+class ContactRoleFilter(OrganizationalModelFilterMixin):
     pass
 
 
 @strawberry_django.filter_type(models.ContactGroup, lookups=True)
-class ContactGroupFilter(NestedGroupModelFilter):
+class ContactGroupFilter(NestedGroupModelFilterMixin):
     parent: Annotated['ContactGroupFilter', strawberry.lazy('tenancy.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
 
 
 @strawberry_django.filter_type(models.ContactAssignment, lookups=True)
-class ContactAssignmentFilter(CustomFieldsFilterMixin, TagsFilterMixin, ChangeLoggedModelFilter):
+class ContactAssignmentFilter(CustomFieldsFilterMixin, TagsFilterMixin, ChangeLogFilterMixin):
     object_type: Annotated['ContentTypeFilter', strawberry.lazy('core.graphql.filters')] | None = (
         strawberry_django.filter_field()
     )
@@ -193,6 +191,6 @@ class ContactAssignmentFilter(CustomFieldsFilterMixin, TagsFilterMixin, ChangeLo
         strawberry_django.filter_field()
     )
     role_id: ID | None = strawberry_django.filter_field()
-    priority: BaseFilterLookup[Annotated['ContactPriorityEnum', strawberry.lazy('tenancy.graphql.enums')]] | None = (
+    priority: Annotated['ContactPriorityEnum', strawberry.lazy('tenancy.graphql.enums')] | None = (
         strawberry_django.filter_field()
     )

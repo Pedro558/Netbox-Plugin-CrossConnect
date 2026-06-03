@@ -3,7 +3,6 @@ from django.dispatch import receiver
 
 from dcim.models import Device
 from virtualization.models import VirtualMachine
-
 from .models import IPAddress, Prefix
 
 

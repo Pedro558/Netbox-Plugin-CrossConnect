@@ -24,7 +24,6 @@ from netbox.config import get_config
 from netbox.constants import ADVISORY_LOCK_KEYS
 from utilities.api import get_serializer_for_model
 from virtualization.models import VMInterface
-
 from . import serializers
 
 
@@ -392,7 +391,7 @@ class AvailablePrefixesView(AvailableObjectsView):
     @extend_schema(
         methods=["post"],
         responses={201: serializers.PrefixSerializer(many=True)},
-        request=serializers.PrefixLengthSerializer(many=True),
+        request=serializers.PrefixSerializer(many=True),
     )
     def post(self, request, pk):
         return super().post(request, pk)
@@ -401,7 +400,7 @@ class AvailablePrefixesView(AvailableObjectsView):
 class AvailableIPAddressesView(AvailableObjectsView):
     queryset = IPAddress.objects.all()
     read_serializer_class = serializers.AvailableIPSerializer
-    write_serializer_class = serializers.AvailableIPRequestSerializer
+    write_serializer_class = serializers.AvailableIPSerializer
     advisory_lock_key = 'available-ips'
 
     def get_available_objects(self, parent, limit=None):
@@ -422,9 +421,8 @@ class AvailableIPAddressesView(AvailableObjectsView):
     def prep_object_data(self, requested_objects, available_objects, parent):
         available_ips = iter(available_objects)
         for i, request_data in enumerate(requested_objects):
-            prefix_length = request_data.pop('prefix_length', None) or parent.mask_length
             request_data.update({
-                'address': f'{next(available_ips)}/{prefix_length}',
+                'address': f'{next(available_ips)}/{parent.mask_length}',
                 'vrf': parent.vrf.pk if parent.vrf else None,
             })
 
@@ -437,7 +435,7 @@ class AvailableIPAddressesView(AvailableObjectsView):
     @extend_schema(
         methods=["post"],
         responses={201: serializers.IPAddressSerializer(many=True)},
-        request=serializers.AvailableIPRequestSerializer(many=True),
+        request=serializers.IPAddressSerializer(many=True),
     )
     def post(self, request, pk):
         return super().post(request, pk)
@@ -488,7 +486,7 @@ class AvailableVLANsView(AvailableObjectsView):
     @extend_schema(
         methods=["post"],
         responses={201: serializers.VLANSerializer(many=True)},
-        request=serializers.CreateAvailableVLANSerializer(many=True),
+        request=serializers.VLANSerializer(many=True),
     )
     def post(self, request, pk):
         return super().post(request, pk)

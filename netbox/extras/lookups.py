@@ -45,7 +45,8 @@ class Empty(Lookup):
         sql, params = compiler.compile(self.lhs)
         if self.rhs:
             return f"CAST(LENGTH({sql}) AS BOOLEAN) IS NOT TRUE", params
-        return f"CAST(LENGTH({sql}) AS BOOLEAN) IS TRUE", params
+        else:
+            return f"CAST(LENGTH({sql}) AS BOOLEAN) IS TRUE", params
 
 
 class JSONEmpty(Lookup):
@@ -82,7 +83,7 @@ class NetHost(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'HOST(CAST({lhs} AS INET)) = HOST({rhs})', params
+        return 'HOST(CAST(%s AS INET)) = HOST(%s)' % (lhs, rhs), params
 
 
 class NetContainsOrEquals(Lookup):
@@ -95,7 +96,7 @@ class NetContainsOrEquals(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'CAST({lhs} AS INET) >>= {rhs}', params
+        return 'CAST(%s AS INET) >>= %s' % (lhs, rhs), params
 
 
 ArrayField.register_lookup(RangeContains)

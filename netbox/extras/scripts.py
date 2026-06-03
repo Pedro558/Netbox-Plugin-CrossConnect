@@ -1,16 +1,18 @@
 import inspect
+import json
 import logging
 import os
 import re
 
+import yaml
 from django import forms
+from django.conf import settings
 from django.core.files.storage import storages
 from django.core.validators import RegexValidator
 from django.utils import timezone
 from django.utils.functional import classproperty
 from django.utils.translation import gettext as _
 
-from core.choices import JobNotificationChoices
 from extras.choices import LogLevelChoices
 from extras.models import ScriptModule
 from ipam.formfields import IPAddressFormField, IPNetworkFormField
@@ -18,21 +20,21 @@ from ipam.validators import MaxPrefixLengthValidator, MinPrefixLengthValidator, 
 from utilities.forms import add_blank_choice
 from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.widgets import DatePicker, DateTimePicker
-
 from .forms import ScriptForm
+
 
 __all__ = (
     'BaseScript',
     'BooleanVar',
     'ChoiceVar',
-    'DateTimeVar',
     'DateVar',
-    'DecimalVar',
+    'DateTimeVar',
     'FileVar',
+    'IntegerVar',
+    'DecimalVar',
     'IPAddressVar',
     'IPAddressWithMaskVar',
     'IPNetworkVar',
-    'IntegerVar',
     'MultiChoiceVar',
     'MultiObjectVar',
     'ObjectVar',
@@ -62,7 +64,7 @@ class ScriptVariable:
             self.field_attrs['label'] = label
         if description:
             self.field_attrs['help_text'] = description
-        if default is not None:
+        if default:
             self.field_attrs['initial'] = default
         if widget:
             self.field_attrs['widget'] = widget
@@ -390,10 +392,6 @@ class BaseScript:
     def scheduling_enabled(self):
         return getattr(self.Meta, 'scheduling_enabled', True)
 
-    @classproperty
-    def notifications_default(self):
-        return getattr(self.Meta, 'notifications_default', JobNotificationChoices.NOTIFICATION_ALWAYS)
-
     @property
     def filename(self):
         return inspect.getfile(self.__class__)
@@ -492,14 +490,11 @@ class BaseScript:
         if self.fieldsets:
             fieldsets.extend(self.fieldsets)
         else:
-            fields = list(name for name, __ in self._get_vars().items())
+            fields = list(name for name, _ in self._get_vars().items())
             fieldsets.append((_('Script Data'), fields))
 
         # Append the default fieldset if defined in the Meta class
-        if self.scheduling_enabled:
-            exec_parameters = ('_schedule_at', '_interval', '_commit', '_notifications')
-        else:
-            exec_parameters = ('_commit', '_notifications')
+        exec_parameters = ('_schedule_at', '_interval', '_commit') if self.scheduling_enabled else ('_commit',)
         fieldsets.append((_('Script Execution Parameters'), exec_parameters))
 
         return fieldsets
@@ -518,9 +513,6 @@ class BaseScript:
 
         # Set initial "commit" checkbox state based on the script's Meta parameter
         form.fields['_commit'].initial = self.commit_default
-
-        # Set initial "notifications" selection based on the script's Meta parameter
-        form.fields['_notifications'].initial = self.notifications_default
 
         # Hide fields if scheduling has been disabled
         if not self.scheduling_enabled:
@@ -589,6 +581,40 @@ class BaseScript:
     def log_failure(self, message=None, obj=None):
         self._log(message, obj, level=LogLevelChoices.LOG_FAILURE)
         self.failed = True
+
+    #
+    # Convenience functions
+    #
+
+    def load_yaml(self, filename):
+        """
+        Return data from a YAML file
+        """
+        # TODO: DEPRECATED: Remove this method in v4.5
+        self._log(
+            _("load_yaml is deprecated and will be removed in v4.5"),
+            level=LogLevelChoices.LOG_WARNING
+        )
+        file_path = os.path.join(settings.SCRIPTS_ROOT, filename)
+        with open(file_path, 'r') as datafile:
+            data = yaml.load(datafile, Loader=yaml.SafeLoader)
+
+        return data
+
+    def load_json(self, filename):
+        """
+        Return data from a JSON file
+        """
+        # TODO: DEPRECATED: Remove this method in v4.5
+        self._log(
+            _("load_json is deprecated and will be removed in v4.5"),
+            level=LogLevelChoices.LOG_WARNING
+        )
+        file_path = os.path.join(settings.SCRIPTS_ROOT, filename)
+        with open(file_path, 'r') as datafile:
+            data = json.load(datafile)
+
+        return data
 
     #
     # Legacy Report functionality

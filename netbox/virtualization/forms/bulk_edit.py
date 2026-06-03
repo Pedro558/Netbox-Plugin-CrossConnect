@@ -1,5 +1,4 @@
 from django import forms
-from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 from dcim.choices import InterfaceModeChoices
@@ -7,47 +6,57 @@ from dcim.constants import INTERFACE_MTU_MAX, INTERFACE_MTU_MIN
 from dcim.forms.mixins import ScopedBulkEditForm
 from dcim.models import Device, DeviceRole, Platform, Site
 from extras.models import ConfigTemplate
-from ipam.models import VLAN, VRF, VLANGroup, VLANTranslationPolicy
-from netbox.forms import NetBoxModelBulkEditForm, OrganizationalModelBulkEditForm, PrimaryModelBulkEditForm
-from netbox.forms.mixins import OwnerMixin
+from ipam.models import VLAN, VLANGroup, VLANTranslationPolicy, VRF
+from netbox.forms import NetBoxModelBulkEditForm
 from tenancy.models import Tenant
-from utilities.forms import add_blank_choice
-from utilities.forms.fields import DynamicModelChoiceField, DynamicModelMultipleChoiceField
+from utilities.forms import BulkRenameForm, add_blank_choice
+from utilities.forms.fields import CommentField, DynamicModelChoiceField, DynamicModelMultipleChoiceField
 from utilities.forms.rendering import FieldSet
-from utilities.forms.utils import get_capacity_unit_label
 from utilities.forms.widgets import BulkEditNullBooleanSelect
-
-from ..choices import *
-from ..models import *
+from virtualization.choices import *
+from virtualization.models import *
 
 __all__ = (
     'ClusterBulkEditForm',
     'ClusterGroupBulkEditForm',
     'ClusterTypeBulkEditForm',
-    'VMInterfaceBulkEditForm',
     'VirtualDiskBulkEditForm',
+    'VirtualDiskBulkRenameForm',
     'VirtualMachineBulkEditForm',
-    'VirtualMachineTypeBulkEditForm',
+    'VMInterfaceBulkEditForm',
+    'VMInterfaceBulkRenameForm',
 )
 
 
-class ClusterTypeBulkEditForm(OrganizationalModelBulkEditForm):
+class ClusterTypeBulkEditForm(NetBoxModelBulkEditForm):
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+
     model = ClusterType
     fieldsets = (
         FieldSet('description'),
     )
-    nullable_fields = ('description', 'comments')
+    nullable_fields = ('description',)
 
 
-class ClusterGroupBulkEditForm(OrganizationalModelBulkEditForm):
+class ClusterGroupBulkEditForm(NetBoxModelBulkEditForm):
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+
     model = ClusterGroup
     fieldsets = (
         FieldSet('description'),
     )
-    nullable_fields = ('description', 'comments')
+    nullable_fields = ('description',)
 
 
-class ClusterBulkEditForm(ScopedBulkEditForm, PrimaryModelBulkEditForm):
+class ClusterBulkEditForm(ScopedBulkEditForm, NetBoxModelBulkEditForm):
     type = DynamicModelChoiceField(
         label=_('Type'),
         queryset=ClusterType.objects.all(),
@@ -69,6 +78,12 @@ class ClusterBulkEditForm(ScopedBulkEditForm, PrimaryModelBulkEditForm):
         queryset=Tenant.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = Cluster
     fieldsets = (
@@ -80,46 +95,10 @@ class ClusterBulkEditForm(ScopedBulkEditForm, PrimaryModelBulkEditForm):
     )
 
 
-class VirtualMachineTypeBulkEditForm(PrimaryModelBulkEditForm):
-    default_platform = DynamicModelChoiceField(
-        label=_('Default platform'),
-        queryset=Platform.objects.all(),
-        required=False
-    )
-    default_vcpus = forms.IntegerField(
-        label=_('Default vCPUs'),
-        required=False,
-    )
-    default_memory = forms.IntegerField(
-        label=_('Default Memory (MB)'),
-        required=False,
-    )
-
-    model = VirtualMachineType
-    fieldsets = (
-        FieldSet('description', name=_('Virtual Machine Type')),
-        FieldSet('default_platform', 'default_vcpus', 'default_memory', name=_('Defaults')),
-    )
-    nullable_fields = (
-        'default_platform', 'default_vcpus', 'default_memory', 'description', 'comments',
-    )
-
-
-class VirtualMachineBulkEditForm(PrimaryModelBulkEditForm):
-    virtual_machine_type = DynamicModelChoiceField(
-        label=_('Virtual machine type'),
-        queryset=VirtualMachineType.objects.all(),
-        required=False
-    )
+class VirtualMachineBulkEditForm(NetBoxModelBulkEditForm):
     status = forms.ChoiceField(
         label=_('Status'),
         choices=add_blank_choice(VirtualMachineStatusChoices),
-        required=False,
-        initial='',
-    )
-    start_on_boot = forms.ChoiceField(
-        label=_('Start on boot'),
-        choices=add_blank_choice(VirtualMachineStartOnBootChoices),
         required=False,
         initial='',
     )
@@ -141,8 +120,7 @@ class VirtualMachineBulkEditForm(PrimaryModelBulkEditForm):
         queryset=Device.objects.all(),
         required=False,
         query_params={
-            'cluster_id': '$cluster',
-            'site_id': '$site'
+            'cluster_id': '$cluster'
         }
     )
     role = DynamicModelChoiceField(
@@ -171,42 +149,35 @@ class VirtualMachineBulkEditForm(PrimaryModelBulkEditForm):
     )
     memory = forms.IntegerField(
         required=False,
-        label=_('Memory')
+        label=_('Memory (MB)')
     )
     disk = forms.IntegerField(
         required=False,
-        label=_('Disk')
+        label=_('Disk (MB)')
+    )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
     )
     config_template = DynamicModelChoiceField(
         queryset=ConfigTemplate.objects.all(),
         required=False
     )
+    comments = CommentField()
 
     model = VirtualMachine
     fieldsets = (
-        FieldSet('virtual_machine_type', 'status', 'start_on_boot', 'role', 'tenant', 'platform', 'description'),
-        FieldSet('site', 'cluster', 'device', name=_('Placement')),
+        FieldSet('site', 'cluster', 'device', 'status', 'role', 'tenant', 'platform', 'description'),
         FieldSet('vcpus', 'memory', 'disk', name=_('Resources')),
         FieldSet('config_template', name=_('Configuration')),
     )
     nullable_fields = (
-        'virtual_machine_type', 'role', 'site', 'cluster', 'device', 'platform', 'vcpus', 'memory', 'disk', 'tenant',
-        'description', 'comments',
+        'site', 'cluster', 'device', 'role', 'tenant', 'platform', 'vcpus', 'memory', 'disk', 'description', 'comments',
     )
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-        # The ?device=<id> GET param is navigation context (filter), not an intent to change the
-        # device field — drop it from initial so Django's changed_data doesn't treat it as an edit.
-        self.initial.pop('device', None)
-
-        # Set unit labels based on configured RAM_BASE_UNIT / DISK_BASE_UNIT (MB vs MiB)
-        self.fields['memory'].label = _('Memory ({unit})').format(unit=get_capacity_unit_label(settings.RAM_BASE_UNIT))
-        self.fields['disk'].label = _('Disk ({unit})').format(unit=get_capacity_unit_label(settings.DISK_BASE_UNIT))
-
-
-class VMInterfaceBulkEditForm(OwnerMixin, NetBoxModelBulkEditForm):
+class VMInterfaceBulkEditForm(NetBoxModelBulkEditForm):
     virtual_machine = forms.ModelChoiceField(
         label=_('Virtual machine'),
         queryset=VirtualMachine.objects.all(),
@@ -310,21 +281,13 @@ class VMInterfaceBulkEditForm(OwnerMixin, NetBoxModelBulkEditForm):
                 interfaces = VMInterface.objects.filter(
                     pk__in=self.initial['pk']
                 ).prefetch_related(
-                    'virtual_machine__site',
-                    'virtual_machine__cluster',
-                    'virtual_machine__device',
+                    'virtual_machine__site'
                 )
 
-                # Determine the effective site for each interface's VM (from its site,
-                # cluster, or device). If all selected interfaces share the same site,
-                # use it to filter VLAN choices; otherwise leave unfiltered.
+                # Check interface sites.  First interface should set site, further interfaces will either continue the
+                # loop or reset back to no site and break the loop.
                 for interface in interfaces:
-                    vm = interface.virtual_machine
-                    vm_site = (
-                        vm.site
-                        or (vm.cluster and vm.cluster._site)
-                        or (vm.device and vm.device.site)
-                    )
+                    vm_site = interface.virtual_machine.site or interface.virtual_machine.cluster._site
                     if site is None:
                         site = vm_site
                     elif vm_site is not site:
@@ -341,7 +304,14 @@ class VMInterfaceBulkEditForm(OwnerMixin, NetBoxModelBulkEditForm):
             self.fields['bridge'].widget.attrs['disabled'] = True
 
 
-class VirtualDiskBulkEditForm(OwnerMixin, NetBoxModelBulkEditForm):
+class VMInterfaceBulkRenameForm(BulkRenameForm):
+    pk = forms.ModelMultipleChoiceField(
+        queryset=VMInterface.objects.all(),
+        widget=forms.MultipleHiddenInput()
+    )
+
+
+class VirtualDiskBulkEditForm(NetBoxModelBulkEditForm):
     virtual_machine = forms.ModelChoiceField(
         label=_('Virtual machine'),
         queryset=VirtualMachine.objects.all(),
@@ -351,7 +321,7 @@ class VirtualDiskBulkEditForm(OwnerMixin, NetBoxModelBulkEditForm):
     )
     size = forms.IntegerField(
         required=False,
-        label=_('Size')
+        label=_('Size (MB)')
     )
     description = forms.CharField(
         label=_('Description'),
@@ -365,8 +335,9 @@ class VirtualDiskBulkEditForm(OwnerMixin, NetBoxModelBulkEditForm):
     )
     nullable_fields = ('description',)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
 
-        # Set unit label based on configured DISK_BASE_UNIT (MB vs MiB)
-        self.fields['size'].label = _('Size ({unit})').format(unit=get_capacity_unit_label(settings.DISK_BASE_UNIT))
+class VirtualDiskBulkRenameForm(BulkRenameForm):
+    pk = forms.ModelMultipleChoiceField(
+        queryset=VirtualDisk.objects.all(),
+        widget=forms.MultipleHiddenInput()
+    )

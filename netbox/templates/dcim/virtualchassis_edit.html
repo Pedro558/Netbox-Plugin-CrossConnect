@@ -10,7 +10,7 @@
 {% endblock %}
 
 {% block content %}
-  <div class="tab-pane show active" id="edit-form" role="tabpanel" aria-labelledby="edit-form-tab">
+  <div class="tab-pane show active" id="edit-form" role="tabpanel" aria-labelledby="object-list-tab">
     <form action="" method="post" enctype="multipart/form-data" class="object-edit">
       {% render_errors vc_form %}
       {% for form in formset %}
@@ -34,12 +34,8 @@
         {% render_field vc_form.tags %}
       </div>
 
-      <div class="field-group mb-5">
-        <div class="row">
-          <h2 class="col-9 offset-3">{% trans "Ownership" %}</h2>
-        </div>
-        {% render_field vc_form.owner_group %}
-        {% render_field vc_form.owner %}
+      <div class="field-group my-5">
+        {% render_field vc_form.comments %}
       </div>
 
       {% if vc_form.custom_fields %}
@@ -50,10 +46,6 @@
           {% render_custom_fields vc_form %}
         </div>
       {% endif %}
-
-      <div class="field-group my-5">
-        {% render_field vc_form.comments %}
-      </div>
 
       <div class="field-group mb-5">
         <h2 class="text-center">{% trans "Members" %}</h2>
@@ -100,7 +92,7 @@
                             </td>
                             <td>
                                 {% if virtual_chassis.pk %}
-                                    <a href="{% url 'dcim:virtualchassis_remove_member' pk=device.pk %}?return_url={% url 'dcim:virtualchassis_edit' pk=virtual_chassis.pk %}" title="{% trans "Remove member" %}" aria-label="{% trans "Remove member" %}" class="btn btn-danger{% if virtual_chassis.master == device %} disabled{% endif %}">
+                                    <a href="{% url 'dcim:virtualchassis_remove_member' pk=device.pk %}?return_url={% url 'dcim:virtualchassis_edit' pk=virtual_chassis.pk %}" class="btn btn-danger{% if virtual_chassis.master == device %} disabled{% endif %}">
                                         <span class="mdi mdi-trash-can-outline" aria-hidden="true"></span>
                                     </a>
                                 {% endif %}

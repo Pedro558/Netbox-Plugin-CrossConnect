@@ -1,8 +1,8 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
+import django_tables2 as tables
 
 from dcim.models import Interface
-from netbox.tables import NestedGroupModelTable, NetBoxTable, PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 from tenancy.tables import TenancyColumnsMixin
 from wireless.models import *
 
@@ -13,17 +13,28 @@ __all__ = (
 )
 
 
-class WirelessLANGroupTable(NestedGroupModelTable):
+class WirelessLANGroupTable(NetBoxTable):
+    name = columns.MPTTColumn(
+        verbose_name=_('Name'),
+        linkify=True
+    )
+    parent = tables.Column(
+        verbose_name=_('Parent'),
+        linkify=True,
+    )
     wirelesslan_count = columns.LinkedCountColumn(
         viewname='wireless:wirelesslan_list',
         url_params={'group_id': 'pk'},
         verbose_name=_('Wireless LANs')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='wireless:wirelesslangroup_list'
     )
 
-    class Meta(NestedGroupModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = WirelessLANGroup
         fields = (
             'pk', 'name', 'parent', 'slug', 'description', 'comments', 'tags', 'wirelesslan_count', 'created',
@@ -32,7 +43,7 @@ class WirelessLANGroupTable(NestedGroupModelTable):
         default_columns = ('pk', 'name', 'wirelesslan_count', 'description')
 
 
-class WirelessLANTable(TenancyColumnsMixin, PrimaryModelTable):
+class WirelessLANTable(TenancyColumnsMixin, NetBoxTable):
     ssid = tables.Column(
         verbose_name=_('SSID'),
         linkify=True
@@ -55,11 +66,14 @@ class WirelessLANTable(TenancyColumnsMixin, PrimaryModelTable):
     interface_count = tables.Column(
         verbose_name=_('Interfaces')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='wireless:wirelesslan_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = WirelessLAN
         fields = (
             'pk', 'ssid', 'group', 'status', 'tenant', 'tenant_group', 'vlan', 'interface_count', 'auth_type',

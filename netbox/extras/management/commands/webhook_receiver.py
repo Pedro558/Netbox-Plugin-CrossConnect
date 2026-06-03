@@ -1,8 +1,9 @@
 import json
 import sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
 from django.core.management.base import BaseCommand
+
 
 request_counter = 1
 

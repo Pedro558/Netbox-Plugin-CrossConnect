@@ -1,12 +1,12 @@
 from django.forms import PasswordInput
 from django.utils.translation import gettext_lazy as _
 
-from dcim.forms.mixins import ScopedForm
 from dcim.models import Device, Interface, Location, Site
+from dcim.forms.mixins import ScopedForm
 from ipam.models import VLAN
-from netbox.forms import NestedGroupModelForm, PrimaryModelForm
+from netbox.forms import NetBoxModelForm
 from tenancy.forms import TenancyForm
-from utilities.forms.fields import DynamicModelChoiceField
+from utilities.forms.fields import CommentField, DynamicModelChoiceField, SlugField
 from utilities.forms.mixins import DistanceValidationMixin
 from utilities.forms.rendering import FieldSet, InlineFields
 from wireless.models import *
@@ -18,12 +18,14 @@ __all__ = (
 )
 
 
-class WirelessLANGroupForm(NestedGroupModelForm):
+class WirelessLANGroupForm(NetBoxModelForm):
     parent = DynamicModelChoiceField(
         label=_('Parent'),
         queryset=WirelessLANGroup.objects.all(),
         required=False
     )
+    slug = SlugField()
+    comments = CommentField()
 
     fieldsets = (
         FieldSet('parent', 'name', 'slug', 'description', 'tags', name=_('Wireless LAN Group')),
@@ -32,11 +34,11 @@ class WirelessLANGroupForm(NestedGroupModelForm):
     class Meta:
         model = WirelessLANGroup
         fields = [
-            'parent', 'name', 'slug', 'description', 'owner', 'comments', 'tags',
+            'parent', 'name', 'slug', 'description', 'tags', 'comments',
         ]
 
 
-class WirelessLANForm(ScopedForm, TenancyForm, PrimaryModelForm):
+class WirelessLANForm(ScopedForm, TenancyForm, NetBoxModelForm):
     group = DynamicModelChoiceField(
         label=_('Group'),
         queryset=WirelessLANGroup.objects.all(),
@@ -49,6 +51,7 @@ class WirelessLANForm(ScopedForm, TenancyForm, PrimaryModelForm):
         selector=True,
         label=_('VLAN')
     )
+    comments = CommentField()
 
     fieldsets = (
         FieldSet('ssid', 'group', 'vlan', 'status', 'description', 'tags', name=_('Wireless LAN')),
@@ -61,7 +64,7 @@ class WirelessLANForm(ScopedForm, TenancyForm, PrimaryModelForm):
         model = WirelessLAN
         fields = [
             'ssid', 'group', 'status', 'vlan', 'tenant_group', 'tenant', 'auth_type', 'auth_cipher', 'auth_psk',
-            'scope_type', 'description', 'owner', 'comments', 'tags',
+            'scope_type', 'description', 'comments', 'tags',
         ]
         widgets = {
             'auth_psk': PasswordInput(
@@ -71,7 +74,7 @@ class WirelessLANForm(ScopedForm, TenancyForm, PrimaryModelForm):
         }
 
 
-class WirelessLinkForm(DistanceValidationMixin, TenancyForm, PrimaryModelForm):
+class WirelessLinkForm(DistanceValidationMixin, TenancyForm, NetBoxModelForm):
     site_a = DynamicModelChoiceField(
         queryset=Site.objects.all(),
         required=False,
@@ -156,6 +159,7 @@ class WirelessLinkForm(DistanceValidationMixin, TenancyForm, PrimaryModelForm):
         },
         label=_('Interface')
     )
+    comments = CommentField()
 
     fieldsets = (
         FieldSet('site_a', 'location_a', 'device_a', 'interface_a', name=_('Side A')),
@@ -177,7 +181,7 @@ class WirelessLinkForm(DistanceValidationMixin, TenancyForm, PrimaryModelForm):
         fields = [
             'site_a', 'location_a', 'device_a', 'interface_a', 'site_b', 'location_b', 'device_b', 'interface_b',
             'status', 'ssid', 'tenant_group', 'tenant', 'auth_type', 'auth_cipher', 'auth_psk',
-            'distance', 'distance_unit', 'description', 'owner', 'comments', 'tags',
+            'distance', 'distance_unit', 'description', 'comments', 'tags',
         ]
         widgets = {
             'auth_psk': PasswordInput(

@@ -11,8 +11,8 @@ __all__ = (
     'IPRangeStatusEnum',
     'PrefixStatusEnum',
     'ServiceProtocolEnum',
-    'VLANQinQRoleEnum',
     'VLANStatusEnum',
+    'VLANQinQRoleEnum',
 )
 
 FHRPGroupAuthTypeEnum = strawberry.enum(FHRPGroupAuthTypeChoices.as_enum(prefix='authentication'))

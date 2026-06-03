@@ -1,4 +1,6 @@
-from datetime import UTC, date, datetime
+import logging
+import tempfile
+from datetime import date, datetime, timezone
 from decimal import Decimal
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -7,6 +9,7 @@ from netaddr import IPAddress, IPNetwork
 
 from dcim.models import DeviceRole
 from extras.scripts import *
+from utilities.testing import disable_logging
 
 CHOICES = (
     ('ff0000', 'Red'),
@@ -32,7 +35,36 @@ JSON_DATA = """
 """
 
 
-class ScriptVariablesTestCase(TestCase):
+class ScriptTest(TestCase):
+
+    def test_load_yaml(self):
+        datafile = tempfile.NamedTemporaryFile()
+        datafile.write(bytes(YAML_DATA, 'UTF-8'))
+        datafile.seek(0)
+
+        with disable_logging(level=logging.WARNING):
+            data = Script().load_yaml(datafile.name)
+        self.assertEqual(data, {
+            'Foo': 123,
+            'Bar': 456,
+            'Baz': ['A', 'B', 'C'],
+        })
+
+    def test_load_json(self):
+        datafile = tempfile.NamedTemporaryFile()
+        datafile.write(bytes(JSON_DATA, 'UTF-8'))
+        datafile.seek(0)
+
+        with disable_logging(level=logging.WARNING):
+            data = Script().load_json(datafile.name)
+        self.assertEqual(data, {
+            'Foo': 123,
+            'Bar': 456,
+            'Baz': ['A', 'B', 'C'],
+        })
+
+
+class ScriptVariablesTest(TestCase):
 
     def test_stringvar(self):
 
@@ -381,7 +413,7 @@ class ScriptVariablesTestCase(TestCase):
         self.assertIn('var1', form.errors)
 
         # Validate valid data
-        input_datetime = datetime(2024, 4, 1, 8, 0, 0, 0, UTC)
+        input_datetime = datetime(2024, 4, 1, 8, 0, 0, 0, timezone.utc)
         data = {'var1': input_datetime}
         form = TestScript().as_form(data, None)
         self.assertTrue(form.is_valid())

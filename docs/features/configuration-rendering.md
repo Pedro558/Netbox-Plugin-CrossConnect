@@ -75,39 +75,6 @@ The configuration can be rendered as JSON or as plaintext by setting the `Accept
 * `Accept: application/json`
 * `Accept: text/plain`
 
-### Overriding the Config Template
-
-To render a specific config template against a device's context data - rather than the template resolved via the fallback chain above — include `config_template_id` in the request body:
-
-```no-highlight
-curl -X POST \
--H "Authorization: Token $TOKEN" \
--H "Content-Type: application/json" \
--H "Accept: application/json; indent=4" \
-http://netbox:8000/api/dcim/devices/123/render-config/ \
---data '{
-  "config_template_id": 42
-}'
-```
-
-This is useful for rendering partial or alternative templates against a device's assembled context without changing any stored assignments. Any additional keys in the request body are passed into the template as context variables alongside the device's own config context data, as with standard rendering:
-
-```no-highlight
---data '{
-  "config_template_id": 42,
-  "environment": "staging"
-}'
-```
-
-!!! note "Permissions"
-    Overriding the config template requires the requesting user to have `view` permission for the "Extras > Config Template" object type in addition to the `render_config` permission on the device.
-
-The same override is available in the UI by appending `config_template_id` as a query parameter to the device's render config URL:
-
-```no-highlight
-/dcim/devices/123/render-config/?config_template_id=42
-```
-
 ### General Purpose Use
 
 NetBox config templates can also be rendered without being tied to any specific device, using a separate general purpose REST API endpoint. Any data included with a POST request to this endpoint will be passed as context data for the template.
@@ -123,10 +90,3 @@ http://netbox:8000/api/extras/config-templates/123/render/ \
   "bar": 123
 }'
 ```
-
-!!! note "Permissions"
-    Rendering configuration templates via the REST API requires appropriate permissions for the relevant object type:
-
-    * To render a device's configuration via `/api/dcim/devices/{id}/render-config/`, assign a permission for "DCIM > Device" with the `render_config` action.
-    * To render a virtual machine's configuration via `/api/virtualization/virtual-machines/{id}/render-config/`, assign a permission for "Virtualization > Virtual Machine" with the `render_config` action.
-    * To render a config template directly via `/api/extras/config-templates/{id}/render/`, assign a permission for "Extras > Config Template" with the `render` action.

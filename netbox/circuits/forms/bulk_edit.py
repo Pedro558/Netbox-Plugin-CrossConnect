@@ -4,24 +4,18 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils.translation import gettext_lazy as _
 
 from circuits.choices import (
-    CircuitCommitRateChoices,
-    CircuitPriorityChoices,
-    CircuitStatusChoices,
-    VirtualCircuitTerminationRoleChoices,
+    CircuitCommitRateChoices, CircuitPriorityChoices, CircuitStatusChoices, VirtualCircuitTerminationRoleChoices,
 )
 from circuits.constants import CIRCUIT_TERMINATION_TERMINATION_TYPES
 from circuits.models import *
 from dcim.models import Site
 from ipam.models import ASN
 from netbox.choices import DistanceUnitChoices
-from netbox.forms import NetBoxModelBulkEditForm, OrganizationalModelBulkEditForm, PrimaryModelBulkEditForm
+from netbox.forms import NetBoxModelBulkEditForm
 from tenancy.models import Tenant
 from utilities.forms import add_blank_choice, get_field_value
 from utilities.forms.fields import (
-    ColorField,
-    ContentTypeChoiceField,
-    DynamicModelChoiceField,
-    DynamicModelMultipleChoiceField,
+    ColorField, CommentField, ContentTypeChoiceField, DynamicModelChoiceField, DynamicModelMultipleChoiceField,
 )
 from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import BulkEditNullBooleanSelect, DatePicker, HTMXSelect, NumberWithOptions
@@ -33,8 +27,8 @@ __all__ = (
     'CircuitGroupBulkEditForm',
     'CircuitTerminationBulkEditForm',
     'CircuitTypeBulkEditForm',
-    'ProviderAccountBulkEditForm',
     'ProviderBulkEditForm',
+    'ProviderAccountBulkEditForm',
     'ProviderNetworkBulkEditForm',
     'VirtualCircuitBulkEditForm',
     'VirtualCircuitTerminationBulkEditForm',
@@ -42,12 +36,18 @@ __all__ = (
 )
 
 
-class ProviderBulkEditForm(PrimaryModelBulkEditForm):
+class ProviderBulkEditForm(NetBoxModelBulkEditForm):
     asns = DynamicModelMultipleChoiceField(
         queryset=ASN.objects.all(),
         label=_('ASNs'),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = Provider
     fieldsets = (
@@ -58,12 +58,18 @@ class ProviderBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class ProviderAccountBulkEditForm(PrimaryModelBulkEditForm):
+class ProviderAccountBulkEditForm(NetBoxModelBulkEditForm):
     provider = DynamicModelChoiceField(
         label=_('Provider'),
         queryset=Provider.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = ProviderAccount
     fieldsets = (
@@ -74,7 +80,7 @@ class ProviderAccountBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class ProviderNetworkBulkEditForm(PrimaryModelBulkEditForm):
+class ProviderNetworkBulkEditForm(NetBoxModelBulkEditForm):
     provider = DynamicModelChoiceField(
         label=_('Provider'),
         queryset=Provider.objects.all(),
@@ -85,6 +91,12 @@ class ProviderNetworkBulkEditForm(PrimaryModelBulkEditForm):
         required=False,
         label=_('Service ID')
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
+    comments = CommentField()
 
     model = ProviderNetwork
     fieldsets = (
@@ -95,9 +107,14 @@ class ProviderNetworkBulkEditForm(PrimaryModelBulkEditForm):
     )
 
 
-class CircuitTypeBulkEditForm(OrganizationalModelBulkEditForm):
+class CircuitTypeBulkEditForm(NetBoxModelBulkEditForm):
     color = ColorField(
         label=_('Color'),
+        required=False
+    )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
         required=False
     )
 
@@ -105,10 +122,10 @@ class CircuitTypeBulkEditForm(OrganizationalModelBulkEditForm):
     fieldsets = (
         FieldSet('color', 'description'),
     )
-    nullable_fields = ('color', 'description', 'comments')
+    nullable_fields = ('color', 'description')
 
 
-class CircuitBulkEditForm(PrimaryModelBulkEditForm):
+class CircuitBulkEditForm(NetBoxModelBulkEditForm):
     type = DynamicModelChoiceField(
         label=_('Type'),
         queryset=CircuitType.objects.all(),
@@ -166,6 +183,12 @@ class CircuitBulkEditForm(PrimaryModelBulkEditForm):
         required=False,
         initial=''
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=100,
+        required=False
+    )
+    comments = CommentField()
 
     model = Circuit
     fieldsets = (
@@ -238,7 +261,12 @@ class CircuitTerminationBulkEditForm(NetBoxModelBulkEditForm):
                 pass
 
 
-class CircuitGroupBulkEditForm(OrganizationalModelBulkEditForm):
+class CircuitGroupBulkEditForm(NetBoxModelBulkEditForm):
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False
+    )
     tenant = DynamicModelChoiceField(
         label=_('Tenant'),
         queryset=Tenant.objects.all(),
@@ -247,7 +275,7 @@ class CircuitGroupBulkEditForm(OrganizationalModelBulkEditForm):
 
     model = CircuitGroup
     nullable_fields = (
-        'description', 'tenant', 'comments',
+        'description', 'tenant',
     )
 
 
@@ -270,9 +298,14 @@ class CircuitGroupAssignmentBulkEditForm(NetBoxModelBulkEditForm):
     nullable_fields = ('priority',)
 
 
-class VirtualCircuitTypeBulkEditForm(OrganizationalModelBulkEditForm):
+class VirtualCircuitTypeBulkEditForm(NetBoxModelBulkEditForm):
     color = ColorField(
         label=_('Color'),
+        required=False
+    )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
         required=False
     )
 
@@ -280,10 +313,10 @@ class VirtualCircuitTypeBulkEditForm(OrganizationalModelBulkEditForm):
     fieldsets = (
         FieldSet('color', 'description'),
     )
-    nullable_fields = ('color', 'description', 'comments')
+    nullable_fields = ('color', 'description')
 
 
-class VirtualCircuitBulkEditForm(PrimaryModelBulkEditForm):
+class VirtualCircuitBulkEditForm(NetBoxModelBulkEditForm):
     provider_network = DynamicModelChoiceField(
         label=_('Provider network'),
         queryset=ProviderNetwork.objects.all(),
@@ -310,6 +343,12 @@ class VirtualCircuitBulkEditForm(PrimaryModelBulkEditForm):
         queryset=Tenant.objects.all(),
         required=False
     )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=100,
+        required=False
+    )
+    comments = CommentField()
 
     model = VirtualCircuit
     fieldsets = (

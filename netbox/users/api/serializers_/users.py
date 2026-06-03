@@ -6,7 +6,6 @@ from rest_framework import serializers
 from netbox.api.fields import SerializedPKRelatedField
 from netbox.api.serializers import ValidatedModelSerializer
 from users.models import Group, ObjectPermission, User
-
 from .permissions import ObjectPermissionSerializer
 
 __all__ = (
@@ -53,7 +52,7 @@ class UserSerializer(ValidatedModelSerializer):
         model = User
         fields = (
             'id', 'url', 'display_url', 'display', 'username', 'password', 'first_name', 'last_name', 'email',
-            'is_active', 'date_joined', 'last_login', 'groups', 'permissions',
+            'is_staff', 'is_active', 'date_joined', 'last_login', 'groups', 'permissions',
         )
         brief_fields = ('id', 'url', 'display', 'username')
         extra_kwargs = {

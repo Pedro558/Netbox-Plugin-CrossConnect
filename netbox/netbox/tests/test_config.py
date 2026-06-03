@@ -1,9 +1,10 @@
 from django.conf import settings
 from django.core.cache import cache
-from django.test import TestCase, override_settings
+from django.test import override_settings, TestCase
 
 from core.models import ConfigRevision
 from netbox.config import clear_config, get_config
+
 
 # Prefix cache keys to avoid interfering with the local environment
 CACHES = settings.CACHES

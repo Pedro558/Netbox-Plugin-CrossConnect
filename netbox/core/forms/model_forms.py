@@ -8,12 +8,12 @@ from django.utils.translation import gettext_lazy as _
 
 from core.forms.mixins import SyncedDataMixin
 from core.models import *
-from netbox.config import PARAMS, get_config
-from netbox.forms import NetBoxModelForm, PrimaryModelForm
+from netbox.config import get_config, PARAMS
+from netbox.forms import NetBoxModelForm
 from netbox.registry import registry
 from netbox.utils import get_data_backend_choices
 from utilities.forms import get_field_value
-from utilities.forms.fields import JSONField
+from utilities.forms.fields import CommentField, JSONField
 from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import HTMXSelect
 
@@ -26,24 +26,24 @@ __all__ = (
 EMPTY_VALUES = ('', None, [], ())
 
 
-class DataSourceForm(PrimaryModelForm):
+class DataSourceForm(NetBoxModelForm):
     type = forms.ChoiceField(
         choices=get_data_backend_choices,
         widget=HTMXSelect()
     )
+    comments = CommentField()
 
     class Meta:
         model = DataSource
         fields = [
-            'name', 'type', 'source_url', 'enabled', 'description', 'sync_interval', 'ignore_rules', 'owner',
-            'comments', 'tags',
+            'name', 'type', 'source_url', 'enabled', 'description', 'sync_interval', 'ignore_rules', 'comments', 'tags',
         ]
         widgets = {
             'ignore_rules': forms.Textarea(
                 attrs={
                     'rows': 5,
                     'class': 'font-monospace',
-                    'placeholder': '.cache\n*.txt\nsubdir/*'
+                    'placeholder': '.cache\n*.txt'
                 }
             ),
         }
@@ -165,10 +165,9 @@ class ConfigRevisionForm(forms.ModelForm, metaclass=ConfigFormMetaclass):
         FieldSet('PAGINATE_COUNT', 'MAX_PAGE_SIZE', name=_('Pagination')),
         FieldSet('CUSTOM_VALIDATORS', 'PROTECTION_RULES', name=_('Validation')),
         FieldSet('DEFAULT_USER_PREFERENCES', name=_('User Preferences')),
-        FieldSet('CHANGELOG_RETENTION', 'CHANGELOG_RETAIN_CREATE_LAST_UPDATE', name=_('Change Log')),
         FieldSet(
-            'MAINTENANCE_MODE', 'COPILOT_ENABLED', 'GRAPHQL_ENABLED', 'JOB_RETENTION', 'MAPS_URL',
-            name=_('Miscellaneous'),
+            'MAINTENANCE_MODE', 'COPILOT_ENABLED', 'GRAPHQL_ENABLED', 'CHANGELOG_RETENTION', 'JOB_RETENTION',
+            'MAPS_URL', name=_('Miscellaneous'),
         ),
         FieldSet('comment', name=_('Config Revision'))
     )

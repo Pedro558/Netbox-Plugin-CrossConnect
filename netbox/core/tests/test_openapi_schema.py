@@ -4,7 +4,6 @@ Unit tests for OpenAPI schema generation.
 Refs: #20638
 """
 import json
-
 from django.test import TestCase
 
 

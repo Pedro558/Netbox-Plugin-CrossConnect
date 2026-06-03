@@ -2,8 +2,8 @@ from rest_framework import serializers
 from rest_framework.reverse import reverse
 
 __all__ = (
-    'BackgroundQueueSerializer',
     'BackgroundTaskSerializer',
+    'BackgroundQueueSerializer',
     'BackgroundWorkerSerializer',
 )
 

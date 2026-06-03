@@ -1,18 +1,15 @@
 import json
-import warnings
-from typing import Any
+from typing import Dict, Any
 from urllib.parse import quote
 
 from django import template
 from django.urls import NoReverseMatch, reverse
 from django.utils.html import conditional_escape
-from django.utils.translation import gettext_lazy as _
 
 from core.models import ObjectType
+from utilities.forms import get_selected_values, TableConfigForm
+from utilities.views import get_viewname, get_action_url
 from netbox.settings import DISK_BASE_UNIT, RAM_BASE_UNIT
-from utilities.forms import TableConfigForm, get_selected_values
-from utilities.forms.mixins import FORM_FIELD_LOOKUPS
-from utilities.views import get_action_url, get_viewname
 
 __all__ = (
     'action_url',
@@ -21,8 +18,8 @@ __all__ = (
     'divide',
     'get_item',
     'get_key',
-    'humanize_disk_capacity',
-    'humanize_ram_capacity',
+    'humanize_disk_megabytes',
+    'humanize_ram_megabytes',
     'humanize_speed',
     'icon_from_status',
     'kg_to_pounds',
@@ -187,100 +184,65 @@ def action_url(parser, token):
     return ActionURLNode(model, action, kwargs, asvar)
 
 
-def _format_speed(speed, divisor, unit):
-    """
-    Format a speed value with a given divisor and unit.
-
-    Handles decimal values and strips trailing zeros for clean output.
-    """
-    whole, remainder = divmod(speed, divisor)
-    if remainder == 0:
-        return f'{whole} {unit}'
-
-    # Divisors are powers of 10, so len(str(divisor)) - 1 matches the decimal precision.
-    precision = len(str(divisor)) - 1
-    fraction = f'{remainder:0{precision}d}'.rstrip('0')
-    return f'{whole}.{fraction} {unit}'
-
-
 @register.filter()
 def humanize_speed(speed):
     """
-    Humanize speeds given in Kbps, always using the largest appropriate unit.
+    Humanize speeds given in Kbps. Examples:
 
-    Decimal values are displayed when the result is not a whole number;
-    trailing zeros after the decimal point are stripped for clean output.
-
-    Examples:
-
-        1_544 => "1.544 Mbps"
-        100_000 => "100 Mbps"
-        1_000_000 => "1 Gbps"
-        2_500_000 => "2.5 Gbps"
-        10_000_000 => "10 Gbps"
-        800_000_000 => "800 Gbps"
-        1_600_000_000 => "1.6 Tbps"
+        1544 => "1.544 Mbps"
+        100000 => "100 Mbps"
+        10000000 => "10 Gbps"
     """
     if not speed:
         return ''
-
-    speed = int(speed)
-
-    if speed >= 1_000_000_000:
-        return _format_speed(speed, 1_000_000_000, 'Tbps')
-    if speed >= 1_000_000:
-        return _format_speed(speed, 1_000_000, 'Gbps')
-    if speed >= 1_000:
-        return _format_speed(speed, 1_000, 'Mbps')
-    return f'{speed} Kbps'
-
-
-def _humanize_capacity(value, divisor=1000):
-    """
-    Express a capacity value in the most suitable unit (e.g. GB, TiB, etc.).
-
-    The value is treated as a unitless base-unit quantity; the divisor determines
-    both the scaling thresholds and the label convention:
-      - 1000: SI labels (MB, GB, TB, PB)
-      - 1024: IEC labels (MiB, GiB, TiB, PiB)
-    """
-    if not value:
-        return ""
-
-    if divisor == 1024:
-        labels = ('MiB', 'GiB', 'TiB', 'PiB')
+    if speed >= 1000000000 and speed % 1000000000 == 0:
+        return '{} Tbps'.format(int(speed / 1000000000))
+    elif speed >= 1000000 and speed % 1000000 == 0:
+        return '{} Gbps'.format(int(speed / 1000000))
+    elif speed >= 1000 and speed % 1000 == 0:
+        return '{} Mbps'.format(int(speed / 1000))
+    elif speed >= 1000:
+        return '{} Mbps'.format(float(speed) / 1000)
     else:
-        labels = ('MB', 'GB', 'TB', 'PB')
+        return '{} Kbps'.format(speed)
+
+
+def _humanize_megabytes(mb, divisor=1000):
+    """
+    Express a number of megabytes in the most suitable unit (e.g. gigabytes, terabytes, etc.).
+    """
+    if not mb:
+        return ""
 
     PB_SIZE = divisor**3
     TB_SIZE = divisor**2
     GB_SIZE = divisor
 
-    if value >= PB_SIZE:
-        return f"{value / PB_SIZE:.2f} {labels[3]}"
-    if value >= TB_SIZE:
-        return f"{value / TB_SIZE:.2f} {labels[2]}"
-    if value >= GB_SIZE:
-        return f"{value / GB_SIZE:.2f} {labels[1]}"
-    return f"{value} {labels[0]}"
+    if mb >= PB_SIZE:
+        return f"{mb / PB_SIZE:.2f} PB"
+    if mb >= TB_SIZE:
+        return f"{mb / TB_SIZE:.2f} TB"
+    if mb >= GB_SIZE:
+        return f"{mb / GB_SIZE:.2f} GB"
+    return f"{mb} MB"
 
 
 @register.filter()
-def humanize_disk_capacity(value):
+def humanize_disk_megabytes(mb):
     """
-    Express a disk capacity in the most suitable unit, using the DISK_BASE_UNIT
-    setting to select SI (MB/GB) or IEC (MiB/GiB) labels.
+    Express a number of megabytes in the most suitable unit (e.g. gigabytes, terabytes, etc.).
+    Use the DISK_BASE_UNIT setting to determine the divisor. Default is 1000.
     """
-    return _humanize_capacity(value, DISK_BASE_UNIT)
+    return _humanize_megabytes(mb, DISK_BASE_UNIT)
 
 
 @register.filter()
-def humanize_ram_capacity(value):
+def humanize_ram_megabytes(mb):
     """
-    Express a RAM capacity in the most suitable unit, using the RAM_BASE_UNIT
-    setting to select SI (MB/GB) or IEC (MiB/GiB) labels.
+    Express a number of megabytes in the most suitable unit (e.g. gigabytes, terabytes, etc.).
+    Use the RAM_BASE_UNIT setting to determine the divisor. Default is 1000.
     """
-    return _humanize_capacity(value, RAM_BASE_UNIT)
+    return _humanize_megabytes(mb, RAM_BASE_UNIT)
 
 
 @register.filter()
@@ -343,7 +305,7 @@ def startswith(text: str, starts: str) -> bool:
 
 
 @register.filter
-def get_key(value: dict, arg: str) -> Any:
+def get_key(value: Dict, arg: str) -> Any:
     """
     Template implementation of `dict.get()`, for accessing dict values
     by key when the key is not able to be used in a template. For
@@ -400,11 +362,6 @@ def querystring(request, **kwargs):
     """
     Append or update the page number in a querystring.
     """
-    warnings.warn(
-        'The querystring template tag is deprecated and will be removed in a future release. Use '
-        'the built-in Django querystring tag instead.',
-        category=FutureWarning,
-    )
     querydict = request.GET.copy()
     for k, v in kwargs.items():
         if v is not None:
@@ -414,7 +371,8 @@ def querystring(request, **kwargs):
     querystring = querydict.urlencode(safe='/')
     if querystring:
         return '?' + querystring
-    return ''
+    else:
+        return ''
 
 
 @register.inclusion_tag('helpers/utilization_graph.html')
@@ -460,20 +418,7 @@ def applied_filters(context, model, form, query_params):
             continue
 
         querydict = query_params.copy()
-
-        # Check if this is a modifier-enhanced field
-        # Field may be in querydict as field__lookup instead of field
-        param_name = None
-        if filter_name in querydict:
-            param_name = filter_name
-        else:
-            # Check for modifier variants (field__ic, field__isw, etc.)
-            for key in querydict.keys():
-                if key.startswith(f'{filter_name}__'):
-                    param_name = key
-                    break
-
-        if param_name is None:
+        if filter_name not in querydict:
             continue
 
         # Skip saved filters, as they're displayed alongside the quick search widget
@@ -481,75 +426,14 @@ def applied_filters(context, model, form, query_params):
             continue
 
         bound_field = form.fields[filter_name].get_bound_field(form, filter_name)
-        querydict.pop(param_name)
-
-        # Extract modifier from parameter name (e.g., "serial__ic" → "ic")
-        if '__' in param_name:
-            modifier = param_name.split('__', 1)[1]
-        else:
-            modifier = 'exact'
-
-        # Get display value
+        querydict.pop(filter_name)
         display_value = ', '.join([str(v) for v in get_selected_values(form, filter_name)])
 
-        # Get the correct lookup label for this field's type
-        lookup_label = None
-        if modifier != 'exact':
-            field = form.fields[filter_name]
-            for field_class in field.__class__.__mro__:
-                if field_lookups := FORM_FIELD_LOOKUPS.get(field_class):
-                    for lookup_code, label in field_lookups:
-                        if lookup_code == modifier:
-                            lookup_label = label
-                            break
-                    if lookup_label:
-                        break
-
-        # Special handling for empty lookup (boolean value)
-        if modifier == 'empty':
-            if display_value.lower() in ('true', '1'):
-                link_text = f'{bound_field.label} {_("is empty")}'
-            else:
-                link_text = f'{bound_field.label} {_("is not empty")}'
-        elif lookup_label:
-            link_text = f'{bound_field.label} {lookup_label}: {display_value}'
-        else:
-            link_text = f'{bound_field.label}: {display_value}'
-
         applied_filters.append({
-            'name': param_name,  # Use actual param name for removal link
-            'value': form.cleaned_data.get(filter_name),
+            'name': filter_name,
+            'value': form.cleaned_data[filter_name],
             'link_url': f'?{querydict.urlencode()}',
-            'link_text': link_text,
-        })
-
-    # Handle empty modifier pills separately. `FilterModifierWidget.value_from_datadict()`
-    # returns None for fields with a `field__empty` query parameter so that the underlying
-    # form field does not attempt to validate 'true'/'false' as a real field value (which
-    # would raise a ValidationError for ModelChoiceField). Because the value is None, these
-    # fields never appear in `form.changed_data`, so we build their pills directly from the
-    # query parameters here.
-    for param_name, param_value in query_params.items():
-        if not param_name.endswith('__empty'):
-            continue
-        field_name = param_name[:-len('__empty')]
-        if field_name not in form.fields or field_name == 'filter_id':
-            continue
-
-        querydict = query_params.copy()
-        querydict.pop(param_name)
-        label = form.fields[field_name].label or field_name
-
-        if param_value.lower() in ('true', '1'):
-            link_text = f'{label} {_("is empty")}'
-        else:
-            link_text = f'{label} {_("is not empty")}'
-
-        applied_filters.append({
-            'name': param_name,
-            'value': param_value,
-            'link_url': f'?{querydict.urlencode()}',
-            'link_text': link_text,
+            'link_text': f'{bound_field.label}: {display_value}',
         })
 
     save_link = None

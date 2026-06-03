@@ -3,7 +3,6 @@ from rest_framework import serializers
 from dcim.models import Platform
 from extras.api.serializers_.configtemplates import ConfigTemplateSerializer
 from netbox.api.serializers import NestedGroupModelSerializer
-
 from .manufacturers import ManufacturerSerializer
 from .nested import NestedPlatformSerializer
 
@@ -25,7 +24,7 @@ class PlatformSerializer(NestedGroupModelSerializer):
         model = Platform
         fields = [
             'id', 'url', 'display_url', 'display', 'parent', 'name', 'slug', 'manufacturer', 'config_template',
-            'description', 'owner', 'comments', 'tags', 'custom_fields', 'created', 'last_updated', 'device_count',
+            'description', 'comments', 'tags', 'custom_fields', 'created', 'last_updated', 'device_count',
             'virtualmachine_count', '_depth',
         ]
         brief_fields = (

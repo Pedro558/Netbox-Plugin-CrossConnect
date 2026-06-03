@@ -7,7 +7,7 @@ from core.models import ObjectChange
 from netbox.tests.dummy_plugin.models import DummyNetBoxModel
 
 
-class ModelTestCase(TestCase):
+class ModelTest(TestCase):
 
     def test_get_absolute_url(self):
         m = ObjectChange()

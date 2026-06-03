@@ -2,6 +2,7 @@ from django import template
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
 
+
 register = template.Library()
 
 

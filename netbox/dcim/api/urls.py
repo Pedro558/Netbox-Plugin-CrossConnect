@@ -1,6 +1,6 @@
 from netbox.api.routers import NetBoxRouter
-
 from . import views
+
 
 router = NetBoxRouter()
 router.APIRootView = views.DCIMRootView
@@ -12,7 +12,6 @@ router.register('sites', views.SiteViewSet)
 
 # Racks
 router.register('locations', views.LocationViewSet)
-router.register('rack-groups', views.RackGroupViewSet)
 router.register('rack-types', views.RackTypeViewSet)
 router.register('rack-roles', views.RackRoleViewSet)
 router.register('racks', views.RackViewSet)
@@ -64,7 +63,6 @@ router.register('mac-addresses', views.MACAddressViewSet)
 # Cables
 router.register('cables', views.CableViewSet)
 router.register('cable-terminations', views.CableTerminationViewSet)
-router.register('cable-bundles', views.CableBundleViewSet)
 
 # Virtual chassis
 router.register('virtual-chassis', views.VirtualChassisViewSet)

@@ -1,21 +1,19 @@
 from functools import cached_property
 
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
-from django.contrib.postgres.fields import ArrayField
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models import Sum
 from django.utils.translation import gettext_lazy as _
 from mptt.models import MPTTModel, TreeForeignKey
 
 from dcim.choices import *
 from dcim.constants import *
 from dcim.fields import WWNField
-from dcim.models.base import PortMappingBase
 from dcim.models.mixins import InterfaceValidationMixin
 from netbox.choices import ColorChoices
-from netbox.models import NetBoxModel, OrganizationalModel
-from netbox.models.mixins import OwnerMixin
+from netbox.models import OrganizationalModel, NetBoxModel
 from utilities.fields import ColorField, NaturalOrderingField
 from utilities.mptt import TreeManager
 from utilities.ordering import naturalize_interface
@@ -36,14 +34,13 @@ __all__ = (
     'InventoryItemRole',
     'ModuleBay',
     'PathEndpoint',
-    'PortMapping',
     'PowerOutlet',
     'PowerPort',
     'RearPort',
 )
 
 
-class ComponentModel(OwnerMixin, NetBoxModel):
+class ComponentModel(NetBoxModel):
     """
     An abstract model inherited by any model which has a parent Device.
     """
@@ -177,24 +174,6 @@ class CabledObjectModel(models.Model):
         blank=True,
         null=True
     )
-    cable_connector = models.PositiveSmallIntegerField(
-        blank=True,
-        null=True,
-        validators=(
-            MinValueValidator(CABLE_CONNECTOR_MIN),
-            MaxValueValidator(CABLE_CONNECTOR_MAX)
-        ),
-    )
-    cable_positions = ArrayField(
-        base_field=models.PositiveSmallIntegerField(
-            validators=(
-                MinValueValidator(CABLE_POSITION_MIN),
-                MaxValueValidator(CABLE_POSITION_MAX)
-            )
-        ),
-        blank=True,
-        null=True,
-    )
     mark_connected = models.BooleanField(
         verbose_name=_('mark connected'),
         default=False,
@@ -214,36 +193,18 @@ class CabledObjectModel(models.Model):
     def clean(self):
         super().clean()
 
-        if self.cable:
-            if not self.cable_end:
-                raise ValidationError({
-                    "cable_end": _("Must specify cable end (A or B) when attaching a cable.")
-                })
-            if self.cable_connector and not self.cable_positions:
-                raise ValidationError({
-                    "cable_positions": _("Must specify position(s) when specifying a cable connector.")
-                })
-            if self.cable_positions and not self.cable_connector:
-                raise ValidationError({
-                    "cable_positions": _("Cable positions cannot be set without a cable connector.")
-                })
-            if self.mark_connected:
-                raise ValidationError({
-                    "mark_connected": _("Cannot mark as connected with a cable attached.")
-                })
-        else:
-            if self.cable_end:
-                raise ValidationError({
-                    "cable_end": _("Cable end must not be set without a cable.")
-                })
-            if self.cable_connector:
-                raise ValidationError({
-                    "cable_connector": _("Cable connector must not be set without a cable.")
-                })
-            if self.cable_positions:
-                raise ValidationError({
-                    "cable_positions": _("Cable termination positions must not be set without a cable.")
-                })
+        if self.cable and not self.cable_end:
+            raise ValidationError({
+                "cable_end": _("Must specify cable end (A or B) when attaching a cable.")
+            })
+        if self.cable_end and not self.cable:
+            raise ValidationError({
+                "cable_end": _("Cable end must not be set without a cable.")
+            })
+        if self.mark_connected and self.cable:
+            raise ValidationError({
+                "mark_connected": _("Cannot mark as connected with a cable attached.")
+            })
 
     @property
     def link(self):
@@ -254,37 +215,13 @@ class CabledObjectModel(models.Model):
 
     @cached_property
     def link_peers(self):
-        if not self.cable:
-            return []
-
-        if self.cable.profile:
-            return self._get_profile_link_peers()
-
-        return [peer.termination for peer in self.cable.terminations.all() if peer.cable_end != self.cable_end]
-
-    def _get_profile_link_peers(self):
-        if self.cable_end is None or self.cable_connector is None or not self.cable_positions:
-            return []
-
-        profile = self.cable.profile_class()
-        peer_terminations = {
-            (peer.connector, position): peer.termination
-            for peer in self.cable.terminations.all()
-            if peer.cable_end == self.opposite_cable_end and peer.connector is not None
-            for position in peer.positions or []
-        }
-        link_peers = []
-
-        for position in self.cable_positions:
-            mapped_position = profile.get_mapped_position(self.cable_end, self.cable_connector, position)
-            if mapped_position is None:
-                continue
-
-            peer = peer_terminations.get(mapped_position)
-            if peer is not None and peer not in link_peers:
-                link_peers.append(peer)
-
-        return link_peers
+        if self.cable:
+            return [
+                peer.termination
+                for peer in self.cable.terminations.all()
+                if peer.cable_end != self.cable_end
+            ]
+        return []
 
     @property
     def _occupied(self):
@@ -302,22 +239,6 @@ class CabledObjectModel(models.Model):
             return None
         return CableEndChoices.SIDE_A if self.cable_end == CableEndChoices.SIDE_B else CableEndChoices.SIDE_B
 
-    def set_cable_termination(self, termination):
-        """Save attributes from the given CableTermination on the terminating object."""
-        self.cable = termination.cable
-        self.cable_end = termination.cable_end
-        self.cable_connector = termination.connector
-        self.cable_positions = termination.positions
-    set_cable_termination.alters_data = True
-
-    def clear_cable_termination(self, termination):
-        """Clear all cable termination attributes from the terminating object."""
-        self.cable = None
-        self.cable_end = None
-        self.cable_connector = None
-        self.cable_positions = None
-    clear_cable_termination.alters_data = True
-
 
 class PathEndpoint(models.Model):
     """
@@ -330,12 +251,11 @@ class PathEndpoint(models.Model):
 
     `connected_endpoints()` is a convenience method for returning the destination of the associated CablePath, if any.
     """
-
     _path = models.ForeignKey(
         to='dcim.CablePath',
         on_delete=models.SET_NULL,
         null=True,
-        blank=True,
+        blank=True
     )
 
     class Meta:
@@ -347,14 +267,11 @@ class PathEndpoint(models.Model):
 
         # Construct the complete path (including e.g. bridged interfaces)
         while origin is not None:
-            # Go through the public accessor rather than dereferencing `_path`
-            # directly. During cable edits, CablePath rows can be deleted and
-            # recreated while this endpoint instance is still in memory.
-            cable_path = origin.path
-            if cable_path is None:
+
+            if origin._path is None:
                 break
 
-            path.extend(cable_path.path_objects)
+            path.extend(origin._path.path_objects)
 
             # If the path ends at a non-connected pass-through port, pad out the link and far-end terminations
             if len(path) % 3 == 1:
@@ -363,8 +280,8 @@ class PathEndpoint(models.Model):
             elif len(path) % 3 == 2:
                 path.insert(-1, [])
 
-            # Check for a bridged relationship to continue the trace.
-            destinations = cable_path.destinations
+            # Check for a bridged relationship to continue the trace
+            destinations = origin._path.destinations
             if len(destinations) == 1:
                 origin = getattr(destinations[0], 'bridge', None)
             else:
@@ -375,42 +292,14 @@ class PathEndpoint(models.Model):
 
     @property
     def path(self):
-        """
-        Return this endpoint's current CablePath, if any.
-
-        `_path` is a denormalized reference that is updated from CablePath
-        save/delete handlers, including queryset.update() calls on origin
-        endpoints. That means an already-instantiated endpoint can briefly hold
-        a stale in-memory `_path` relation while the database already points to
-        a different CablePath (or to no path at all).
-
-        If the cached relation points to a CablePath that has just been
-        deleted, refresh only the `_path` field from the database and retry.
-        This keeps the fix cheap and narrowly scoped to the denormalized FK.
-        """
-        if self._path_id is None:
-            return None
-
-        try:
-            return self._path
-        except ObjectDoesNotExist:
-            # Refresh only the denormalized FK instead of the whole model.
-            # The expected problem here is in-memory staleness during path
-            # rebuilds, not persistent database corruption.
-            self.refresh_from_db(fields=['_path'])
-            return self._path if self._path_id else None
+        return self._path
 
     @cached_property
     def connected_endpoints(self):
         """
-        Caching accessor for the attached CablePath's destinations (if any).
-
-        Always route through `path` so stale in-memory `_path` references are
-        repaired before we cache the result for the lifetime of this instance.
+        Caching accessor for the attached CablePath's destination (if any)
         """
-        if cable_path := self.path:
-            return cable_path.destinations
-        return []
+        return self._path.destinations if self._path else []
 
 
 #
@@ -546,7 +435,7 @@ class PowerPort(ModularComponentModel, CabledObjectModel, PathEndpoint, Tracking
 
         return PowerPort.objects.filter(q)
 
-    def get_power_draw(self, _seen=None):
+    def get_power_draw(self):
         """
         Return the allocated and maximum power draw (in VA) and child PowerOutlet count for this PowerPort.
         """
@@ -554,34 +443,13 @@ class PowerPort(ModularComponentModel, CabledObjectModel, PathEndpoint, Tracking
 
         # Calculate aggregate draw of all child power outlets if no numbers have been defined manually
         if self.allocated_draw is None and self.maximum_draw is None:
-
-            def _aggregate(powerports, seen):
-                # Recursively resolve the draw for each downstream PowerPort. Using the per-port value
-                # (rather than a SQL aggregate over allocated_draw/maximum_draw) allows the draw to
-                # propagate through intermediate auto-mode PowerPorts, e.g. PDU-internal fuse chains.
-                # `seen` tracks visited PowerPorts to prevent infinite recursion if the topology
-                # happens to form a cycle.
-                allocated_total = 0
-                maximum_total = 0
-                for powerport in powerports:
-                    if powerport.pk in seen:
-                        continue
-                    seen.add(powerport.pk)
-                    draw = powerport.get_power_draw(_seen=seen)
-                    allocated_total += draw['allocated']
-                    maximum_total += draw['maximum']
-                return allocated_total, maximum_total
-
-            # Seed each _aggregate() call with a fresh copy of the inherited visited set so the full
-            # and per-leg aggregations are independent. Otherwise, ports visited during the full
-            # aggregation would be skipped during the per-leg passes.
-            base_seen = set(_seen) if _seen else set()
-            base_seen.add(self.pk)
-
-            allocated, maximum = _aggregate(self.get_downstream_powerports(), set(base_seen))
+            utilization = self.get_downstream_powerports().aggregate(
+                maximum_draw_total=Sum('maximum_draw'),
+                allocated_draw_total=Sum('allocated_draw'),
+            )
             ret = {
-                'allocated': allocated,
-                'maximum': maximum,
+                'allocated': utilization['allocated_draw_total'] or 0,
+                'maximum': utilization['maximum_draw_total'] or 0,
                 'outlet_count': self.poweroutlets.count(),
                 'legs': [],
             }
@@ -590,13 +458,14 @@ class PowerPort(ModularComponentModel, CabledObjectModel, PathEndpoint, Tracking
             if len(self.link_peers) == 1 and isinstance(self.link_peers[0], PowerFeed) and \
                     self.link_peers[0].phase == PowerFeedPhaseChoices.PHASE_3PHASE:
                 for leg, leg_name in PowerOutletFeedLegChoices:
-                    leg_allocated, leg_maximum = _aggregate(
-                        self.get_downstream_powerports(leg=leg), set(base_seen)
+                    utilization = self.get_downstream_powerports(leg=leg).aggregate(
+                        maximum_draw_total=Sum('maximum_draw'),
+                        allocated_draw_total=Sum('allocated_draw'),
                     )
                     ret['legs'].append({
                         'name': leg_name,
-                        'allocated': leg_allocated,
-                        'maximum': leg_maximum,
+                        'allocated': utilization['allocated_draw_total'] or 0,
+                        'maximum': utilization['maximum_draw_total'] or 0,
                         'outlet_count': self.poweroutlets.filter(feed_leg=leg).count(),
                     })
 
@@ -806,7 +675,6 @@ class BaseInterface(models.Model):
     def mac_address(self):
         if self.primary_mac_address:
             return self.primary_mac_address.mac_address
-        return None
 
 
 class Interface(
@@ -849,7 +717,7 @@ class Interface(
         verbose_name=_('management only'),
         help_text=_('This interface is used only for out-of-band management')
     )
-    speed = models.PositiveBigIntegerField(
+    speed = models.PositiveIntegerField(
         blank=True,
         null=True,
         verbose_name=_('speed (Kbps)')
@@ -882,8 +750,8 @@ class Interface(
         verbose_name=_('wireless channel')
     )
     rf_channel_frequency = models.DecimalField(
-        max_digits=8,
-        decimal_places=3,
+        max_digits=7,
+        decimal_places=2,
         blank=True,
         null=True,
         verbose_name=_('channel frequency (MHz)'),
@@ -1019,7 +887,7 @@ class Interface(
                         "The selected parent interface ({interface}) belongs to a different device ({device})"
                     ).format(interface=self.parent, device=self.parent.device)
                 })
-            if self.parent.device.virtual_chassis != self.device.virtual_chassis:
+            elif self.parent.device.virtual_chassis != self.device.virtual_chassis:
                 raise ValidationError({
                     'parent': _(
                         "The selected parent interface ({interface}) belongs to {device}, which is not part of "
@@ -1041,7 +909,7 @@ class Interface(
                         "The selected bridge interface ({bridge}) belongs to a different device ({device})."
                     ).format(bridge=self.bridge, device=self.bridge.device)
                 })
-            if self.bridge.device.virtual_chassis != self.device.virtual_chassis:
+            elif self.bridge.device.virtual_chassis != self.device.virtual_chassis:
                 raise ValidationError({
                     'bridge': _(
                         "The selected bridge interface ({interface}) belongs to {device}, which is not part of virtual "
@@ -1069,7 +937,7 @@ class Interface(
                         "The selected LAG interface ({lag}) belongs to a different device ({device})."
                     ).format(lag=self.lag, device=self.lag.device)
                 })
-            if self.lag.device.virtual_chassis != self.device.virtual_chassis:
+            elif self.lag.device.virtual_chassis != self.device.virtual_chassis:
                 raise ValidationError({
                     'lag': _(
                         "The selected LAG interface ({lag}) belongs to {device}, which is not part of virtual chassis "
@@ -1161,7 +1029,8 @@ class Interface(
             # Return the opposite side of the attached wireless link
             if self.wireless_link.interface_a == self:
                 return [self.wireless_link.interface_b]
-            return [self.wireless_link.interface_a]
+            else:
+                return [self.wireless_link.interface_a]
         return []
 
     @property
@@ -1181,43 +1050,6 @@ class Interface(
 # Pass-through ports
 #
 
-class PortMapping(PortMappingBase):
-    """
-    Maps a FrontPort & position to a RearPort & position.
-    """
-    device = models.ForeignKey(
-        to='dcim.Device',
-        on_delete=models.CASCADE,
-        related_name='port_mappings',
-    )
-    front_port = models.ForeignKey(
-        to='dcim.FrontPort',
-        on_delete=models.CASCADE,
-        related_name='mappings',
-    )
-    rear_port = models.ForeignKey(
-        to='dcim.RearPort',
-        on_delete=models.CASCADE,
-        related_name='mappings',
-    )
-
-    def clean(self):
-        super().clean()
-
-        # Both ports must belong to the same device
-        if self.front_port.device_id != self.rear_port.device_id:
-            raise ValidationError({
-                "rear_port": _("Rear port ({rear_port}) must belong to the same device").format(
-                    rear_port=self.rear_port
-                )
-            })
-
-    def save(self, *args, **kwargs):
-        # Associate the mapping with the parent Device
-        self.device = self.front_port.device
-        super().save(*args, **kwargs)
-
-
 class FrontPort(ModularComponentModel, CabledObjectModel, TrackingModelMixin):
     """
     A pass-through port on the front of a Device.
@@ -1231,22 +1063,32 @@ class FrontPort(ModularComponentModel, CabledObjectModel, TrackingModelMixin):
         verbose_name=_('color'),
         blank=True
     )
-    positions = models.PositiveSmallIntegerField(
-        verbose_name=_('positions'),
+    rear_port = models.ForeignKey(
+        to='dcim.RearPort',
+        on_delete=models.CASCADE,
+        related_name='frontports'
+    )
+    rear_port_position = models.PositiveSmallIntegerField(
+        verbose_name=_('rear port position'),
         default=1,
         validators=[
-            MinValueValidator(PORT_POSITION_MIN),
-            MaxValueValidator(PORT_POSITION_MAX)
+            MinValueValidator(REARPORT_POSITIONS_MIN),
+            MaxValueValidator(REARPORT_POSITIONS_MAX)
         ],
+        help_text=_('Mapped position on corresponding rear port')
     )
 
-    clone_fields = ('device', 'type', 'color', 'positions')
+    clone_fields = ('device', 'type', 'color')
 
     class Meta(ModularComponentModel.Meta):
         constraints = (
             models.UniqueConstraint(
                 fields=('device', 'name'),
                 name='%(app_label)s_%(class)s_unique_device_name'
+            ),
+            models.UniqueConstraint(
+                fields=('rear_port', 'rear_port_position'),
+                name='%(app_label)s_%(class)s_unique_rear_port_position'
             ),
         )
         verbose_name = _('front port')
@@ -1255,14 +1097,27 @@ class FrontPort(ModularComponentModel, CabledObjectModel, TrackingModelMixin):
     def clean(self):
         super().clean()
 
-        # Check that positions is greater than or equal to the number of associated RearPorts
-        if not self._state.adding:
-            mapping_count = self.mappings.count()
-            if self.positions < mapping_count:
+        if hasattr(self, 'rear_port'):
+
+            # Validate rear port assignment
+            if self.rear_port.device != self.device:
                 raise ValidationError({
-                    "positions": _(
-                        "The number of positions cannot be less than the number of mapped rear ports ({count})"
-                    ).format(count=mapping_count)
+                    "rear_port": _(
+                        "Rear port ({rear_port}) must belong to the same device"
+                    ).format(rear_port=self.rear_port)
+                })
+
+            # Validate rear port position assignment
+            if self.rear_port_position > self.rear_port.positions:
+                raise ValidationError({
+                    "rear_port_position": _(
+                        "Invalid rear port position ({rear_port_position}): Rear port {name} has only {positions} "
+                        "positions."
+                    ).format(
+                        rear_port_position=self.rear_port_position,
+                        name=self.rear_port.name,
+                        positions=self.rear_port.positions
+                    )
                 })
 
 
@@ -1283,11 +1138,11 @@ class RearPort(ModularComponentModel, CabledObjectModel, TrackingModelMixin):
         verbose_name=_('positions'),
         default=1,
         validators=[
-            MinValueValidator(PORT_POSITION_MIN),
-            MaxValueValidator(PORT_POSITION_MAX)
+            MinValueValidator(REARPORT_POSITIONS_MIN),
+            MaxValueValidator(REARPORT_POSITIONS_MAX)
         ],
+        help_text=_('Number of front ports which may be mapped')
     )
-
     clone_fields = ('device', 'type', 'color', 'positions')
 
     class Meta(ModularComponentModel.Meta):
@@ -1299,42 +1154,19 @@ class RearPort(ModularComponentModel, CabledObjectModel, TrackingModelMixin):
 
         # Check that positions count is greater than or equal to the number of associated FrontPorts
         if not self._state.adding:
-            mapping_count = self.mappings.count()
-            if self.positions < mapping_count:
+            frontport_count = self.frontports.count()
+            if self.positions < frontport_count:
                 raise ValidationError({
                     "positions": _(
                         "The number of positions cannot be less than the number of mapped front ports "
-                        "({count})"
-                    ).format(count=mapping_count)
+                        "({frontport_count})"
+                    ).format(frontport_count=frontport_count)
                 })
 
 
 #
 # Bays
 #
-
-class ModuleBayManager(TreeManager):
-    """
-    Order ModuleBays by the natural-sort name of each tree's root, then by MPTT
-    left value within the tree. Combined with the root-insert bypass in
-    ModuleBay.save(), this lets us keep MPTTMeta.order_insertion_by for cheap
-    intra-tree sibling placement while skipping the global tree_id renumbering
-    it would otherwise perform on every root insert.
-    """
-    def get_queryset(self, *args, **kwargs):
-        # Use the raw manager to avoid recursing through this get_queryset() when
-        # building the annotation subquery.
-        root_name = self.model._objects_raw.filter(
-            tree_id=models.OuterRef('tree_id'),
-            level=0,
-        ).values('name')[:1]
-        return super().get_queryset(*args, **kwargs).annotate(
-            _root_name=models.Subquery(
-                root_name,
-                output_field=models.CharField(db_collation='natural_sort'),
-            )
-        ).order_by('_root_name', 'lft')
-
 
 class ModuleBay(ModularComponentModel, TrackingModelMixin, MPTTModel):
     """
@@ -1355,22 +1187,12 @@ class ModuleBay(ModularComponentModel, TrackingModelMixin, MPTTModel):
         blank=True,
         help_text=_('Identifier to reference when renaming installed components')
     )
-    enabled = models.BooleanField(
-        verbose_name=_('enabled'),
-        default=True,
-    )
 
-    objects = ModuleBayManager()
-    # Plain TreeManager used by ModuleBayManager to build the _root_name subquery
-    # without recursing through our annotated get_queryset().
-    _objects_raw = TreeManager()
+    objects = TreeManager()
 
-    clone_fields = ('device', 'enabled')
+    clone_fields = ('device',)
 
     class Meta(ModularComponentModel.Meta):
-        # Empty tuple triggers Django migration detection for MPTT indexes
-        # (see #21016, django-mptt/django-mptt#682)
-        indexes = ()
         constraints = (
             models.UniqueConstraint(
                 fields=('device', 'module', 'name'),
@@ -1381,10 +1203,7 @@ class ModuleBay(ModularComponentModel, TrackingModelMixin, MPTTModel):
         verbose_name_plural = _('module bays')
 
     class MPTTMeta:
-        # Used for placing siblings within a single tree at insert time. Costs
-        # are bounded to that tree's rows. Cross-tree (root) insertion is
-        # handled in save() to avoid the O(N) tree_id shift this would trigger.
-        order_insertion_by = ('name',)
+        order_insertion_by = ('module',)
 
     def clean(self):
         super().clean()
@@ -1403,46 +1222,7 @@ class ModuleBay(ModularComponentModel, TrackingModelMixin, MPTTModel):
     def save(self, *args, **kwargs):
         if self.module:
             self.parent = self.module.module_bay
-        else:
-            self.parent = None
-        opts = self._mptt_meta
-        # For new root nodes, allocate the next tree_id and pre-set MPTT fields
-        # so super().save() skips MPTT's order_insertion_by-driven insertion
-        # path. That path would otherwise UPDATE every later tree_id on each
-        # root insert (NB-2800). Children still go through MPTT, which keeps
-        # siblings in name order via the same order_insertion_by setting.
-        if self._state.adding and self.parent_id is None and not self.lft and not self.rght:
-            max_tree_id = ModuleBay._objects_raw.aggregate(
-                models.Max('tree_id')
-            )['tree_id__max'] or 0
-            self.tree_id = max_tree_id + 1
-            self.lft = 1
-            self.rght = 2
-            self.level = 0
-        elif (
-            not self._state.adding
-            and self.parent_id is None
-            and self._mptt_cached_fields.get(opts.parent_attr) is None
-        ):
-            # Existing root being updated. Spoof the cached order_insertion_by
-            # values so MPTT's same_order check passes and it skips its reorder
-            # path, which would UPDATE every later tree_id on each root rename.
-            # ModuleBayManager._root_name recovers display order at query time,
-            # so the tree_id reshuffling would be wasted work. Child renames
-            # and root<->child transitions intentionally fall through to MPTT.
-            for field_name in opts.order_insertion_by:
-                field_name = field_name.lstrip('-')
-                self._mptt_cached_fields[field_name] = opts.get_raw_field_value(
-                    self, field_name
-                )
         super().save(*args, **kwargs)
-
-    @property
-    def _occupied(self):
-        """
-        Indicates whether the module bay is occupied by a module.
-        """
-        return bool(not self.enabled or hasattr(self, 'installed_module'))
 
 
 class DeviceBay(ComponentModel, TrackingModelMixin):
@@ -1456,12 +1236,8 @@ class DeviceBay(ComponentModel, TrackingModelMixin):
         blank=True,
         null=True
     )
-    enabled = models.BooleanField(
-        verbose_name=_('enabled'),
-        default=True,
-    )
 
-    clone_fields = ('device', 'enabled')
+    clone_fields = ('device',)
 
     class Meta(ComponentModel.Meta):
         verbose_name = _('device bay')
@@ -1476,16 +1252,6 @@ class DeviceBay(ComponentModel, TrackingModelMixin):
                 device_type=self.device.device_type
             ))
 
-        # Prevent installing a device into a disabled bay
-        if self.installed_device and not self.enabled:
-            current_installed_device_id = (
-                DeviceBay.objects.filter(pk=self.pk).values_list('installed_device_id', flat=True).first()
-            )
-            if self.pk is None or current_installed_device_id != self.installed_device_id:
-                raise ValidationError({
-                    'installed_device': _("Cannot install a device in a disabled device bay.")
-                })
-
         # Cannot install a device into itself, obviously
         if self.installed_device and getattr(self, 'device', None) == self.installed_device:
             raise ValidationError(_("Cannot install a device into itself."))
@@ -1499,13 +1265,6 @@ class DeviceBay(ComponentModel, TrackingModelMixin):
                         "Cannot install the specified device; device is already installed in {bay}."
                     ).format(bay=current_bay)
                 })
-
-    @property
-    def _occupied(self):
-        """
-        Indicates whether the device bay is occupied by a child device.
-        """
-        return bool(not self.enabled or self.installed_device_id)
 
 
 #

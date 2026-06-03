@@ -10,22 +10,16 @@ from core.forms.mixins import SyncedDataMixin
 from core.models import ObjectType
 from dcim.models import DeviceRole, DeviceType, Location, Platform, Region, Site, SiteGroup
 from extras.choices import *
-from extras.constants import IMAGE_ATTACHMENT_IMAGE_FORMATS
 from extras.models import *
 from netbox.events import get_event_type_choices
-from netbox.forms import NetBoxModelForm, PrimaryModelForm
-from netbox.forms.mixins import ChangelogMessageMixin, OwnerMixin
+from netbox.forms import NetBoxModelForm
+from netbox.forms.mixins import ChangelogMessageMixin
 from tenancy.models import Tenant, TenantGroup
 from users.models import Group, User
 from utilities.forms import get_field_value
 from utilities.forms.fields import (
-    CommentField,
-    ContentTypeChoiceField,
-    ContentTypeMultipleChoiceField,
-    DynamicModelChoiceField,
-    DynamicModelMultipleChoiceField,
-    JSONField,
-    SlugField,
+    CommentField, ContentTypeChoiceField, ContentTypeMultipleChoiceField, DynamicModelChoiceField,
+    DynamicModelMultipleChoiceField, JSONField, SlugField,
 )
 from utilities.forms.rendering import FieldSet, ObjectAttribute
 from utilities.forms.widgets import ChoicesWidget, HTMXSelect
@@ -53,7 +47,7 @@ __all__ = (
 )
 
 
-class CustomFieldForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
+class CustomFieldForm(ChangelogMessageMixin, forms.ModelForm):
     object_types = ContentTypeMultipleChoiceField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('custom_fields'),
@@ -75,11 +69,6 @@ class CustomFieldForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
     )
     choice_set = DynamicModelChoiceField(
         queryset=CustomFieldChoiceSet.objects.all()
-    )
-    validation_schema = JSONField(
-        label=_('Validation schema'),
-        required=False,
-        help_text=_('A JSON schema definition for validating the custom field value')
     )
     comments = CommentField()
 
@@ -149,16 +138,6 @@ class CustomFieldForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
             del self.fields['validation_minimum']
             del self.fields['validation_maximum']
 
-        # Adjust for JSON fields
-        if field_type == CustomFieldTypeChoices.TYPE_JSON:
-            self.fieldsets = (
-                self.fieldsets[0],
-                FieldSet('validation_schema', name=_('Validation')),
-                *self.fieldsets[1:]
-            )
-        else:
-            del self.fields['validation_schema']
-
         # Adjust for object & multi-object fields
         if field_type in (
                 CustomFieldTypeChoices.TYPE_OBJECT,
@@ -187,7 +166,7 @@ class CustomFieldForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
             del self.fields['choice_set']
 
 
-class CustomFieldChoiceSetForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
+class CustomFieldChoiceSetForm(ChangelogMessageMixin, forms.ModelForm):
     # TODO: The extra_choices field definition diverge from the CustomFieldChoiceSet model
     extra_choices = forms.CharField(
         widget=ChoicesWidget(),
@@ -197,33 +176,10 @@ class CustomFieldChoiceSetForm(ChangelogMessageMixin, OwnerMixin, forms.ModelFor
             'colon. Example:'
         ) + ' <code>choice1:First Choice</code>')
     )
-    choice_colors = forms.CharField(
-        widget=ChoicesWidget(),
-        required=False,
-        help_text=mark_safe(
-            _(
-                'Bind an optional color to a choice by its value. Enter one mapping per line as '
-                '<code>value:color</code>. Example:'
-            )
-            + ' <code>choice1:red</code><br />'
-            + _('Supported colors: {colors}').format(
-                colors=', '.join(f'<code>{color}</code>' for color in CustomFieldChoiceColorChoices.values())
-            )
-        ),
-    )
-
-    fieldsets = (
-        FieldSet(
-            'name', 'description', 'base_choices', 'extra_choices', 'choice_colors', 'order_alphabetically',
-            name=_('Custom Field Choice Set')
-        ),
-    )
 
     class Meta:
         model = CustomFieldChoiceSet
-        fields = (
-            'name', 'description', 'base_choices', 'extra_choices', 'choice_colors', 'order_alphabetically', 'owner'
-        )
+        fields = ('name', 'description', 'base_choices', 'extra_choices', 'order_alphabetically')
 
     def __init__(self, *args, initial=None, **kwargs):
         super().__init__(*args, initial=initial, **kwargs)
@@ -233,42 +189,26 @@ class CustomFieldChoiceSetForm(ChangelogMessageMixin, OwnerMixin, forms.ModelFor
         # if standardize these, we can simplify this code
 
         # Convert extra_choices Array Field from model to CharField for form
-        if extra_choices := self.initial.get('extra_choices', None):
+        if 'extra_choices' in self.initial and self.initial['extra_choices']:
+            extra_choices = self.initial['extra_choices']
             if isinstance(extra_choices, str):
                 extra_choices = [extra_choices]
-            choices = []
+            choices = ""
             for choice in extra_choices:
                 # Setup choices in Add Another use case
                 if isinstance(choice, str):
                     choice_str = ":".join(choice.replace("'", "").replace(" ", "")[1:-1].split(","))
-                    choices.append(choice_str)
+                    choices += choice_str + "\n"
                 # Setup choices in Edit use case
                 elif isinstance(choice, list):
-                    value = choice[0].replace(':', '\\:')
-                    label = choice[1].replace(':', '\\:')
-                    choices.append(f'{value}:{label}')
+                    choice_str = ":".join(choice)
+                    choices += choice_str + "\n"
 
-            self.initial['extra_choices'] = '\n'.join(choices)
-
-        # Convert choice_colors JSONField from model to CharField for form
-        if 'choice_colors' in self.initial:
-            choice_colors = self.initial.get('choice_colors') or {}
-
-            if isinstance(choice_colors, str):
-                choice_colors = json.loads(choice_colors)
-
-            mappings = []
-            for value, color in sorted(choice_colors.items()):
-                value = value.replace(':', '\\:')
-                mappings.append(f'{value}:{color}')
-
-            self.initial['choice_colors'] = '\n'.join(mappings)
+            self.initial['extra_choices'] = choices
 
     def clean_extra_choices(self):
         data = []
         for line in self.cleaned_data['extra_choices'].splitlines():
-            if not line.strip():
-                continue
             try:
                 value, label = re.split(r'(?<!\\):', line, maxsplit=1)
                 value = value.replace('\\:', ':')
@@ -278,30 +218,8 @@ class CustomFieldChoiceSetForm(ChangelogMessageMixin, OwnerMixin, forms.ModelFor
             data.append((value.strip(), label.strip()))
         return data
 
-    def clean_choice_colors(self):
-        data = {}
-        for line in self.cleaned_data['choice_colors'].splitlines():
-            if not line.strip():
-                continue
-            try:
-                value, color = re.split(r'(?<!\\):', line, maxsplit=1)
-                value = value.replace('\\:', ':')
-            except ValueError as e:
-                raise forms.ValidationError(
-                    _("Invalid color mapping '{line}'. Use the format value:color.").format(line=line)
-                ) from e
 
-            value = value.strip()
-            color = color.strip()
-            if value in data:
-                raise forms.ValidationError(
-                    _("Duplicate color mapping defined for choice '{value}'.").format(value=value)
-                )
-            data[value] = color
-        return data
-
-
-class CustomLinkForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
+class CustomLinkForm(ChangelogMessageMixin, forms.ModelForm):
     object_types = ContentTypeMultipleChoiceField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('custom_links')
@@ -333,7 +251,7 @@ class CustomLinkForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
         }
 
 
-class ExportTemplateForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, forms.ModelForm):
+class ExportTemplateForm(ChangelogMessageMixin, SyncedDataMixin, forms.ModelForm):
     object_types = ContentTypeMultipleChoiceField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('export_templates')
@@ -375,7 +293,7 @@ class ExportTemplateForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, for
         return self.cleaned_data
 
 
-class SavedFilterForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
+class SavedFilterForm(ChangelogMessageMixin, forms.ModelForm):
     slug = SlugField()
     object_types = ContentTypeMultipleChoiceField(
         label=_('Object types'),
@@ -459,7 +377,6 @@ class TableConfigForm(forms.ModelForm):
             return columns.split(',') if type(columns) is str else columns
         if self.instance is not None:
             return self.instance.columns
-        return None
 
 
 class BookmarkForm(forms.ModelForm):
@@ -510,7 +427,7 @@ class SubscriptionForm(forms.ModelForm):
         fields = ('object_type', 'object_id')
 
 
-class WebhookForm(OwnerMixin, NetBoxModelForm):
+class WebhookForm(NetBoxModelForm):
 
     fieldsets = (
         FieldSet('name', 'description', 'tags', name=_('Webhook')),
@@ -530,7 +447,7 @@ class WebhookForm(OwnerMixin, NetBoxModelForm):
         }
 
 
-class EventRuleForm(OwnerMixin, NetBoxModelForm):
+class EventRuleForm(NetBoxModelForm):
     object_types = ContentTypeMultipleChoiceField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('event_rules'),
@@ -563,7 +480,7 @@ class EventRuleForm(OwnerMixin, NetBoxModelForm):
         model = EventRule
         fields = (
             'object_types', 'name', 'description', 'enabled', 'event_types', 'conditions', 'action_type',
-            'action_object_type', 'action_object_id', 'action_data', 'owner', 'comments', 'tags'
+            'action_object_type', 'action_object_id', 'action_data', 'comments', 'tags'
         )
         widgets = {
             'conditions': forms.Textarea(attrs={'class': 'font-monospace'}),
@@ -646,11 +563,15 @@ class EventRuleForm(OwnerMixin, NetBoxModelForm):
         return self.cleaned_data
 
 
-class TagForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
+class TagForm(ChangelogMessageMixin, forms.ModelForm):
     slug = SlugField()
     object_types = ContentTypeMultipleChoiceField(
         label=_('Object types'),
         queryset=ObjectType.objects.with_feature('tags'),
+        required=False
+    )
+    weight = forms.IntegerField(
+        label=_('Weight'),
         required=False
     )
 
@@ -661,11 +582,11 @@ class TagForm(ChangelogMessageMixin, OwnerMixin, forms.ModelForm):
     class Meta:
         model = Tag
         fields = [
-            'name', 'slug', 'color', 'weight', 'description', 'object_types', 'owner',
+            'name', 'slug', 'color', 'weight', 'description', 'object_types',
         ]
 
 
-class ConfigContextProfileForm(SyncedDataMixin, PrimaryModelForm):
+class ConfigContextProfileForm(SyncedDataMixin, NetBoxModelForm):
     schema = JSONField(
         label=_('Schema'),
         required=False,
@@ -685,12 +606,11 @@ class ConfigContextProfileForm(SyncedDataMixin, PrimaryModelForm):
     class Meta:
         model = ConfigContextProfile
         fields = (
-            'name', 'description', 'schema', 'data_source', 'data_file', 'auto_sync_enabled', 'owner', 'comments',
-            'tags',
+            'name', 'description', 'schema', 'data_source', 'data_file', 'auto_sync_enabled', 'comments', 'tags',
         )
 
 
-class ConfigContextForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, forms.ModelForm):
+class ConfigContextForm(ChangelogMessageMixin, SyncedDataMixin, forms.ModelForm):
     profile = DynamicModelChoiceField(
         label=_('Profile'),
         queryset=ConfigContextProfile.objects.all(),
@@ -781,7 +701,7 @@ class ConfigContextForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, form
         fields = (
             'name', 'weight', 'profile', 'description', 'data', 'is_active', 'regions', 'site_groups', 'sites',
             'locations', 'roles', 'device_types', 'platforms', 'cluster_types', 'cluster_groups', 'clusters',
-            'tenant_groups', 'tenants', 'owner', 'tags', 'data_source', 'data_file', 'auto_sync_enabled',
+            'tenant_groups', 'tenants', 'tags', 'data_source', 'data_file', 'auto_sync_enabled',
         )
 
     def __init__(self, *args, initial=None, **kwargs):
@@ -807,7 +727,7 @@ class ConfigContextForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, form
         return self.cleaned_data
 
 
-class ConfigTemplateForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, forms.ModelForm):
+class ConfigTemplateForm(ChangelogMessageMixin, SyncedDataMixin, forms.ModelForm):
     tags = DynamicModelMultipleChoiceField(
         label=_('Tags'),
         queryset=Tag.objects.all(),
@@ -823,8 +743,7 @@ class ConfigTemplateForm(ChangelogMessageMixin, SyncedDataMixin, OwnerMixin, for
         FieldSet('name', 'description', 'tags', 'template_code', name=_('Config Template')),
         FieldSet('data_source', 'data_file', 'auto_sync_enabled', name=_('Data Source')),
         FieldSet(
-            'mime_type', 'file_name', 'file_extension', 'environment_params', 'as_attachment', 'debug',
-            name=_('Rendering')
+            'mime_type', 'file_name', 'file_extension', 'environment_params', 'as_attachment', name=_('Rendering')
         ),
     )
 
@@ -864,11 +783,8 @@ class ImageAttachmentForm(forms.ModelForm):
         fields = [
             'image', 'name', 'description',
         ]
-        # Explicitly set 'image/avif' to support AVIF selection in Firefox
-        widgets = {
-            'image': forms.ClearableFileInput(
-                attrs={'accept': ','.join(sorted(set(IMAGE_ATTACHMENT_IMAGE_FORMATS.values())))}
-            ),
+        help_texts = {
+            'name': _("If no name is specified, the file name will be used.")
         }
 
 

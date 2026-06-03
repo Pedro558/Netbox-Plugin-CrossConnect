@@ -5,11 +5,9 @@ from django.conf import settings
 from django.contrib import auth, messages
 from django.contrib.auth.middleware import RemoteUserMiddleware as RemoteUserMiddleware_
 from django.core.exceptions import ImproperlyConfigured
-from django.core.signals import got_request_exception
-from django.db import ProgrammingError, connection
+from django.db import connection, ProgrammingError
 from django.db.utils import InternalError
 from django.http import Http404, HttpResponseRedirect
-from django.middleware.common import CommonMiddleware as DjangoCommonMiddleware
 from django_prometheus import middleware
 
 from netbox.config import clear_config, get_config
@@ -20,30 +18,12 @@ from utilities.error_handlers import handle_rest_api_exception
 from utilities.request import apply_request_processors
 
 __all__ = (
-    'CommonMiddleware',
     'CoreMiddleware',
     'MaintenanceModeMiddleware',
     'PrometheusAfterMiddleware',
     'PrometheusBeforeMiddleware',
     'RemoteUserMiddleware',
 )
-
-
-class CommonMiddleware(DjangoCommonMiddleware):
-    """
-    Subclass of Django's CommonMiddleware that suppresses the APPEND_SLASH
-    redirect for REST API requests using an unsafe HTTP method. Redirecting a
-    POST/PUT/PATCH/DELETE to a trailing-slash URL would either drop the request
-    body (clients downgrade to GET on a 302) or raise a RuntimeError when
-    DEBUG is enabled. Letting the original 404 propagate gives the caller a
-    clear, actionable error instead.
-    """
-    UNSAFE_METHODS = frozenset(('DELETE', 'PATCH', 'POST', 'PUT'))
-
-    def should_redirect_with_slash(self, request):
-        if request.method in self.UNSAFE_METHODS and is_api_request(request):
-            return False
-        return super().should_redirect_with_slash(request)
 
 
 class CoreMiddleware:
@@ -60,24 +40,15 @@ class CoreMiddleware:
         with apply_request_processors(request):
             response = self.get_response(request)
 
-        # Set or renew the language cookie based on the user's preference. This handles two cases:
-        # 1. The user just logged in (via any auth backend): the user_logged_in signal stores the preferred language on
-        #    the request so we set the cookie here on the login response.
-        # 2. SESSION_SAVE_EVERY_REQUEST is enabled: renew the language cookie on every request to keep it in sync with
-        #    the session expiry.
-        if hasattr(request, '_language_cookie'):
-            language = request._language_cookie
-        elif request.user.is_authenticated and settings.SESSION_SAVE_EVERY_REQUEST:
-            language = request.user.config.get('locale.language')
-        else:
-            language = None
-        if language:
-            response.set_cookie(
-                key=settings.LANGUAGE_COOKIE_NAME,
-                value=language,
-                max_age=request.session.get_expiry_age(),
-                secure=settings.SESSION_COOKIE_SECURE,
-            )
+        # Check if language cookie should be renewed
+        if request.user.is_authenticated and settings.SESSION_SAVE_EVERY_REQUEST:
+            if language := request.user.config.get('locale.language'):
+                response.set_cookie(
+                    key=settings.LANGUAGE_COOKIE_NAME,
+                    value=language,
+                    max_age=request.session.get_expiry_age(),
+                    secure=settings.SESSION_COOKIE_SECURE,
+                )
 
         # Attach the unique request ID as an HTTP header.
         response['X-Request-ID'] = request.id
@@ -100,18 +71,15 @@ class CoreMiddleware:
         """
         # Don't catch exceptions when in debug mode
         if settings.DEBUG:
-            return None
+            return
 
         # Cleanly handle exceptions that occur from REST API requests
         if is_api_request(request):
-            # Fire Django's got_request_exception signal so error-tracking
-            # integrations (e.g. Sentry) capture the exception.
-            got_request_exception.send(sender=self.__class__, request=request)
             return handle_rest_api_exception(request)
 
         # Ignore Http404s (defer to Django's built-in 404 handling)
         if isinstance(exception, Http404):
-            return None
+            return
 
         # Determine the type of exception. If it's a common issue, return a custom error page with instructions.
         custom_template = None
@@ -124,11 +92,7 @@ class CoreMiddleware:
 
         # Return a custom error message, or fall back to Django's default 500 error handling
         if custom_template:
-            # Fire Django's got_request_exception signal so error-tracking
-            # integrations (e.g. Sentry) capture the exception.
-            got_request_exception.send(sender=self.__class__, request=request)
             return handler_500(request, template_name=custom_template)
-        return None
 
 
 class RemoteUserMiddleware(RemoteUserMiddleware_):
@@ -175,9 +139,10 @@ class RemoteUserMiddleware(RemoteUserMiddleware_):
         if request.user.is_authenticated:
             if request.user.get_username() == self.clean_username(username, request):
                 return self.get_response(request)
-            # An authenticated user is associated with the request, but
-            # it does not match the authorized user in the header.
-            self._remove_invalid_user(request)
+            else:
+                # An authenticated user is associated with the request, but
+                # it does not match the authorized user in the header.
+                self._remove_invalid_user(request)
 
         # We are seeing this user for the first time in this session, attempt
         # to authenticate the user.
@@ -285,4 +250,3 @@ class MaintenanceModeMiddleware:
 
             messages.error(request, error_message)
             return HttpResponseRedirect(request.path_info)
-        return None

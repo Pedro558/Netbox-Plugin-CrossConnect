@@ -1,14 +1,14 @@
 from core.models import ObjectType
 from extras.models import TableConfig
 from netbox.api.fields import ContentTypeField
-from netbox.api.serializers import ChangeLogMessageSerializer, ValidatedModelSerializer
+from netbox.api.serializers import ValidatedModelSerializer
 
 __all__ = (
     'TableConfigSerializer',
 )
 
 
-class TableConfigSerializer(ChangeLogMessageSerializer, ValidatedModelSerializer):
+class TableConfigSerializer(ValidatedModelSerializer):
     object_type = ContentTypeField(
         queryset=ObjectType.objects.all()
     )

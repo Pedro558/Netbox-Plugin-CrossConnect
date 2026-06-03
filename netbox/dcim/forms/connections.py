@@ -5,7 +5,6 @@ from django.utils.translation import gettext_lazy as _
 from circuits.models import Circuit, CircuitTermination
 from dcim.models import *
 from utilities.forms.fields import DynamicModelMultipleChoiceField
-
 from .model_forms import CableForm
 
 
@@ -15,10 +14,6 @@ def get_cable_form(a_type, b_type):
 
         def __new__(mcs, name, bases, attrs):
 
-            # NOTE: Cable.clone() mirrors the parent selector mapping below:
-            # termination_{end}_device / termination_{end}_powerpanel / termination_{end}_circuit
-            # This supports both the "Clone" and "Create & Add Another" workflows.
-            # If you change the mapping here, update Cable.clone() accordingly.
             for cable_end, term_cls in (('a', a_type), ('b', b_type)):
 
                 # Device component

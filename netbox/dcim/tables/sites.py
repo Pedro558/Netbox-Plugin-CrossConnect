@@ -1,21 +1,33 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
-
+import django_tables2 as tables
 from dcim.models import Location, Region, Site, SiteGroup
-from netbox.tables import NestedGroupModelTable, PrimaryModelTable, columns
 from tenancy.tables import ContactsColumnMixin, TenancyColumnsMixin
+
+from netbox.tables import NetBoxTable, columns
 
 from .template_code import LOCATION_BUTTONS
 
 __all__ = (
     'LocationTable',
     'RegionTable',
-    'SiteGroupTable',
     'SiteTable',
+    'SiteGroupTable',
 )
 
 
-class RegionTable(ContactsColumnMixin, NestedGroupModelTable):
+#
+# Regions
+#
+
+class RegionTable(ContactsColumnMixin, NetBoxTable):
+    name = columns.MPTTColumn(
+        verbose_name=_('Name'),
+        linkify=True
+    )
+    parent = tables.Column(
+        verbose_name=_('Parent'),
+        linkify=True,
+    )
     site_count = columns.LinkedCountColumn(
         viewname='dcim:site_list',
         url_params={'region_id': 'pk'},
@@ -24,8 +36,11 @@ class RegionTable(ContactsColumnMixin, NestedGroupModelTable):
     tags = columns.TagColumn(
         url_name='dcim:region_list'
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
 
-    class Meta(NestedGroupModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Region
         fields = (
             'pk', 'id', 'name', 'parent', 'slug', 'site_count', 'description', 'comments', 'contacts', 'tags',
@@ -34,7 +49,19 @@ class RegionTable(ContactsColumnMixin, NestedGroupModelTable):
         default_columns = ('pk', 'name', 'site_count', 'description')
 
 
-class SiteGroupTable(ContactsColumnMixin, NestedGroupModelTable):
+#
+# Site groups
+#
+
+class SiteGroupTable(ContactsColumnMixin, NetBoxTable):
+    name = columns.MPTTColumn(
+        verbose_name=_('Name'),
+        linkify=True
+    )
+    parent = tables.Column(
+        verbose_name=_('Parent'),
+        linkify=True,
+    )
     site_count = columns.LinkedCountColumn(
         viewname='dcim:site_list',
         url_params={'group_id': 'pk'},
@@ -43,8 +70,11 @@ class SiteGroupTable(ContactsColumnMixin, NestedGroupModelTable):
     tags = columns.TagColumn(
         url_name='dcim:sitegroup_list'
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
 
-    class Meta(NestedGroupModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = SiteGroup
         fields = (
             'pk', 'id', 'name', 'parent', 'slug', 'site_count', 'description', 'comments', 'contacts', 'tags',
@@ -53,7 +83,11 @@ class SiteGroupTable(ContactsColumnMixin, NestedGroupModelTable):
         default_columns = ('pk', 'name', 'site_count', 'description')
 
 
-class SiteTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
+#
+# Sites
+#
+
+class SiteTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -83,11 +117,14 @@ class SiteTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         url_params={'site_id': 'pk'},
         verbose_name=_('Devices')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='dcim:site_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Site
         fields = (
             'pk', 'id', 'name', 'slug', 'status', 'facility', 'region', 'group', 'tenant', 'tenant_group', 'asns',
@@ -97,7 +134,19 @@ class SiteTable(TenancyColumnsMixin, ContactsColumnMixin, PrimaryModelTable):
         default_columns = ('pk', 'name', 'status', 'facility', 'region', 'group', 'tenant', 'description')
 
 
-class LocationTable(TenancyColumnsMixin, ContactsColumnMixin, NestedGroupModelTable):
+#
+# Locations
+#
+
+class LocationTable(TenancyColumnsMixin, ContactsColumnMixin, NetBoxTable):
+    name = columns.MPTTColumn(
+        verbose_name=_('Name'),
+        linkify=True
+    )
+    parent = tables.Column(
+        verbose_name=_('Parent'),
+        linkify=True,
+    )
     site = tables.Column(
         verbose_name=_('Site'),
         linkify=True
@@ -126,8 +175,11 @@ class LocationTable(TenancyColumnsMixin, ContactsColumnMixin, NestedGroupModelTa
     actions = columns.ActionsColumn(
         extra_buttons=LOCATION_BUTTONS
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
 
-    class Meta(NestedGroupModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = Location
         fields = (
             'pk', 'id', 'name', 'parent', 'site', 'status', 'facility', 'tenant', 'tenant_group', 'rack_count',

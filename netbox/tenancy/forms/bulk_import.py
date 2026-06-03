@@ -2,23 +2,17 @@ from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
-from netbox.forms import (
-    NestedGroupModelImportForm,
-    NetBoxModelImportForm,
-    OrganizationalModelImportForm,
-    PrimaryModelImportForm,
-)
+from netbox.forms import NetBoxModelImportForm
+from tenancy.models import *
 from utilities.forms.fields import CSVContentTypeField, CSVModelChoiceField, CSVModelMultipleChoiceField, SlugField
-
-from ..models import *
 
 __all__ = (
     'ContactAssignmentImportForm',
-    'ContactGroupImportForm',
     'ContactImportForm',
+    'ContactGroupImportForm',
     'ContactRoleImportForm',
-    'TenantGroupImportForm',
     'TenantImportForm',
+    'TenantGroupImportForm',
 )
 
 
@@ -26,7 +20,7 @@ __all__ = (
 # Tenants
 #
 
-class TenantGroupImportForm(NestedGroupModelImportForm):
+class TenantGroupImportForm(NetBoxModelImportForm):
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=TenantGroup.objects.all(),
@@ -34,13 +28,14 @@ class TenantGroupImportForm(NestedGroupModelImportForm):
         to_field_name='name',
         help_text=_('Parent group'),
     )
+    slug = SlugField()
 
     class Meta:
         model = TenantGroup
-        fields = ('name', 'slug', 'parent', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'parent', 'description', 'tags', 'comments')
 
 
-class TenantImportForm(PrimaryModelImportForm):
+class TenantImportForm(NetBoxModelImportForm):
     slug = SlugField()
     group = CSVModelChoiceField(
         label=_('Group'),
@@ -52,14 +47,14 @@ class TenantImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = Tenant
-        fields = ('name', 'slug', 'group', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'group', 'description', 'comments', 'tags')
 
 
 #
 # Contacts
 #
 
-class ContactGroupImportForm(NestedGroupModelImportForm):
+class ContactGroupImportForm(NetBoxModelImportForm):
     parent = CSVModelChoiceField(
         label=_('Parent'),
         queryset=ContactGroup.objects.all(),
@@ -67,20 +62,22 @@ class ContactGroupImportForm(NestedGroupModelImportForm):
         to_field_name='name',
         help_text=_('Parent group'),
     )
+    slug = SlugField()
 
     class Meta:
         model = ContactGroup
-        fields = ('name', 'slug', 'parent', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'parent', 'description', 'tags', 'comments')
 
 
-class ContactRoleImportForm(OrganizationalModelImportForm):
+class ContactRoleImportForm(NetBoxModelImportForm):
+    slug = SlugField()
 
     class Meta:
         model = ContactRole
-        fields = ('name', 'slug', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'description')
 
 
-class ContactImportForm(PrimaryModelImportForm):
+class ContactImportForm(NetBoxModelImportForm):
     groups = CSVModelMultipleChoiceField(
         queryset=ContactGroup.objects.all(),
         required=False,
@@ -95,9 +92,7 @@ class ContactImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = Contact
-        fields = (
-            'name', 'title', 'phone', 'email', 'address', 'link', 'groups', 'description', 'owner', 'comments', 'tags',
-        )
+        fields = ('name', 'title', 'phone', 'email', 'address', 'link', 'groups', 'description', 'comments', 'tags')
 
 
 class ContactAssignmentImportForm(NetBoxModelImportForm):

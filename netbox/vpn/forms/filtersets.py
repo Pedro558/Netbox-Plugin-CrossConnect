@@ -3,14 +3,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext as _
 
 from dcim.models import Device, Region, Site
-from ipam.models import VLAN, RouteTarget
-from netbox.forms import NetBoxModelFilterSetForm, OrganizationalModelFilterSetForm, PrimaryModelFilterSetForm
+from ipam.models import RouteTarget, VLAN
+from netbox.forms import NetBoxModelFilterSetForm
 from tenancy.forms import ContactModelFilterForm, TenancyFilterForm
 from utilities.forms.fields import (
-    ContentTypeMultipleChoiceField,
-    DynamicModelChoiceField,
-    DynamicModelMultipleChoiceField,
-    TagFilterField,
+    ContentTypeMultipleChoiceField, DynamicModelChoiceField, DynamicModelMultipleChoiceField, TagFilterField,
 )
 from utilities.forms.rendering import FieldSet
 from utilities.forms.utils import add_blank_choice
@@ -33,24 +30,22 @@ __all__ = (
 )
 
 
-class TunnelGroupFilterForm(ContactModelFilterForm, OrganizationalModelFilterSetForm):
+class TunnelGroupFilterForm(ContactModelFilterForm, NetBoxModelFilterSetForm):
     model = TunnelGroup
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
         FieldSet('contact', 'contact_role', 'contact_group', name=_('Contacts')),
     )
     tag = TagFilterField(model)
 
 
-class TunnelFilterForm(ContactModelFilterForm, TenancyFilterForm, PrimaryModelFilterSetForm):
+class TunnelFilterForm(ContactModelFilterForm, TenancyFilterForm, NetBoxModelFilterSetForm):
     model = Tunnel
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('status', 'encapsulation', 'tunnel_id', name=_('Tunnel')),
         FieldSet('ipsec_profile_id', name=_('Security')),
         FieldSet('tenant_group_id', 'tenant_id', name=_('Tenancy')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
         FieldSet('contact', 'contact_role', 'contact_group', name=_('Contacts')),
     )
     status = forms.MultipleChoiceField(
@@ -99,14 +94,13 @@ class TunnelTerminationFilterForm(NetBoxModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class IKEProposalFilterForm(PrimaryModelFilterSetForm):
+class IKEProposalFilterForm(NetBoxModelFilterSetForm):
     model = IKEProposal
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet(
             'authentication_method', 'encryption_algorithm', 'authentication_algorithm', 'group', name=_('Parameters')
         ),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     authentication_method = forms.MultipleChoiceField(
         label=_('Authentication method'),
@@ -131,12 +125,11 @@ class IKEProposalFilterForm(PrimaryModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class IKEPolicyFilterForm(PrimaryModelFilterSetForm):
+class IKEPolicyFilterForm(NetBoxModelFilterSetForm):
     model = IKEPolicy
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('version', 'mode', 'proposal_id', name=_('Parameters')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     version = forms.MultipleChoiceField(
         label=_('IKE version'),
@@ -156,12 +149,11 @@ class IKEPolicyFilterForm(PrimaryModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class IPSecProposalFilterForm(PrimaryModelFilterSetForm):
+class IPSecProposalFilterForm(NetBoxModelFilterSetForm):
     model = IPSecProposal
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('encryption_algorithm', 'authentication_algorithm', name=_('Parameters')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     encryption_algorithm = forms.MultipleChoiceField(
         label=_('Encryption algorithm'),
@@ -176,12 +168,11 @@ class IPSecProposalFilterForm(PrimaryModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class IPSecPolicyFilterForm(PrimaryModelFilterSetForm):
+class IPSecPolicyFilterForm(NetBoxModelFilterSetForm):
     model = IPSecPolicy
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('proposal_id', 'pfs_group', name=_('Parameters')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     proposal_id = DynamicModelMultipleChoiceField(
         queryset=IKEProposal.objects.all(),
@@ -196,12 +187,11 @@ class IPSecPolicyFilterForm(PrimaryModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class IPSecProfileFilterForm(PrimaryModelFilterSetForm):
+class IPSecProfileFilterForm(NetBoxModelFilterSetForm):
     model = IPSecProfile
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('mode', 'ike_policy_id', 'ipsec_policy_id', name=_('Profile')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     mode = forms.MultipleChoiceField(
         label=_('Mode'),
@@ -221,13 +211,12 @@ class IPSecProfileFilterForm(PrimaryModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class L2VPNFilterForm(ContactModelFilterForm, TenancyFilterForm, PrimaryModelFilterSetForm):
+class L2VPNFilterForm(ContactModelFilterForm, TenancyFilterForm, NetBoxModelFilterSetForm):
     model = L2VPN
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('type', 'status', 'import_target_id', 'export_target_id', name=_('Attributes')),
         FieldSet('tenant_group_id', 'tenant_id', name=_('Tenant')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
         FieldSet('contact', 'contact_role', 'contact_group', name=_('Contacts')),
     )
     status = forms.MultipleChoiceField(
@@ -256,7 +245,7 @@ class L2VPNFilterForm(ContactModelFilterForm, TenancyFilterForm, PrimaryModelFil
 class L2VPNTerminationFilterForm(NetBoxModelFilterSetForm):
     model = L2VPNTermination
     fieldsets = (
-        FieldSet('filter_id', 'tag', 'l2vpn_id'),
+        FieldSet('filter_id', 'l2vpn_id'),
         FieldSet(
             'assigned_object_type_id', 'region_id', 'site_id', 'device_id', 'virtual_machine_id', 'vlan_id',
             name=_('Assigned Object')
@@ -314,4 +303,3 @@ class L2VPNTerminationFilterForm(NetBoxModelFilterSetForm):
         },
         label=_('Virtual Machine')
     )
-    tag = TagFilterField(model)

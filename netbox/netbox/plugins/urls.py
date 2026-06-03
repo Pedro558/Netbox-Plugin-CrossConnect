@@ -6,7 +6,6 @@ from django.urls import path
 from django.utils.module_loading import import_string, module_has_submodule
 
 from netbox.registry import registry
-
 from . import views
 
 plugin_patterns = []

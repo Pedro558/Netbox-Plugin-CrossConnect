@@ -1,7 +1,7 @@
 import urllib.parse
 
-from django.test import Client, override_settings
 from django.urls import reverse
+from django.test import Client, override_settings
 
 from dcim.models import Site
 from netbox.constants import EMPTY_TABLE_TEXT
@@ -62,8 +62,8 @@ class SearchViewTestCase(TestCase):
         self.assertNotIn('Site Echo', content)
         self.assertNotIn('Site Foxtrot', content)
 
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
     def test_search_no_results(self):
-        self.add_permissions('dcim.view_site')
         url = reverse('search')
         params = {
             'q': 'xxxxxxxxx',  # Matches nothing

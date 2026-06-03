@@ -1,10 +1,8 @@
 import json
 import uuid
-from unittest import skipIf
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import django_rq
-from django.conf import settings
 from django.http import HttpResponse
 from django.test import RequestFactory
 from django.urls import reverse
@@ -17,14 +15,13 @@ from dcim.choices import SiteStatusChoices
 from dcim.models import Site
 from extras.choices import EventRuleActionChoices
 from extras.events import enqueue_event, flush_events, serialize_for_event
-from extras.models import EventRule, Script, Tag, Webhook
-from extras.signals import process_job_end_event_rules
+from extras.models import EventRule, Tag, Webhook
 from extras.webhooks import generate_signature, send_webhook
 from netbox.context_managers import event_tracking
 from utilities.testing import APITestCase
 
 
-class EventRuleTestCase(APITestCase):
+class EventRuleTest(APITestCase):
 
     def setUp(self):
         super().setUp()
@@ -345,10 +342,8 @@ class EventRuleTestCase(APITestCase):
             self.assertEqual(job.kwargs['snapshots']['prechange']['name'], sites[i].name)
             self.assertEqual(job.kwargs['snapshots']['prechange']['tags'], ['Bar', 'Foo'])
 
-    @skipIf('netbox.tests.dummy_plugin' not in settings.PLUGINS, 'dummy_plugin not in settings.PLUGINS')
     def test_send_webhook(self):
         request_id = uuid.uuid4()
-        url_path = reverse('dcim:site_add')
 
         def dummy_send(_, request, **kwargs):
             """
@@ -368,21 +363,17 @@ class EventRuleTestCase(APITestCase):
             body = json.loads(request.body)
             self.assertEqual(body['event'], 'created')
             self.assertEqual(body['timestamp'], job.kwargs['timestamp'])
-            self.assertEqual(body['object_type'], 'dcim.site')
+            self.assertEqual(body['model'], 'site')
             self.assertEqual(body['username'], 'testuser')
             self.assertEqual(body['request_id'], str(request_id))
             self.assertEqual(body['data']['name'], 'Site 1')
             self.assertEqual(body['data']['foo'], 1)
             self.assertEqual(body['context']['foo'], 123)  # From netbox.tests.dummy_plugin
-            self.assertEqual(body['request']['id'], str(request_id))
-            self.assertEqual(body['request']['method'], 'GET')
-            self.assertEqual(body['request']['path'], url_path)
-            self.assertEqual(body['request']['user'], 'testuser')
 
             return HttpResponse()
 
         # Create a dummy request
-        request = RequestFactory().get(url_path)
+        request = RequestFactory().get(reverse('dcim:site_add'))
         request.id = request_id
         request.user = self.user
 
@@ -403,127 +394,6 @@ class EventRuleTestCase(APITestCase):
         # Patch the Session object with our dummy_send() method, then process the webhook for sending
         with patch.object(Session, 'send', dummy_send):
             send_webhook(**job.kwargs)
-
-    def test_job_completed_webhook_username_fallback(self):
-        """
-        Ensure job_end event processing can enqueue a webhook even when the EventContext
-        lacks legacy request attributes (e.g. `username`).
-
-        The job_start/job_end signal receivers only populate `user` and `data`, so webhook
-        processing must derive the username from the user object (or tolerate it being unset).
-        """
-        script_type = ObjectType.objects.get_for_model(Script)
-        webhook_type = ObjectType.objects.get_for_model(Webhook)
-        webhook = Webhook.objects.get(name='Webhook 1')
-        event_rule = EventRule.objects.create(
-            name='Event Rule Job Completed',
-            event_types=[JOB_COMPLETED],
-            action_type=EventRuleActionChoices.WEBHOOK,
-            action_object_type=webhook_type,
-            action_object_id=webhook.pk,
-        )
-        event_rule.object_types.set([script_type])
-        # Mimic the `core.job_end` signal sender expected by extras.signals.process_job_end_event_rules
-        # (notably: no request, and thus no legacy `username`)
-        sender = Mock(object_type=script_type, data={}, user=self.user)
-        process_job_end_event_rules(sender)
-        self.assertEqual(self.queue.count, 1)
-        job = self.queue.jobs[0]
-        self.assertEqual(job.kwargs['event_rule'], event_rule)
-        self.assertEqual(job.kwargs['event_type'], JOB_COMPLETED)
-        self.assertEqual(job.kwargs['object_type'], script_type)
-        self.assertEqual(job.kwargs['username'], self.user.username)
-
-    def test_duplicate_enqueue_refreshes_lazy_payload(self):
-        """
-        When the same object is enqueued more than once in a single request,
-        lazy serialization should use the most recently enqueued instance while
-        preserving the original event['object'] reference.
-        """
-        request = RequestFactory().get(reverse('dcim:site_add'))
-        request.id = uuid.uuid4()
-        request.user = self.user
-
-        site = Site.objects.create(name='Site 1', slug='site-1')
-        stale_site = Site.objects.get(pk=site.pk)
-
-        queue = {}
-        enqueue_event(queue, stale_site, request, OBJECT_UPDATED)
-
-        event = queue[f'dcim.site:{site.pk}']
-
-        # Data should not be materialized yet (lazy serialization)
-        self.assertNotIn('data', event.data)
-
-        fresh_site = Site.objects.get(pk=site.pk)
-        fresh_site.description = 'foo'
-        fresh_site.save()
-
-        enqueue_event(queue, fresh_site, request, OBJECT_UPDATED)
-
-        # The original object reference should be preserved
-        self.assertIs(event['object'], stale_site)
-
-        # But serialized data should reflect the fresher instance
-        self.assertEqual(event['data']['description'], 'foo')
-        self.assertEqual(event['snapshots']['postchange']['description'], 'foo')
-
-    def test_duplicate_enqueue_invalidates_materialized_data(self):
-        """
-        If event['data'] has already been materialized before a second enqueue
-        for the same object, the stale payload should be discarded and rebuilt
-        from the fresher instance on next access.
-        """
-        request = RequestFactory().get(reverse('dcim:site_add'))
-        request.id = uuid.uuid4()
-        request.user = self.user
-
-        site = Site.objects.create(name='Site 1', slug='site-1')
-
-        queue = {}
-        enqueue_event(queue, site, request, OBJECT_UPDATED)
-
-        event = queue[f'dcim.site:{site.pk}']
-
-        # Force early materialization
-        self.assertEqual(event['data']['description'], '')
-
-        # Now update and re-enqueue
-        fresh_site = Site.objects.get(pk=site.pk)
-        fresh_site.description = 'updated'
-        fresh_site.save()
-
-        enqueue_event(queue, fresh_site, request, OBJECT_UPDATED)
-
-        # Stale data should have been invalidated; new access should reflect update
-        self.assertEqual(event['data']['description'], 'updated')
-
-    def test_update_then_delete_enqueue_freezes_payload(self):
-        """
-        When an update event is coalesced with a subsequent delete, the event
-        type should be promoted to OBJECT_DELETED and the payload should be
-        eagerly frozen (since the object will be inaccessible after deletion).
-        """
-        request = RequestFactory().get(reverse('dcim:site_add'))
-        request.id = uuid.uuid4()
-        request.user = self.user
-
-        site = Site.objects.create(name='Site 1', slug='site-1')
-
-        queue = {}
-        enqueue_event(queue, site, request, OBJECT_UPDATED)
-
-        event = queue[f'dcim.site:{site.pk}']
-
-        enqueue_event(queue, site, request, OBJECT_DELETED)
-
-        # Event type should have been promoted
-        self.assertEqual(event['event_type'], OBJECT_DELETED)
-
-        # Data should already be materialized (frozen), not lazy
-        self.assertIn('data', event.data)
-        self.assertEqual(event['data']['name'], 'Site 1')
-        self.assertIsNone(event['snapshots']['postchange'])
 
     def test_duplicate_triggers(self):
         """
@@ -568,30 +438,3 @@ class EventRuleTestCase(APITestCase):
         job = self.queue.get_jobs()[0]
         self.assertEqual(job.kwargs['event_type'], OBJECT_DELETED)
         self.queue.empty()
-
-    def test_non_dict_action_data_does_not_crash_flush(self):
-        """
-        Pre-existing non-dict action_data must not cause flush_events() to
-        raise.
-        """
-        site_type = ObjectType.objects.get_for_model(Site)
-        webhook = Webhook.objects.get(name='Webhook 1')
-        webhook_type = ObjectType.objects.get_for_model(Webhook)
-
-        bad_rule = EventRule.objects.create(
-            name='Bad action_data rule',
-            event_types=[OBJECT_CREATED],
-            action_type=EventRuleActionChoices.WEBHOOK,
-            action_object_type=webhook_type,
-            action_object_id=webhook.pk,
-            action_data={},
-        )
-        bad_rule.object_types.set([site_type])
-
-        # Simulate a legacy row that predates model validation.
-        EventRule.objects.filter(pk=bad_rule.pk).update(action_data='not a dict')
-
-        url = reverse('dcim-api:site-list')
-        self.add_permissions('dcim.add_site')
-        response = self.client.post(url, {'name': 'Site X', 'slug': 'site-x'}, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)

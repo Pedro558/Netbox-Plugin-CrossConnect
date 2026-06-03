@@ -1,9 +1,9 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
-
+import django_tables2 as tables
 from dcim.models import PowerFeed, PowerPanel
-from netbox.tables import PrimaryModelTable, columns
 from tenancy.tables import ContactsColumnMixin, TenancyColumnsMixin
+
+from netbox.tables import NetBoxTable, columns
 
 from .devices import CableTerminationTable
 
@@ -17,7 +17,7 @@ __all__ = (
 # Power panels
 #
 
-class PowerPanelTable(ContactsColumnMixin, PrimaryModelTable):
+class PowerPanelTable(ContactsColumnMixin, NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -35,11 +35,14 @@ class PowerPanelTable(ContactsColumnMixin, PrimaryModelTable):
         url_params={'power_panel_id': 'pk'},
         verbose_name=_('Power Feeds')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='dcim:powerpanel_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = PowerPanel
         fields = (
             'pk', 'id', 'name', 'site', 'location', 'powerfeed_count', 'contacts', 'description', 'comments', 'tags',
@@ -54,7 +57,7 @@ class PowerPanelTable(ContactsColumnMixin, PrimaryModelTable):
 
 # We're not using PathEndpointTable for PowerFeed because power connections
 # cannot traverse pass-through ports.
-class PowerFeedTable(TenancyColumnsMixin, CableTerminationTable, PrimaryModelTable):
+class PowerFeedTable(TenancyColumnsMixin, CableTerminationTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -89,11 +92,14 @@ class PowerFeedTable(TenancyColumnsMixin, CableTerminationTable, PrimaryModelTab
         linkify=True,
         verbose_name=_('Site'),
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='dcim:powerfeed_list'
     )
 
-    class Meta(CableTerminationTable.Meta, PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = PowerFeed
         fields = (
             'pk', 'id', 'name', 'power_panel', 'site', 'rack', 'status', 'type', 'supply', 'voltage', 'amperage',

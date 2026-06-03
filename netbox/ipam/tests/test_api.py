@@ -14,7 +14,7 @@ from utilities.data import string_to_ranges
 from utilities.testing import APITestCase, APIViewTestCases, create_test_device, disable_logging
 
 
-class AppTestCase(APITestCase):
+class AppTest(APITestCase):
 
     def test_root(self):
 
@@ -24,7 +24,7 @@ class AppTestCase(APITestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class ASNRangeTestCase(APIViewTestCases.APIViewTestCase):
+class ASNRangeTest(APIViewTestCases.APIViewTestCase):
     model = ASNRange
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     bulk_update_data = {
@@ -136,7 +136,7 @@ class ASNRangeTestCase(APIViewTestCases.APIViewTestCase):
         self.assertEqual(len(response.data), 10)
 
 
-class ASNTestCase(APIViewTestCases.APIViewTestCase):
+class ASNTest(APIViewTestCases.APIViewTestCase):
     model = ASN
     brief_fields = ['asn', 'description', 'display', 'id', 'url']
     bulk_update_data = {
@@ -151,12 +151,6 @@ class ASNTestCase(APIViewTestCases.APIViewTestCase):
         )
         RIR.objects.bulk_create(rirs)
 
-        roles = (
-            Role(name='Role 1', slug='role-1'),
-            Role(name='Role 2', slug='role-2'),
-        )
-        Role.objects.bulk_create(roles)
-
         sites = (
             Site(name='Site 1', slug='site-1'),
             Site(name='Site 2', slug='site-2')
@@ -170,10 +164,10 @@ class ASNTestCase(APIViewTestCases.APIViewTestCase):
         Tenant.objects.bulk_create(tenants)
 
         asns = (
-            ASN(asn=65000, rir=rirs[0], role=roles[0], tenant=tenants[0]),
-            ASN(asn=65001, rir=rirs[0], role=roles[0], tenant=tenants[1]),
-            ASN(asn=4200000000, rir=rirs[1], role=roles[1], tenant=tenants[0]),
-            ASN(asn=4200000001, rir=rirs[1], role=roles[1], tenant=tenants[1]),
+            ASN(asn=65000, rir=rirs[0], tenant=tenants[0]),
+            ASN(asn=65001, rir=rirs[0], tenant=tenants[1]),
+            ASN(asn=4200000000, rir=rirs[1], tenant=tenants[0]),
+            ASN(asn=4200000001, rir=rirs[1], tenant=tenants[1]),
         )
         ASN.objects.bulk_create(asns)
 
@@ -186,12 +180,10 @@ class ASNTestCase(APIViewTestCases.APIViewTestCase):
             {
                 'asn': 64512,
                 'rir': rirs[0].pk,
-                'role': roles[0].pk,
             },
             {
                 'asn': 65002,
                 'rir': rirs[0].pk,
-                'role': roles[1].pk,
             },
             {
                 'asn': 4200000002,
@@ -200,7 +192,7 @@ class ASNTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class VRFTestCase(APIViewTestCases.APIViewTestCase):
+class VRFTest(APIViewTestCases.APIViewTestCase):
     model = VRF
     brief_fields = ['description', 'display', 'id', 'name', 'prefix_count', 'rd', 'url']
     create_data = [
@@ -232,7 +224,7 @@ class VRFTestCase(APIViewTestCases.APIViewTestCase):
         VRF.objects.bulk_create(vrfs)
 
 
-class RouteTargetTestCase(APIViewTestCases.APIViewTestCase):
+class RouteTargetTest(APIViewTestCases.APIViewTestCase):
     model = RouteTarget
     brief_fields = ['description', 'display', 'id', 'name', 'url']
     create_data = [
@@ -261,7 +253,7 @@ class RouteTargetTestCase(APIViewTestCases.APIViewTestCase):
         RouteTarget.objects.bulk_create(route_targets)
 
 
-class RIRTestCase(APIViewTestCases.APIViewTestCase):
+class RIRTest(APIViewTestCases.APIViewTestCase):
     model = RIR
     brief_fields = ['aggregate_count', 'description', 'display', 'id', 'name', 'slug', 'url']
     create_data = [
@@ -293,7 +285,7 @@ class RIRTestCase(APIViewTestCases.APIViewTestCase):
         RIR.objects.bulk_create(rirs)
 
 
-class AggregateTestCase(APIViewTestCases.APIViewTestCase):
+class AggregateTest(APIViewTestCases.APIViewTestCase):
     model = Aggregate
     brief_fields = ['description', 'display', 'family', 'id', 'prefix', 'url']
     bulk_update_data = {
@@ -381,9 +373,9 @@ class AggregateTestCase(APIViewTestCases.APIViewTestCase):
         # No exception occurred; invalid entries were ignored
 
 
-class RoleTestCase(APIViewTestCases.APIViewTestCase):
+class RoleTest(APIViewTestCases.APIViewTestCase):
     model = Role
-    brief_fields = ['asn_count', 'description', 'display', 'id', 'name', 'prefix_count', 'slug', 'url', 'vlan_count']
+    brief_fields = ['description', 'display', 'id', 'name', 'prefix_count', 'slug', 'url', 'vlan_count']
     create_data = [
         {
             'name': 'Role 4',
@@ -412,19 +404,8 @@ class RoleTestCase(APIViewTestCases.APIViewTestCase):
         )
         Role.objects.bulk_create(roles)
 
-        rirs = (
-            RIR(name='RIR 1', slug='rir-1', is_private=True),
-        )
-        RIR.objects.bulk_create(rirs)
 
-        asns = (
-            ASN(asn=65000, rir=rirs[0], role=roles[0]),
-            ASN(asn=65001, rir=rirs[0], role=roles[0]),
-        )
-        ASN.objects.bulk_create(asns)
-
-
-class PrefixTestCase(APIViewTestCases.APIViewTestCase):
+class PrefixTest(APIViewTestCases.APIViewTestCase):
     model = Prefix
     brief_fields = ['_depth', 'description', 'display', 'family', 'id', 'prefix', 'url']
     create_data = [
@@ -614,31 +595,6 @@ class PrefixTestCase(APIViewTestCases.APIViewTestCase):
         self.assertHttpStatus(response, status.HTTP_201_CREATED)
         self.assertEqual(len(response.data), 8)
 
-    def test_create_available_ip_with_mask(self):
-        """
-        Test the creation of an available IP address with a specific prefix length.
-        """
-        prefix = Prefix.objects.create(prefix=IPNetwork('192.0.2.0/24'))
-        url = reverse('ipam-api:prefix-available-ips', kwargs={'pk': prefix.pk})
-        self.add_permissions('ipam.view_prefix', 'ipam.add_ipaddress')
-
-        # Create an available IP with a specific prefix length
-        data = {
-            'prefix_length': 32,
-            'description': 'Test IP 1',
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_201_CREATED)
-        self.assertEqual(response.data['address'], '192.0.2.1/32')
-        self.assertEqual(response.data['description'], data['description'])
-
-        # Attempt to create an available IP with a prefix length less than its parent prefix
-        data = {
-            'prefix_length': 23,  # Prefix is a /24
-        }
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
     @tag('regression')
     def test_graphql_tenant_prefixes_contains_nested_skips_invalid(self):
         """
@@ -664,7 +620,7 @@ class PrefixTestCase(APIViewTestCases.APIViewTestCase):
         self.assertTrue(data['data']['tenant_list'])  # tenant returned
 
 
-class IPRangeTestCase(APIViewTestCases.APIViewTestCase):
+class IPRangeTest(APIViewTestCases.APIViewTestCase):
     model = IPRange
     brief_fields = ['description', 'display', 'end_address', 'family', 'id', 'start_address', 'url']
     create_data = [
@@ -679,11 +635,6 @@ class IPRangeTestCase(APIViewTestCases.APIViewTestCase):
         {
             'start_address': '192.168.6.10/24',
             'end_address': '192.168.6.50/24',
-        },
-        {
-            # Single-address range (start == end)
-            'start_address': '192.168.7.10/24',
-            'end_address': '192.168.7.10/24',
         },
     ]
     bulk_update_data = {
@@ -827,7 +778,7 @@ class IPRangeTestCase(APIViewTestCases.APIViewTestCase):
         # No exception occurred; invalid entries were ignored
 
 
-class IPAddressTestCase(APIViewTestCases.APIViewTestCase):
+class IPAddressTest(APIViewTestCases.APIViewTestCase):
     model = IPAddress
     brief_fields = ['address', 'description', 'display', 'family', 'id', 'url']
     create_data = [
@@ -982,7 +933,7 @@ class IPAddressTestCase(APIViewTestCases.APIViewTestCase):
         self.assertIn(str(device1.pk), ids)
 
 
-class FHRPGroupTestCase(APIViewTestCases.APIViewTestCase):
+class FHRPGroupTest(APIViewTestCases.APIViewTestCase):
     model = FHRPGroup
     brief_fields = ['description', 'display', 'group_id', 'id', 'protocol', 'url']
     bulk_update_data = {
@@ -1033,7 +984,7 @@ class FHRPGroupTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class FHRPGroupAssignmentTestCase(APIViewTestCases.APIViewTestCase):
+class FHRPGroupAssignmentTest(APIViewTestCases.APIViewTestCase):
     model = FHRPGroupAssignment
     brief_fields = ['display', 'group', 'id', 'interface_id', 'interface_type', 'priority', 'url']
     bulk_update_data = {
@@ -1113,24 +1064,21 @@ class FHRPGroupAssignmentTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class VLANGroupTestCase(APIViewTestCases.APIViewTestCase):
+class VLANGroupTest(APIViewTestCases.APIViewTestCase):
     model = VLANGroup
     brief_fields = ['description', 'display', 'id', 'name', 'slug', 'url', 'vlan_count']
     create_data = [
         {
             'name': 'VLAN Group 4',
             'slug': 'vlan-group-4',
-            'vid_ranges': [[1, 4094]]
         },
         {
             'name': 'VLAN Group 5',
             'slug': 'vlan-group-5',
-            'vid_ranges': [[1, 4094]]
         },
         {
             'name': 'VLAN Group 6',
             'slug': 'vlan-group-6',
-            'vid_ranges': [[1, 4094]]
         },
     ]
     bulk_update_data = {
@@ -1236,7 +1184,7 @@ class VLANGroupTestCase(APIViewTestCases.APIViewTestCase):
         self.assertEqual(response.data[2]['vid'], 6)
 
 
-class VLANTestCase(APIViewTestCases.APIViewTestCase):
+class VLANTest(APIViewTestCases.APIViewTestCase):
     model = VLAN
     brief_fields = ['description', 'display', 'id', 'name', 'url', 'vid']
     bulk_update_data = {
@@ -1303,7 +1251,7 @@ class VLANTestCase(APIViewTestCases.APIViewTestCase):
         self.assertTrue(content['detail'].startswith('Unable to delete object.'))
 
 
-class VLANTranslationPolicyTestCase(APIViewTestCases.APIViewTestCase):
+class VLANTranslationPolicyTest(APIViewTestCases.APIViewTestCase):
     model = VLANTranslationPolicy
     brief_fields = ['description', 'display', 'id', 'name', 'url',]
     bulk_update_data = {
@@ -1345,7 +1293,7 @@ class VLANTranslationPolicyTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class VLANTranslationRuleTestCase(APIViewTestCases.APIViewTestCase):
+class VLANTranslationRuleTest(APIViewTestCases.APIViewTestCase):
     model = VLANTranslationRule
     brief_fields = ['description', 'display', 'id', 'local_vid', 'policy', 'remote_vid', 'url']
 
@@ -1414,7 +1362,7 @@ class VLANTranslationRuleTestCase(APIViewTestCases.APIViewTestCase):
         }
 
 
-class ServiceTemplateTestCase(APIViewTestCases.APIViewTestCase):
+class ServiceTemplateTest(APIViewTestCases.APIViewTestCase):
     model = ServiceTemplate
     brief_fields = ['description', 'display', 'id', 'name', 'ports', 'protocol', 'url']
     bulk_update_data = {
@@ -1450,7 +1398,7 @@ class ServiceTemplateTestCase(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class ServiceTestCase(APIViewTestCases.APIViewTestCase):
+class ServiceTest(APIViewTestCases.APIViewTestCase):
     model = Service
     brief_fields = ['description', 'display', 'id', 'name', 'ports', 'protocol', 'url']
     bulk_update_data = {

@@ -13,7 +13,6 @@ from core.models import ObjectChange, ObjectType
 from netbox.choices import CSVDelimiterChoices, ImportFormatChoices
 from netbox.models.features import ChangeLoggingMixin, CustomFieldsMixin
 from users.models import ObjectPermission
-
 from .base import ModelTestCase
 from .utils import add_custom_field_data, disable_warnings, get_random_string, post_data
 
@@ -192,8 +191,8 @@ class ViewTestCases:
                     changed_object_id=instance.pk
                 )
                 self.assertEqual(len(objectchanges), 1)
-                self.assertObjectChange(objectchanges[0], action=ObjectChangeActionChoices.ACTION_CREATE,
-                    message=self.form_data['changelog_message'])
+                self.assertEqual(objectchanges[0].action, ObjectChangeActionChoices.ACTION_CREATE)
+                self.assertEqual(objectchanges[0].message, self.form_data['changelog_message'])
 
         @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
         def test_create_object_with_constrained_permission(self):
@@ -299,8 +298,8 @@ class ViewTestCases:
                     changed_object_id=instance.pk
                 )
                 self.assertEqual(len(objectchanges), 1)
-                self.assertObjectChange(objectchanges[0], action=ObjectChangeActionChoices.ACTION_UPDATE,
-                    message=self.form_data['changelog_message'])
+                self.assertEqual(objectchanges[0].action, ObjectChangeActionChoices.ACTION_UPDATE)
+                self.assertEqual(objectchanges[0].message, self.form_data['changelog_message'])
 
         @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
         def test_edit_object_with_constrained_permission(self):
@@ -394,8 +393,8 @@ class ViewTestCases:
                     changed_object_id=instance.pk
                 )
                 self.assertEqual(len(objectchanges), 1)
-                self.assertObjectChange(objectchanges[0], action=ObjectChangeActionChoices.ACTION_DELETE,
-                    message=form_data['changelog_message'])
+                self.assertEqual(objectchanges[0].action, ObjectChangeActionChoices.ACTION_DELETE)
+                self.assertEqual(objectchanges[0].message, form_data['changelog_message'])
 
         @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
         def test_delete_object_with_constrained_permission(self):
@@ -635,9 +634,10 @@ class ViewTestCases:
                     available = ', '.join(self.csv_data.keys())
                     raise ValueError(f"Scenario '{scenario_name}' not found in csv_data. Available: {available}")
                 return '\n'.join(self.csv_data[scenario_name])
-            if isinstance(self.csv_data, (tuple, list)):
+            elif isinstance(self.csv_data, (tuple, list)):
                 return '\n'.join(self.csv_data)
-            raise TypeError(f'csv_data must be a tuple, list, or dictionary, got {type(self.csv_data)}')
+            else:
+                raise TypeError(f'csv_data must be a tuple, list, or dictionary, got {type(self.csv_data)}')
 
         def _get_update_csv_data(self):
             return self.csv_update_data, '\n'.join(self.csv_update_data)
@@ -716,8 +716,7 @@ class ViewTestCases:
                 self.assertEqual(len(objectchanges), expected_new_objects)
 
                 for oc in objectchanges:
-                    self.assertObjectChange(oc, action=ObjectChangeActionChoices.ACTION_CREATE,
-                        message=data['changelog_message'])
+                    self.assertEqual(oc.message, data['changelog_message'])
 
         @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
         def test_bulk_update_objects_with_permission(self):
@@ -869,8 +868,8 @@ class ViewTestCases:
                 )
                 self.assertEqual(len(objectchanges), len(pk_list))
                 for oc in objectchanges:
-                    self.assertObjectChange(oc, action=ObjectChangeActionChoices.ACTION_UPDATE,
-                        message=data['changelog_message'])
+                    self.assertEqual(oc.action, ObjectChangeActionChoices.ACTION_UPDATE)
+                    self.assertEqual(oc.message, data['changelog_message'])
 
         @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'], EXEMPT_EXCLUDE_MODELS=[])
         def test_bulk_edit_objects_with_constrained_permission(self):
@@ -965,8 +964,8 @@ class ViewTestCases:
                 )
                 self.assertEqual(len(objectchanges), len(pk_list))
                 for oc in objectchanges:
-                    self.assertObjectChange(oc, action=ObjectChangeActionChoices.ACTION_DELETE,
-                        message=data['changelog_message'])
+                    self.assertEqual(oc.action, ObjectChangeActionChoices.ACTION_DELETE)
+                    self.assertEqual(oc.message, data['changelog_message'])
 
         def test_bulk_delete_objects_with_constrained_permission(self):
             pk_list = self._get_queryset().values_list('pk', flat=True)
@@ -1050,41 +1049,6 @@ class ViewTestCases:
                 self.assertEqual(instance.name, f'{objects[i].name}X')
 
         @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
-        def test_bulk_rename_objects_with_changelog_message(self):
-            if not issubclass(self.model, ChangeLoggingMixin):
-                self.skipTest("Model does not support change logging")
-            objects = self._get_queryset().all()[:3]
-            pk_list = [obj.pk for obj in objects]
-            data = {
-                'pk': pk_list,
-                '_apply': True,
-                'changelog_message': 'Bulk rename test message',
-            }
-            data.update(self.rename_data)
-
-            # Assign model-level permission
-            obj_perm = ObjectPermission(
-                name='Test permission',
-                actions=['change']
-            )
-            obj_perm.save()
-            obj_perm.users.add(self.user)
-            obj_perm.object_types.add(ObjectType.objects.get_for_model(self.model))
-
-            self.assertHttpStatus(self.client.post(self._get_url('bulk_rename'), data), 302)
-
-            # Verify changelog message was recorded on each renamed object
-            object_type = ObjectType.objects.get_for_model(self.model)
-            for pk in pk_list:
-                oc = ObjectChange.objects.filter(
-                    changed_object_type=object_type,
-                    changed_object_id=pk,
-                    action=ObjectChangeActionChoices.ACTION_UPDATE,
-                ).order_by('-time').first()
-                self.assertIsNotNone(oc)
-                self.assertEqual(oc.message, 'Bulk rename test message')
-
-        @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
         def test_bulk_rename_objects_with_constrained_permission(self):
             objects = self._get_queryset().all()[:3]
             pk_list = [obj.pk for obj in objects]
@@ -1146,21 +1110,6 @@ class ViewTestCases:
     ):
         """
         TestCase suitable for all organizational objects
-        """
-        maxDiff = None
-
-    class AdminModelViewTestCase(
-        GetObjectViewTestCase,
-        CreateObjectViewTestCase,
-        EditObjectViewTestCase,
-        DeleteObjectViewTestCase,
-        ListObjectsViewTestCase,
-        BulkImportObjectsViewTestCase,
-        BulkEditObjectsViewTestCase,
-        BulkDeleteObjectsViewTestCase,
-    ):
-        """
-        TestCase suitable for testing all standard View functions for objects which inherit from AdminModel.
         """
         maxDiff = None
 

@@ -1,19 +1,19 @@
 import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
 
-from netbox.tables import PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 from vpn.models import *
 
 __all__ = (
     'IKEPolicyTable',
     'IKEProposalTable',
     'IPSecPolicyTable',
-    'IPSecProfileTable',
     'IPSecProposalTable',
+    'IPSecProfileTable',
 )
 
 
-class IKEProposalTable(PrimaryModelTable):
+class IKEProposalTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -33,11 +33,14 @@ class IKEProposalTable(PrimaryModelTable):
     sa_lifetime = tables.Column(
         verbose_name=_('SA Lifetime')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='vpn:ikeproposal_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IKEProposal
         fields = (
             'pk', 'id', 'name', 'authentication_method', 'encryption_algorithm', 'authentication_algorithm',
@@ -49,7 +52,7 @@ class IKEProposalTable(PrimaryModelTable):
         )
 
 
-class IKEPolicyTable(PrimaryModelTable):
+class IKEPolicyTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -67,11 +70,14 @@ class IKEPolicyTable(PrimaryModelTable):
     preshared_key = tables.Column(
         verbose_name=_('Pre-shared Key')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='vpn:ikepolicy_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IKEPolicy
         fields = (
             'pk', 'id', 'name', 'version', 'mode', 'proposals', 'preshared_key', 'description', 'comments', 'tags',
@@ -82,7 +88,7 @@ class IKEPolicyTable(PrimaryModelTable):
         )
 
 
-class IPSecProposalTable(PrimaryModelTable):
+class IPSecProposalTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -99,11 +105,14 @@ class IPSecProposalTable(PrimaryModelTable):
     sa_lifetime_data = tables.Column(
         verbose_name=_('SA Lifetime (KB)')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='vpn:ipsecproposal_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IPSecProposal
         fields = (
             'pk', 'id', 'name', 'encryption_algorithm', 'authentication_algorithm', 'sa_lifetime_seconds',
@@ -115,7 +124,7 @@ class IPSecProposalTable(PrimaryModelTable):
         )
 
 
-class IPSecPolicyTable(PrimaryModelTable):
+class IPSecPolicyTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -127,11 +136,14 @@ class IPSecPolicyTable(PrimaryModelTable):
     pfs_group = tables.Column(
         verbose_name=_('PFS Group')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='vpn:ipsecpolicy_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IPSecPolicy
         fields = (
             'pk', 'id', 'name', 'proposals', 'pfs_group', 'description', 'comments', 'tags', 'created', 'last_updated',
@@ -141,7 +153,7 @@ class IPSecPolicyTable(PrimaryModelTable):
         )
 
 
-class IPSecProfileTable(PrimaryModelTable):
+class IPSecProfileTable(NetBoxTable):
     name = tables.Column(
         verbose_name=_('Name'),
         linkify=True
@@ -157,11 +169,14 @@ class IPSecProfileTable(PrimaryModelTable):
         linkify=True,
         verbose_name=_('IPSec Policy')
     )
+    comments = columns.MarkdownColumn(
+        verbose_name=_('Comments'),
+    )
     tags = columns.TagColumn(
         url_name='vpn:ipsecprofile_list'
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = IPSecProfile
         fields = (
             'pk', 'id', 'name', 'mode', 'ike_policy', 'ipsec_policy', 'description', 'comments', 'tags', 'created',

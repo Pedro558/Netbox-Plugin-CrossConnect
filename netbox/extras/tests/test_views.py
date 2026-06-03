@@ -1,8 +1,6 @@
-from unittest.mock import PropertyMock, patch
-
 from django.contrib.contenttypes.models import ContentType
-from django.test import tag
 from django.urls import reverse
+from django.test import tag
 
 from core.choices import ManagedFileRootPathChoices
 from core.events import *
@@ -10,10 +8,9 @@ from core.models import ObjectType
 from dcim.models import DeviceType, Manufacturer, Site
 from extras.choices import *
 from extras.models import *
-from extras.scripts import BooleanVar, IntegerVar
-from extras.scripts import Script as PythonClass
+from extras.scripts import Script as PythonClass, IntegerVar, BooleanVar
 from users.models import Group, User
-from utilities.testing import TestCase, ViewTestCases
+from utilities.testing import ViewTestCases, TestCase
 
 
 class CustomFieldTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -179,27 +176,6 @@ class CustomLinkTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'enabled': False,
             'weight': 200,
         }
-
-
-class CustomLinkRenderingTestCase(TestCase):
-    user_permissions = ['dcim.view_site']
-
-    def test_view_object_with_custom_link(self):
-        customlink = CustomLink(
-            name='Test',
-            link_text='FOO {{ object.name }} BAR',
-            link_url='http://example.com/?site={{ object.slug }}',
-            new_window=False
-        )
-        customlink.save()
-        customlink.object_types.set([ObjectType.objects.get_for_model(Site)])
-
-        site = Site(name='Test Site', slug='test-site')
-        site.save()
-
-        response = self.client.get(site.get_absolute_url(), follow=True)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn(f'FOO {site.name} BAR', str(response.content))
 
 
 class SavedFilterTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -368,59 +344,6 @@ class ExportTemplateTestCase(ViewTestCases.PrimaryObjectViewTestCase):
             'file_extension': 'html',
             'as_attachment': True,
         }
-
-
-class ExportTemplateExportFlowTestCase(TestCase):
-    """
-    End-to-end test for ExportTemplate invocation via a list view's ?export=<name> query param.
-    """
-
-    @classmethod
-    def setUpTestData(cls):
-        Site.objects.bulk_create([
-            Site(name='Site A', slug='site-a'),
-            Site(name='Site B', slug='site-b'),
-        ])
-
-        site_type = ObjectType.objects.get_for_model(Site)
-
-        ok_template = ExportTemplate.objects.create(
-            name='Sites Export',
-            template_code='{% for obj in queryset %}{{ obj.name }}\n{% endfor %}',
-            mime_type='text/plain',
-            file_extension='txt',
-        )
-        ok_template.object_types.set([site_type])
-
-        broken_template = ExportTemplate.objects.create(
-            name='Broken Export',
-            template_code='{% for obj in queryset %}{{ obj.name ',  # unterminated expression
-        )
-        broken_template.object_types.set([site_type])
-
-    def test_export_template_invocation(self):
-        self.add_permissions('dcim.view_site', 'extras.view_exporttemplate')
-        url = reverse('dcim:site_list')
-
-        response = self.client.get(f'{url}?export=Sites Export')
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response['Content-Type'], 'text/plain')
-        self.assertEqual(response['Content-Disposition'], 'attachment; filename="netbox_sites.txt"')
-        # The rendered queryset reflects whatever ordering the list view applies. Assert on set
-        # membership rather than line order so the test isn't coupled to Site's natural ordering.
-        rendered_names = set(filter(None, response.content.decode().split('\n')))
-        self.assertEqual(rendered_names, {'Site A', 'Site B'})
-
-    def test_export_template_render_error_redirects(self):
-        self.add_permissions('dcim.view_site', 'extras.view_exporttemplate')
-        url = reverse('dcim:site_list')
-
-        # A broken template surfaces an exception during render; the view catches it and redirects
-        # back to the (filtered) list view rather than returning a 500.
-        response = self.client.get(f'{url}?export=Broken Export')
-        self.assertEqual(response.status_code, 302)
-        self.assertTrue(response['Location'].startswith(url))
-        self.assertNotIn('export=', response['Location'])
 
 
 class WebhookTestCase(ViewTestCases.PrimaryObjectViewTestCase):
@@ -777,6 +700,27 @@ class JournalEntryTestCase(
         }
 
 
+class CustomLinkTest(TestCase):
+    user_permissions = ['dcim.view_site']
+
+    def test_view_object_with_custom_link(self):
+        customlink = CustomLink(
+            name='Test',
+            link_text='FOO {{ object.name }} BAR',
+            link_url='http://example.com/?site={{ object.slug }}',
+            new_window=False
+        )
+        customlink.save()
+        customlink.object_types.set([ObjectType.objects.get_for_model(Site)])
+
+        site = Site(name='Test Site', slug='test-site')
+        site.save()
+
+        response = self.client.get(site.get_absolute_url(), follow=True)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f'FOO {site.name} BAR', str(response.content))
+
+
 class SubscriptionTestCase(
     ViewTestCases.CreateObjectViewTestCase,
     ViewTestCases.DeleteObjectViewTestCase,
@@ -940,7 +884,7 @@ class NotificationTestCase(
         return
 
 
-class ScriptListViewTestCase(TestCase):
+class ScriptListViewTest(TestCase):
     user_permissions = ['extras.view_script']
 
     def test_script_list_embedded_parameter(self):
@@ -958,11 +902,11 @@ class ScriptListViewTestCase(TestCase):
         self.assertTemplateUsed(response, 'extras/inc/script_list_content.html')
 
 
-class ScriptValidationErrorTestCase(TestCase):
+class ScriptValidationErrorTest(TestCase):
     user_permissions = ['extras.view_script', 'extras.run_script']
 
     class TestScriptMixin:
-        bar = IntegerVar(min_value=0, max_value=30)
+        bar = IntegerVar(min_value=0, max_value=30, default=30)
 
     class TestScriptClass(TestScriptMixin, PythonClass):
         class Meta:
@@ -977,22 +921,17 @@ class ScriptValidationErrorTestCase(TestCase):
 
     @classmethod
     def setUpTestData(cls):
-        # Avoid trying to import a non-existent on-disk module during setup.
-        # This test creates the Script row explicitly and monkey-patches
-        # Script.python_class below.
-        with patch.object(ScriptModule, 'sync_classes'):
-            module = ScriptModule.objects.create(
-                file_root=ManagedFileRootPathChoices.SCRIPTS,
-                file_path='test_script.py',
-            )
+        module = ScriptModule.objects.create(file_root=ManagedFileRootPathChoices.SCRIPTS, file_path='test_script.py')
         cls.script = Script.objects.create(module=module, name='Test script', is_executable=True)
 
     def setUp(self):
         super().setUp()
-        Script.python_class = property(lambda self: ScriptValidationErrorTestCase.TestScriptClass)
+        Script.python_class = property(lambda self: ScriptValidationErrorTest.TestScriptClass)
 
     @tag('regression')
     def test_script_validation_error_displays_message(self):
+        from unittest.mock import patch
+
         url = reverse('extras:script', kwargs={'pk': self.script.pk})
 
         with patch('extras.views.get_workers_for_queue', return_value=['worker']):
@@ -1005,6 +944,8 @@ class ScriptValidationErrorTestCase(TestCase):
 
     @tag('regression')
     def test_script_validation_error_no_toast_for_fieldset_fields(self):
+        from unittest.mock import patch, PropertyMock
+
         class FieldsetScript(PythonClass):
             class Meta:
                 name = 'Fieldset test'
@@ -1026,49 +967,3 @@ class ScriptValidationErrorTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         messages = list(response.context['messages'])
         self.assertEqual(len(messages), 0)
-
-
-class ScriptDefaultValuesTestCase(TestCase):
-    user_permissions = ['extras.view_script', 'extras.run_script']
-
-    class TestScriptClass(PythonClass):
-        class Meta:
-            name = 'Test script'
-            commit_default = False
-
-        bool_default_true = BooleanVar(default=True)
-        bool_default_false = BooleanVar(default=False)
-        int_with_default = IntegerVar(default=0)
-        int_without_default = IntegerVar(required=False)
-
-        def run(self, data, commit):
-            return "Complete"
-
-    @classmethod
-    def setUpTestData(cls):
-        # Avoid trying to import a non-existent on-disk module during setup.
-        # This test creates the Script row explicitly and monkey-patches
-        # Script.python_class below.
-        with patch.object(ScriptModule, 'sync_classes'):
-            module = ScriptModule.objects.create(
-                file_root=ManagedFileRootPathChoices.SCRIPTS,
-                file_path='test_script.py',
-            )
-        cls.script = Script.objects.create(module=module, name='Test script', is_executable=True)
-
-    def setUp(self):
-        super().setUp()
-        Script.python_class = property(lambda self: ScriptDefaultValuesTestCase.TestScriptClass)
-
-    def test_default_values_are_used(self):
-        url = reverse('extras:script', kwargs={'pk': self.script.pk})
-
-        with patch('extras.views.get_workers_for_queue', return_value=['worker']):
-            with patch('extras.jobs.ScriptJob.enqueue') as mock_enqueue:
-                mock_enqueue.return_value.pk = 1
-                self.client.post(url, {})
-                call_kwargs = mock_enqueue.call_args.kwargs
-                self.assertEqual(call_kwargs['data']['bool_default_true'], True)
-                self.assertEqual(call_kwargs['data']['bool_default_false'], False)
-                self.assertEqual(call_kwargs['data']['int_with_default'], 0)
-                self.assertIsNone(call_kwargs['data']['int_without_default'])

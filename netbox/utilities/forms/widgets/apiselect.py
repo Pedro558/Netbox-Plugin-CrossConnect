@@ -1,4 +1,5 @@
 import json
+from typing import Dict, List, Tuple
 
 from django import forms
 from django.conf import settings
@@ -18,8 +19,8 @@ class APISelect(forms.Select):
     """
     template_name = 'widgets/apiselect.html'
     option_template_name = 'widgets/select_option.html'
-    dynamic_params: dict[str, str]
-    static_params: dict[str, list[str]]
+    dynamic_params: Dict[str, str]
+    static_params: Dict[str, List[str]]
 
     def get_context(self, name, value, attrs):
         context = super().get_context(name, value, attrs)
@@ -34,8 +35,8 @@ class APISelect(forms.Select):
         super().__init__(*args, **kwargs)
 
         self.attrs['class'] = 'api-select'
-        self.dynamic_params: dict[str, list[str]] = {}
-        self.static_params: dict[str, list[str]] = {}
+        self.dynamic_params: Dict[str, List[str]] = {}
+        self.static_params: Dict[str, List[str]] = {}
 
         if api_url:
             self.attrs['data-url'] = '/{}{}'.format(settings.BASE_PATH, api_url.lstrip('/'))  # Inject BASE_PATH
@@ -95,7 +96,7 @@ class APISelect(forms.Select):
         Process an entire query_params dictionary, and handle primitive or list values.
         """
         for key, value in query_params.items():
-            if isinstance(value, (list, tuple)):
+            if isinstance(value, (List, Tuple)):
                 # If value is a list/tuple, iterate through each item.
                 for item in value:
                     self._process_query_param(key, item)

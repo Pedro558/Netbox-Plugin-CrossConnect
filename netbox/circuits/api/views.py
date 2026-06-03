@@ -4,7 +4,6 @@ from circuits import filtersets
 from circuits.models import *
 from dcim.api.views import PassThroughPortMixin
 from netbox.api.viewsets import NetBoxModelViewSet
-
 from . import serializers
 
 

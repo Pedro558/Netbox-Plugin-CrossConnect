@@ -5,14 +5,13 @@ from django.utils.translation import gettext as _
 
 from core.models import DataSource, ObjectType
 from dcim.models import DeviceRole, DeviceType, Location, Platform, Region, Site, SiteGroup
-from netbox.filtersets import BaseFilterSet, ChangeLoggedModelFilterSet, NetBoxModelFilterSet, PrimaryModelFilterSet
+from netbox.filtersets import BaseFilterSet, ChangeLoggedModelFilterSet, NetBoxModelFilterSet
 from tenancy.models import Tenant, TenantGroup
-from users.filterset_mixins import OwnerFilterMixin
 from users.models import Group, User
-from utilities.filters import MultiValueCharFilter, MultiValueContentTypeFilter, MultiValueNumberFilter
-from utilities.filtersets import register_filterset
+from utilities.filters import (
+    ContentTypeFilter, MultiValueCharFilter, MultiValueNumberFilter
+)
 from virtualization.models import Cluster, ClusterGroup, ClusterType
-
 from .choices import *
 from .filters import TagFilter, TagIDFilter
 from .models import *
@@ -40,7 +39,6 @@ __all__ = (
 )
 
 
-@register_filterset
 class ScriptFilterSet(BaseFilterSet):
     q = django_filters.CharFilter(
         method='search',
@@ -48,7 +46,6 @@ class ScriptFilterSet(BaseFilterSet):
     )
     module_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ScriptModule.objects.all(),
-        distinct=False,
         label=_('Script module (ID)'),
     )
 
@@ -64,15 +61,13 @@ class ScriptFilterSet(BaseFilterSet):
         )
 
 
-@register_filterset
-class WebhookFilterSet(OwnerFilterMixin, NetBoxModelFilterSet):
+class WebhookFilterSet(NetBoxModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
     http_method = django_filters.MultipleChoiceFilter(
-        choices=WebhookHttpMethodChoices,
-        distinct=False,
+        choices=WebhookHttpMethodChoices
     )
     payload_url = MultiValueCharFilter(
         lookup_expr='icontains'
@@ -95,8 +90,7 @@ class WebhookFilterSet(OwnerFilterMixin, NetBoxModelFilterSet):
         )
 
 
-@register_filterset
-class EventRuleFilterSet(OwnerFilterMixin, NetBoxModelFilterSet):
+class EventRuleFilterSet(NetBoxModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
@@ -105,17 +99,16 @@ class EventRuleFilterSet(OwnerFilterMixin, NetBoxModelFilterSet):
         queryset=ObjectType.objects.all(),
         field_name='object_types'
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='object_types'
     )
     event_type = MultiValueCharFilter(
         method='filter_event_type'
     )
     action_type = django_filters.MultipleChoiceFilter(
-        choices=EventRuleActionChoices,
-        distinct=False,
+        choices=EventRuleActionChoices
     )
-    action_object_type = MultiValueContentTypeFilter()
+    action_object_type = ContentTypeFilter()
     action_object_id = MultiValueNumberFilter()
 
     class Meta:
@@ -137,37 +130,32 @@ class EventRuleFilterSet(OwnerFilterMixin, NetBoxModelFilterSet):
         return queryset.filter(event_types__overlap=value)
 
 
-@register_filterset
-class CustomFieldFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class CustomFieldFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
     type = django_filters.MultipleChoiceFilter(
-        choices=CustomFieldTypeChoices,
-        distinct=False,
+        choices=CustomFieldTypeChoices
     )
     object_type_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ObjectType.objects.all(),
         field_name='object_types'
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='object_types'
     )
     related_object_type_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ObjectType.objects.all(),
-        distinct=False,
         field_name='related_object_type'
     )
-    related_object_type = MultiValueContentTypeFilter()
+    related_object_type = ContentTypeFilter()
     choice_set_id = django_filters.ModelMultipleChoiceFilter(
-        queryset=CustomFieldChoiceSet.objects.all(),
-        distinct=False,
+        queryset=CustomFieldChoiceSet.objects.all()
     )
     choice_set = django_filters.ModelMultipleChoiceFilter(
         field_name='choice_set__name',
         queryset=CustomFieldChoiceSet.objects.all(),
-        distinct=False,
         to_field_name='name'
     )
 
@@ -191,20 +179,13 @@ class CustomFieldFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
-class CustomFieldChoiceSetFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class CustomFieldChoiceSetFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
     choice = MultiValueCharFilter(
         method='filter_by_choice'
-    )
-    choice_colors = django_filters.MultipleChoiceFilter(
-        choices=CustomFieldChoiceColorChoices,
-        method='filter_by_choice_colors',
-        label=_('Choice colors'),
-        distinct=False,
     )
 
     class Meta:
@@ -225,28 +206,8 @@ class CustomFieldChoiceSetFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet
         # TODO: Support case-insensitive matching
         return queryset.filter(extra_choices__overlap=value)
 
-    def filter_by_choice_colors(self, queryset, name, value):
-        if not value:
-            return queryset
 
-        choice_color_keys = set()
-        for choice_colors in queryset.values_list('choice_colors', flat=True):
-            if isinstance(choice_colors, dict):
-                choice_color_keys.update(choice_colors.keys())
-
-        if not choice_color_keys:
-            return queryset.none()
-
-        params = Q()
-        for key in choice_color_keys:
-            for color in value:
-                params |= Q(choice_colors__contains={key: color})
-
-        return queryset.filter(params)
-
-
-@register_filterset
-class CustomLinkFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class CustomLinkFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
@@ -255,7 +216,7 @@ class CustomLinkFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         queryset=ObjectType.objects.all(),
         field_name='object_types'
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='object_types'
     )
 
@@ -276,8 +237,7 @@ class CustomLinkFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
-class ExportTemplateFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class ExportTemplateFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
@@ -286,17 +246,15 @@ class ExportTemplateFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         queryset=ObjectType.objects.all(),
         field_name='object_types'
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='object_types'
     )
     data_source_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data source (ID)'),
     )
     data_file_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data file (ID)'),
     )
 
@@ -317,8 +275,7 @@ class ExportTemplateFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
-class SavedFilterFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class SavedFilterFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
@@ -327,18 +284,16 @@ class SavedFilterFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         queryset=ObjectType.objects.all(),
         field_name='object_types'
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='object_types'
     )
     user_id = django_filters.ModelMultipleChoiceFilter(
         queryset=User.objects.all(),
-        distinct=False,
         label=_('User (ID)'),
     )
     user = django_filters.ModelMultipleChoiceFilter(
         field_name='user__username',
         queryset=User.objects.all(),
-        distinct=False,
         to_field_name='username',
         label=_('User (name)'),
     )
@@ -372,7 +327,6 @@ class SavedFilterFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         return queryset.filter(Q(enabled=False) | Q(Q(shared=False) & ~Q(user=user)))
 
 
-@register_filterset
 class TableConfigFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
@@ -380,21 +334,18 @@ class TableConfigFilterSet(ChangeLoggedModelFilterSet):
     )
     object_type_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ObjectType.objects.all(),
-        distinct=False,
         field_name='object_type'
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='object_type'
     )
     user_id = django_filters.ModelMultipleChoiceFilter(
         queryset=User.objects.all(),
-        distinct=False,
         label=_('User (ID)'),
     )
     user = django_filters.ModelMultipleChoiceFilter(
         field_name='user__username',
         queryset=User.objects.all(),
-        distinct=False,
         to_field_name='username',
         label=_('User (name)'),
     )
@@ -429,20 +380,17 @@ class TableConfigFilterSet(ChangeLoggedModelFilterSet):
         return queryset.filter(Q(enabled=False) | Q(Q(shared=False) & ~Q(user=user)))
 
 
-@register_filterset
 class BookmarkFilterSet(BaseFilterSet):
     created = django_filters.DateTimeFilter()
     object_type_id = MultiValueNumberFilter()
-    object_type = MultiValueContentTypeFilter()
+    object_type = ContentTypeFilter()
     user_id = django_filters.ModelMultipleChoiceFilter(
         queryset=User.objects.all(),
-        distinct=False,
         label=_('User (ID)'),
     )
     user = django_filters.ModelMultipleChoiceFilter(
         field_name='user__username',
         queryset=User.objects.all(),
-        distinct=False,
         to_field_name='username',
         label=_('User (name)'),
     )
@@ -452,7 +400,6 @@ class BookmarkFilterSet(BaseFilterSet):
         fields = ('id', 'object_id')
 
 
-@register_filterset
 class NotificationGroupFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
@@ -496,13 +443,12 @@ class NotificationGroupFilterSet(ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
 class ImageAttachmentFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
-    object_type = MultiValueContentTypeFilter()
+    object_type = ContentTypeFilter()
 
     class Meta:
         model = ImageAttachment
@@ -518,29 +464,24 @@ class ImageAttachmentFilterSet(ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
 class JournalEntryFilterSet(NetBoxModelFilterSet):
     created = django_filters.DateTimeFromToRangeFilter()
-    assigned_object_type = MultiValueContentTypeFilter()
+    assigned_object_type = ContentTypeFilter()
     assigned_object_type_id = django_filters.ModelMultipleChoiceFilter(
-        queryset=ContentType.objects.all(),
-        distinct=False,
+        queryset=ContentType.objects.all()
     )
     created_by_id = django_filters.ModelMultipleChoiceFilter(
         queryset=User.objects.all(),
-        distinct=False,
         label=_('User (ID)'),
     )
     created_by = django_filters.ModelMultipleChoiceFilter(
         field_name='created_by__username',
         queryset=User.objects.all(),
-        distinct=False,
         to_field_name='username',
         label=_('User (name)'),
     )
     kind = django_filters.MultipleChoiceFilter(
-        choices=JournalEntryKindChoices,
-        distinct=False,
+        choices=JournalEntryKindChoices
     )
 
     class Meta:
@@ -553,8 +494,7 @@ class JournalEntryFilterSet(NetBoxModelFilterSet):
         return queryset.filter(comments__icontains=value)
 
 
-@register_filterset
-class TagFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class TagFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
@@ -614,28 +554,24 @@ class TagFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
 class TaggedItemFilterSet(BaseFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
-    object_type = MultiValueContentTypeFilter(
+    object_type = ContentTypeFilter(
         field_name='content_type'
     )
     object_type_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ContentType.objects.all(),
-        distinct=False,
         field_name='content_type_id'
     )
     tag_id = django_filters.ModelMultipleChoiceFilter(
-        queryset=Tag.objects.all(),
-        distinct=False,
+        queryset=Tag.objects.all()
     )
     tag = django_filters.ModelMultipleChoiceFilter(
         field_name='tag__slug',
         queryset=Tag.objects.all(),
-        distinct=False,
         to_field_name='slug',
     )
 
@@ -653,20 +589,17 @@ class TaggedItemFilterSet(BaseFilterSet):
         )
 
 
-@register_filterset
-class ConfigContextProfileFilterSet(PrimaryModelFilterSet):
+class ConfigContextProfileFilterSet(NetBoxModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
     data_source_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data source (ID)'),
     )
     data_file_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data file (ID)'),
     )
 
@@ -686,21 +619,18 @@ class ConfigContextProfileFilterSet(PrimaryModelFilterSet):
         )
 
 
-@register_filterset
-class ConfigContextFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class ConfigContextFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
     profile_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ConfigContextProfile.objects.all(),
-        distinct=False,
         label=_('Profile (ID)'),
     )
     profile = django_filters.ModelMultipleChoiceFilter(
         field_name='profile__name',
         queryset=ConfigContextProfile.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Profile (name)'),
     )
@@ -837,12 +767,10 @@ class ConfigContextFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
     )
     data_source_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data source (ID)'),
     )
     data_file_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data file (ID)'),
     )
 
@@ -860,20 +788,17 @@ class ConfigContextFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
         )
 
 
-@register_filterset
-class ConfigTemplateFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
+class ConfigTemplateFilterSet(ChangeLoggedModelFilterSet):
     q = django_filters.CharFilter(
         method='search',
         label=_('Search'),
     )
     data_source_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data source (ID)'),
     )
     data_file_id = django_filters.ModelMultipleChoiceFilter(
         queryset=DataSource.objects.all(),
-        distinct=False,
         label=_('Data file (ID)'),
     )
     tag = TagFilter()
@@ -882,7 +807,7 @@ class ConfigTemplateFilterSet(OwnerFilterMixin, ChangeLoggedModelFilterSet):
     class Meta:
         model = ConfigTemplate
         fields = (
-            'id', 'name', 'description', 'mime_type', 'file_name', 'file_extension', 'as_attachment', 'debug',
+            'id', 'name', 'description', 'mime_type', 'file_name', 'file_extension', 'as_attachment',
             'auto_sync_enabled', 'data_synced'
         )
 

@@ -1,19 +1,19 @@
 from django.db.models import IntegerField, Lookup, Transform, lookups
 
 
-class NetFieldDecoratorMixin:
+class NetFieldDecoratorMixin(object):
 
     def process_lhs(self, qn, connection, lhs=None):
         lhs = lhs or self.lhs
         lhs_string, lhs_params = qn.compile(lhs)
-        lhs_string = f'TEXT({lhs_string})'
+        lhs_string = 'TEXT(%s)' % lhs_string
         return lhs_string, lhs_params
 
 
 class IExact(NetFieldDecoratorMixin, lookups.IExact):
 
     def get_rhs_op(self, connection, rhs):
-        return f'= LOWER({rhs})'
+        return '= LOWER(%s)' % rhs
 
 
 class EndsWith(NetFieldDecoratorMixin, lookups.EndsWith):
@@ -24,7 +24,7 @@ class IEndsWith(NetFieldDecoratorMixin, lookups.IEndsWith):
     pass
 
     def get_rhs_op(self, connection, rhs):
-        return f'LIKE LOWER({rhs})'
+        return 'LIKE LOWER(%s)' % rhs
 
 
 class StartsWith(NetFieldDecoratorMixin, lookups.StartsWith):
@@ -35,7 +35,7 @@ class IStartsWith(NetFieldDecoratorMixin, lookups.IStartsWith):
     pass
 
     def get_rhs_op(self, connection, rhs):
-        return f'LIKE LOWER({rhs})'
+        return 'LIKE LOWER(%s)' % rhs
 
 
 class Regex(NetFieldDecoratorMixin, lookups.Regex):
@@ -53,7 +53,7 @@ class NetContainsOrEquals(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'{lhs} >>= {rhs}', params
+        return '%s >>= %s' % (lhs, rhs), params
 
 
 class NetContains(Lookup):
@@ -63,7 +63,7 @@ class NetContains(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'{lhs} >> {rhs}', params
+        return '%s >> %s' % (lhs, rhs), params
 
 
 class NetContained(Lookup):
@@ -73,7 +73,7 @@ class NetContained(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'{lhs} << {rhs}', params
+        return '%s << %s' % (lhs, rhs), params
 
 
 class NetContainedOrEqual(Lookup):
@@ -83,7 +83,7 @@ class NetContainedOrEqual(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'{lhs} <<= {rhs}', params
+        return '%s <<= %s' % (lhs, rhs), params
 
 
 class NetHost(Lookup):
@@ -94,12 +94,10 @@ class NetHost(Lookup):
         rhs, rhs_params = self.process_rhs(qn, connection)
         # Query parameters are automatically converted to IPNetwork objects, which are then turned to strings. We need
         # to omit the mask portion of the object's string representation to match PostgreSQL's HOST() function.
-        # Note: params may be tuples (Django 6.0+) or lists (older Django), so convert before mutating.
-        rhs_params = list(rhs_params)
         if rhs_params:
             rhs_params[0] = rhs_params[0].split('/')[0]
-        params = list(lhs_params) + rhs_params
-        return f'HOST({lhs}) = {rhs}', params
+        params = lhs_params + rhs_params
+        return 'HOST(%s) = %s' % (lhs, rhs), params
 
 
 class NetIn(Lookup):
@@ -124,7 +122,7 @@ class NetIn(Lookup):
 
         if with_mask and not without_mask:
             return address_in_clause, with_mask
-        if not with_mask and without_mask:
+        elif not with_mask and without_mask:
             return host_in_clause, without_mask
 
         in_clause = '({}) OR ({})'.format(address_in_clause, host_in_clause)
@@ -153,7 +151,7 @@ class NetHostContained(Lookup):
         lhs, lhs_params = self.process_lhs(qn, connection)
         rhs, rhs_params = self.process_rhs(qn, connection)
         params = lhs_params + rhs_params
-        return f'CAST(HOST({lhs}) AS INET) <<= {rhs}', params
+        return 'CAST(HOST(%s) AS INET) <<= %s' % (lhs, rhs), params
 
 
 class NetFamily(Transform):

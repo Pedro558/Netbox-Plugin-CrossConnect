@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from rq.exceptions import InvalidJobOperation
 
-from core.choices import JobNotificationChoices, JobStatusChoices
+from core.choices import JobStatusChoices
 from core.dataclasses import JobLogEntry
 from core.events import JOB_COMPLETED, JOB_ERRORED, JOB_FAILED
 from core.models import ObjectType
@@ -112,18 +112,6 @@ class Job(models.Model):
         verbose_name=_('job ID'),
         unique=True
     )
-    queue_name = models.CharField(
-        verbose_name=_('queue name'),
-        max_length=100,
-        blank=True,
-        help_text=_('Name of the queue in which this job was enqueued')
-    )
-    notifications = models.CharField(
-        verbose_name=_('notifications'),
-        max_length=30,
-        choices=JobNotificationChoices,
-        default=JobNotificationChoices.NOTIFICATION_ALWAYS
-    )
     log_entries = ArrayField(
         verbose_name=_('log entries'),
         base_field=models.JSONField(
@@ -139,7 +127,6 @@ class Job(models.Model):
     class Meta:
         ordering = ['-created']
         indexes = (
-            models.Index(fields=('-created',)),  # Default ordering
             models.Index(fields=('object_type', 'object_id')),
         )
         verbose_name = _('job')
@@ -153,7 +140,7 @@ class Job(models.Model):
         if self.object_type:
             if self.object_type.model == 'reportmodule':
                 return reverse('extras:report_result', kwargs={'job_pk': self.pk})
-            if self.object_type.model == 'scriptmodule':
+            elif self.object_type.model == 'scriptmodule':
                 return reverse('extras:script_result', kwargs={'job_pk': self.pk})
         return reverse('core:job', args=[self.pk])
 
@@ -192,15 +179,11 @@ class Job(models.Model):
         return f"{int(minutes)} minutes, {seconds:.2f} seconds"
 
     def delete(self, *args, **kwargs):
-        # Use the stored queue name, or fall back to get_queue_for_model for legacy jobs
-        rq_queue_name = self.queue_name or get_queue_for_model(self.object_type.model if self.object_type else None)
-        rq_job_id = str(self.job_id)
-
         super().delete(*args, **kwargs)
 
-        # Cancel the RQ job using the stored queue name
+        rq_queue_name = get_queue_for_model(self.object_type.model if self.object_type else None)
         queue = django_rq.get_queue(rq_queue_name)
-        job = queue.fetch_job(rq_job_id)
+        job = queue.fetch_job(str(self.job_id))
 
         if job:
             try:
@@ -223,7 +206,6 @@ class Job(models.Model):
 
         # Send signal
         job_start.send(self)
-    start.alters_data = True
 
     def terminate(self, status=JobStatusChoices.STATUS_COMPLETED, error=None):
         """
@@ -244,20 +226,15 @@ class Job(models.Model):
         self.save()
 
         # Notify the user (if any) of completion
-        if self.user and self.notifications != JobNotificationChoices.NOTIFICATION_NEVER:
-            if (
-                self.notifications == JobNotificationChoices.NOTIFICATION_ALWAYS or
-                status != JobStatusChoices.STATUS_COMPLETED
-            ):
-                Notification(
-                    user=self.user,
-                    object=self,
-                    event_type=self.get_event_type(),
-                ).save()
+        if self.user:
+            Notification(
+                user=self.user,
+                object=self,
+                event_type=self.get_event_type(),
+            ).save()
 
         # Send signal
         job_end.send(self)
-    terminate.alters_data = True
 
     def log(self, record: logging.LogRecord):
         """
@@ -277,7 +254,6 @@ class Job(models.Model):
             interval=None,
             immediate=False,
             queue_name=None,
-            notifications=None,
             **kwargs
     ):
         """
@@ -292,7 +268,6 @@ class Job(models.Model):
             interval: Recurrence interval (in minutes)
             immediate: Run the job immediately without scheduling it in the background. Should be used for interactive
                 management commands only.
-            notifications: Notification behavior on job completion (always, on_failure, or never)
         """
         if schedule_at and immediate:
             raise ValueError(_("enqueue() cannot be called with values for both schedule_at and immediate."))
@@ -313,9 +288,7 @@ class Job(models.Model):
             scheduled=schedule_at,
             interval=interval,
             user=user,
-            job_id=uuid.uuid4(),
-            queue_name=rq_queue_name,
-            notifications=notifications if notifications is not None else JobNotificationChoices.NOTIFICATION_ALWAYS
+            job_id=uuid.uuid4()
         )
         job.full_clean()
         job.save()

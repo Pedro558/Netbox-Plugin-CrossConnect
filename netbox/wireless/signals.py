@@ -1,19 +1,18 @@
 import logging
 
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 from dcim.exceptions import UnsupportedCablePath
 from dcim.models import CablePath, Interface
-from dcim.utils import create_cablepaths
+from dcim.utils import create_cablepath
 from utilities.exceptions import AbortRequest
-
 from .models import WirelessLink
+
 
 #
 # Wireless links
 #
-
 
 @receiver(post_save, sender=WirelessLink)
 def update_connected_interfaces(instance, created, raw=False, **kwargs):
@@ -29,7 +28,7 @@ def update_connected_interfaces(instance, created, raw=False, **kwargs):
         logger.debug(f"Updating interface A for wireless link {instance}")
         instance.interface_a.wireless_link = instance
         instance.interface_a.save()
-    if instance.interface_b.wireless_link != instance:
+    if instance.interface_b.cable != instance:
         logger.debug(f"Updating interface B for wireless link {instance}")
         instance.interface_b.wireless_link = instance
         instance.interface_b.save()
@@ -38,7 +37,7 @@ def update_connected_interfaces(instance, created, raw=False, **kwargs):
     if created:
         for interface in (instance.interface_a, instance.interface_b):
             try:
-                create_cablepaths([interface])
+                create_cablepath([interface])
             except UnsupportedCablePath as e:
                 raise AbortRequest(e)
 

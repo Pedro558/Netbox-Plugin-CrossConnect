@@ -1,20 +1,15 @@
 import django_filters
 from django import forms
 from django.conf import settings
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django_filters.constants import EMPTY_VALUES
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema_field
 
-from .forms.fields import BigIntegerField
-
 __all__ = (
     'ContentTypeFilter',
     'MultiValueArrayFilter',
-    'MultiValueBigNumberFilter',
     'MultiValueCharFilter',
-    'MultiValueContentTypeFilter',
     'MultiValueDateFilter',
     'MultiValueDateTimeFilter',
     'MultiValueDecimalFilter',
@@ -78,11 +73,6 @@ class MultiValueDateTimeFilter(django_filters.MultipleChoiceFilter):
 @extend_schema_field(OpenApiTypes.INT32)
 class MultiValueNumberFilter(django_filters.MultipleChoiceFilter):
     field_class = multivalue_field_factory(forms.IntegerField)
-
-
-@extend_schema_field(OpenApiTypes.INT64)
-class MultiValueBigNumberFilter(MultiValueNumberFilter):
-    field_class = multivalue_field_factory(BigIntegerField)
 
 
 @extend_schema_field(OpenApiTypes.DECIMAL)
@@ -173,35 +163,11 @@ class ContentTypeFilter(django_filters.CharFilter):
 
         try:
             app_label, model = value.lower().split('.')
-            content_type = ContentType.objects.get_by_natural_key(app_label, model)
-        except (ValueError, ContentType.DoesNotExist):
+        except ValueError:
             return qs.none()
         return qs.filter(
             **{
-                f'{self.field_name}': content_type,
-            }
-        )
-
-
-class MultiValueContentTypeFilter(MultiValueCharFilter):
-    """
-    A multi-value version of ContentTypeFilter.
-    """
-    def filter(self, qs, value):
-        if value in EMPTY_VALUES:
-            return qs
-
-        content_types = []
-        for key in value:
-            try:
-                app_label, model = key.lower().split('.')
-                ct = ContentType.objects.get_by_natural_key(app_label, model)
-                content_types.append(ct)
-            except (ValueError, ContentType.DoesNotExist):
-                continue
-
-        return qs.filter(
-            **{
-                f'{self.field_name}__in': content_types,
+                f'{self.field_name}__app_label': app_label,
+                f'{self.field_name}__model': model
             }
         )

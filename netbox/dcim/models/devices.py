@@ -1,7 +1,8 @@
 import decimal
+import yaml
+
 from functools import cached_property
 
-import yaml
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
@@ -18,22 +19,21 @@ from django.utils.translation import gettext_lazy as _
 from dcim.choices import *
 from dcim.constants import *
 from dcim.fields import MACAddressField
-from dcim.utils import create_port_mappings, update_interface_bridges
+from dcim.utils import update_interface_bridges
 from extras.models import ConfigContextModel, CustomField
 from extras.querysets import ConfigContextModelQuerySet
 from netbox.choices import ColorChoices
 from netbox.config import ConfigItem
 from netbox.models import NestedGroupModel, OrganizationalModel, PrimaryModel
-from netbox.models.features import ContactsMixin, ImageAttachmentsMixin
 from netbox.models.mixins import WeightMixin
-from utilities.exceptions import AbortRequest
+from netbox.models.features import ContactsMixin, ImageAttachmentsMixin
 from utilities.fields import ColorField, CounterCacheField
 from utilities.prefetch import get_prefetchable_fields
 from utilities.tracking import TrackingModelMixin
-
 from .device_components import *
 from .mixins import RenderConfigMixin
 from .modules import Module
+
 
 __all__ = (
     'Device',
@@ -185,10 +185,6 @@ class DeviceType(ImageAttachmentsMixin, PrimaryModel, WeightMixin):
         to_model='dcim.InventoryItemTemplate',
         to_field='device_type'
     )
-    device_count = CounterCacheField(
-        to_model='dcim.Device',
-        to_field='device_type'
-    )
 
     clone_fields = (
         'manufacturer', 'default_platform', 'u_height', 'is_full_depth', 'subdevice_role', 'airflow', 'weight',
@@ -276,15 +272,6 @@ class DeviceType(ImageAttachmentsMixin, PrimaryModel, WeightMixin):
             data['rear-ports'] = [
                 c.to_yaml() for c in self.rearporttemplates.all()
             ]
-
-        # Port mappings
-        port_mapping_data = [
-            c.to_yaml() for c in self.port_mappings.all()
-        ]
-
-        if port_mapping_data:
-            data['port-mappings'] = port_mapping_data
-
         if self.modulebaytemplates.exists():
             data['module-bays'] = [
                 c.to_yaml() for c in self.modulebaytemplates.all()
@@ -412,9 +399,6 @@ class DeviceRole(NestedGroupModel):
 
     class Meta:
         ordering = ('name',)
-        # Empty tuple triggers Django migration detection for MPTT indexes
-        # (see #21016, django-mptt/django-mptt#682)
-        indexes = ()
         constraints = (
             models.UniqueConstraint(
                 fields=('parent', 'name'),
@@ -466,9 +450,6 @@ class Platform(NestedGroupModel):
 
     class Meta:
         ordering = ('name',)
-        # Empty tuple triggers Django migration detection for MPTT indexes
-        # (see #21016, django-mptt/django-mptt#682)
-        indexes = ()
         verbose_name = _('platform')
         verbose_name_plural = _('platforms')
         constraints = (
@@ -746,9 +727,6 @@ class Device(
 
     class Meta:
         ordering = ('name', 'pk')  # Name may be null
-        indexes = (
-            models.Index(fields=('name', 'id')),  # Default ordering
-        )
         constraints = (
             models.UniqueConstraint(
                 Lower('name'), 'site', 'tenant',
@@ -771,18 +749,15 @@ class Device(
         )
         verbose_name = _('device')
         verbose_name_plural = _('devices')
-        permissions = [
-            ('render_config', 'Render configuration'),
-        ]
 
     def __str__(self):
         if self.label and self.asset_tag:
             return f'{self.label} ({self.asset_tag})'
-        if self.label:
+        elif self.label:
             return self.label
-        if self.device_type and self.asset_tag:
+        elif self.device_type and self.asset_tag:
             return f'{self.device_type.manufacturer} {self.device_type.model} ({self.asset_tag})'
-        if self.device_type:
+        elif self.device_type:
             return f'{self.device_type.manufacturer} {self.device_type.model} ({self.pk})'
         return super().__str__()
 
@@ -964,20 +939,6 @@ class Device(
                 ).format(virtual_chassis=self.vc_master_for)
             })
 
-    def _check_duplicate_component_names(self, components):
-        """
-        Check for duplicate component names after resolving {vc_position} placeholders.
-        Raises AbortRequest if duplicates are found.
-        """
-        names = [c.name for c in components]
-        duplicates = {n for n in names if names.count(n) > 1}
-        if duplicates:
-            raise AbortRequest(
-                _("Component name conflict after resolving {{vc_position}}: {names}").format(
-                    names=', '.join(duplicates)
-                )
-            )
-
     def _instantiate_components(self, queryset, bulk_create=True):
         """
         Instantiate components for the device from the specified component templates.
@@ -992,19 +953,10 @@ class Device(
             components = [obj.instantiate(device=self) for obj in queryset]
             if not components:
                 return
-
-            # Check for duplicate names after resolution {vc_position}
-            self._check_duplicate_component_names(components)
-
             # Set default values for any applicable custom fields
             if cf_defaults := CustomField.objects.get_defaults_for_model(model):
                 for component in components:
                     component.custom_field_data = cf_defaults
-            # Set denormalized references
-            for component in components:
-                component._site = self.site
-                component._location = self.location
-                component._rack = self.rack
             components = model.objects.bulk_create(components)
             # Prefetch related objects to minimize queries needed during post_save
             prefetch_fields = get_prefetchable_fields(model)
@@ -1020,14 +972,8 @@ class Device(
                     update_fields=None
                 )
         else:
-            components = [obj.instantiate(device=self) for obj in queryset]
-            if not components:
-                return
-
-            # Check for duplicate names after resolution {vc_position}
-            self._check_duplicate_component_names(components)
-
-            for component in components:
+            for obj in queryset:
+                component = obj.instantiate(device=self)
                 # Set default values for any applicable custom fields
                 if cf_defaults := CustomField.objects.get_defaults_for_model(model):
                     component.custom_field_data = cf_defaults
@@ -1059,8 +1005,6 @@ class Device(
             self._instantiate_components(self.device_type.interfacetemplates.all())
             self._instantiate_components(self.device_type.rearporttemplates.all())
             self._instantiate_components(self.device_type.frontporttemplates.all())
-            # Replicate any front/rear port mappings from the DeviceType
-            create_port_mappings(self, self.device_type)
             # Disable bulk_create to accommodate MPTT
             self._instantiate_components(self.device_type.modulebaytemplates.all(), bulk_create=False)
             self._instantiate_components(self.device_type.devicebaytemplates.all())
@@ -1086,7 +1030,6 @@ class Device(
             return self.name
         if self.virtual_chassis:
             return f'{self.virtual_chassis.name}:{self.vc_position}'
-        return None
 
     @property
     def identifier(self):
@@ -1099,11 +1042,12 @@ class Device(
     def primary_ip(self):
         if ConfigItem('PREFER_IPV4')() and self.primary_ip4:
             return self.primary_ip4
-        if self.primary_ip6:
+        elif self.primary_ip6:
             return self.primary_ip6
-        if self.primary_ip4:
+        elif self.primary_ip4:
             return self.primary_ip4
-        return None
+        else:
+            return None
 
     @property
     def interfaces_count(self):
@@ -1199,9 +1143,6 @@ class VirtualChassis(PrimaryModel):
 
     class Meta:
         ordering = ['name']
-        indexes = (
-            models.Index(fields=('name',)),  # Default ordering
-        )
         verbose_name = _('virtual chassis')
         verbose_name_plural = _('virtual chassis')
 
@@ -1308,9 +1249,6 @@ class VirtualDeviceContext(PrimaryModel):
                 name='%(app_label)s_%(class)s_device_name'
             ),
         )
-        indexes = (
-            models.Index(fields=('name',)),  # Default ordering
-        )
         verbose_name = _('virtual device context')
         verbose_name_plural = _('virtual device contexts')
 
@@ -1324,11 +1262,12 @@ class VirtualDeviceContext(PrimaryModel):
     def primary_ip(self):
         if ConfigItem('PREFER_IPV4')() and self.primary_ip4:
             return self.primary_ip4
-        if self.primary_ip6:
+        elif self.primary_ip6:
             return self.primary_ip6
-        if self.primary_ip4:
+        elif self.primary_ip4:
             return self.primary_ip4
-        return None
+        else:
+            return None
 
     def clean(self):
         super().clean()
@@ -1375,11 +1314,7 @@ class MACAddress(PrimaryModel):
     )
 
     class Meta:
-        ordering = ('mac_address', 'pk')
-        indexes = (
-            models.Index(fields=('mac_address', 'id')),  # Default ordering
-            models.Index(fields=('assigned_object_type', 'assigned_object_id')),
-        )
+        ordering = ('mac_address', 'pk',)
         verbose_name = _('MAC address')
         verbose_name_plural = _('MAC addresses')
 
@@ -1415,7 +1350,7 @@ class MACAddress(PrimaryModel):
                     raise ValidationError(
                         _("Cannot unassign MAC Address while it is designated as the primary MAC for an object")
                     )
-                if original_assigned_object != assigned_object:
+                elif original_assigned_object != assigned_object:
                     raise ValidationError(
                         _("Cannot reassign MAC Address while it is designated as the primary MAC for an object")
                     )

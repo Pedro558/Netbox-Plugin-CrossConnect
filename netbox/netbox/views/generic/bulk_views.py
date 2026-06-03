@@ -1,11 +1,10 @@
 import logging
 import re
-from collections import Counter
 from copy import deepcopy
 
-from django.conf import settings
 from django.contrib import messages
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRel
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import FieldDoesNotExist, ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError, router, transaction
 from django.db.models import ManyToManyField, ProtectedError, RestrictedError
@@ -22,12 +21,11 @@ from core.models import ObjectType
 from core.signals import clear_events
 from extras.choices import CustomFieldUIEditableChoices
 from extras.models import CustomField, ExportTemplate
-from netbox.forms.bulk_rename import NetBoxModelBulkRenameForm
 from netbox.models.features import ChangeLoggingMixin
 from netbox.object_actions import AddObject, BulkDelete, BulkEdit, BulkExport, BulkImport, BulkRename
 from utilities.error_handlers import handle_protectederror
 from utilities.exceptions import AbortRequest, PermissionsViolation
-from utilities.export import TableExport, stream_table_csv_response
+from utilities.export import TableExport
 from utilities.forms import BulkDeleteForm, BulkRenameForm, restrict_form_fields
 from utilities.forms.bulk_import import BulkImportForm
 from utilities.htmx import htmx_partial
@@ -35,10 +33,8 @@ from utilities.jobs import is_background_request, process_request_as_job
 from utilities.permissions import get_permission_for_model
 from utilities.query import reapply_model_ordering
 from utilities.request import safe_for_redirect
-from utilities.string import title
 from utilities.tables import get_table_configs
 from utilities.views import GetReturnURLMixin, get_action_url
-
 from .base import BaseMultiObjectView
 from .mixins import ActionsMixin, TableMixin
 from .utils import get_prerequisite_model
@@ -95,33 +91,20 @@ class ObjectListView(BaseMultiObjectView, ActionsMixin, TableMixin):
             delimiter: The character used to separate columns (a comma is used by default)
         """
         exclude_columns = {'pk', 'actions'}
-        all_columns = [col_name for col_name, _ in table.selected_columns + table.available_columns]
         if columns:
+            all_columns = [col_name for col_name, _ in table.selected_columns + table.available_columns]
             exclude_columns.update({
                 col for col in all_columns if col not in columns
             })
-
-        # Ensure related objects are prefetched for every column that will be exported, not just
-        # those currently visible in the configured table view.
-        table._apply_prefetching(columns=[c for c in all_columns if c not in exclude_columns])
-
-        filename = filename or f'netbox_{self.queryset.model._meta.verbose_name_plural}.csv'
-
-        if settings.STREAMING_EXPORTS:
-            return stream_table_csv_response(
-                table=table,
-                exclude_columns=exclude_columns,
-                filename=filename,
-                delimiter=delimiter,
-            )
-
         exporter = TableExport(
             export_format=TableExport.CSV,
             table=table,
             exclude_columns=exclude_columns,
             delimiter=delimiter,
         )
-        return exporter.response(filename=filename)
+        return exporter.response(
+            filename=filename or f'netbox_{self.queryset.model._meta.verbose_name_plural}.csv'
+        )
 
     def export_template(self, template, request):
         """
@@ -184,25 +167,22 @@ class ObjectListView(BaseMultiObjectView, ActionsMixin, TableMixin):
                 return self.export_table(table, columns, delimiter=delimiter)
 
             # Render an ExportTemplate
-            if request.GET['export']:
-                template = get_object_or_404(
-                    ExportTemplate.objects.restrict(request.user, 'view'),
-                    object_types=object_type,
-                    name=request.GET['export'],
-                )
+            elif request.GET['export']:
+                template = get_object_or_404(ExportTemplate, object_types=object_type, name=request.GET['export'])
                 return self.export_template(template, request)
 
             # Check for YAML export support on the model
-            if hasattr(model, 'to_yaml'):
+            elif hasattr(model, 'to_yaml'):
                 response = HttpResponse(self.export_yaml(), content_type='text/yaml')
                 filename = 'netbox_{}.yaml'.format(self.queryset.model._meta.verbose_name_plural)
                 response['Content-Disposition'] = 'attachment; filename="{}"'.format(filename)
                 return response
 
             # Fall back to default table/YAML export
-            table = self.get_table(self.queryset, request, has_table_actions)
-            delimiter = request.user.config.get('csv_delimiter')
-            return self.export_table(table, delimiter=delimiter)
+            else:
+                table = self.get_table(self.queryset, request, has_table_actions)
+                delimiter = request.user.config.get('csv_delimiter')
+                return self.export_table(table, delimiter=delimiter)
 
         # Render the objects table
         table = self.get_table(self.queryset, request, has_table_actions)
@@ -244,7 +224,6 @@ class BulkCreateView(GetReturnURLMixin, BaseMultiObjectView):
     form = None
     model_form = None
     pattern_target = ''
-    htmx_template_name = 'htmx/bulk_add_form.html'
 
     def get_required_permission(self):
         return get_permission_for_model(self.queryset.model, 'add')
@@ -262,7 +241,6 @@ class BulkCreateView(GetReturnURLMixin, BaseMultiObjectView):
 
             # Validate each new object independently.
             if model_form.is_valid():
-                model_form.instance._changelog_message = model_form.cleaned_data.get('changelog_message', '')
                 obj = model_form.save()
                 new_objects.append(obj)
             else:
@@ -274,19 +252,6 @@ class BulkCreateView(GetReturnURLMixin, BaseMultiObjectView):
                 raise IntegrityError()
 
         return new_objects
-
-    def _get_context(self, request, form, model_form):
-        model = self.queryset.model
-        return {
-            'object': None,
-            'obj_type': model._meta.verbose_name,
-            'obj_type_plural': model._meta.verbose_name_plural,
-            'form': form,
-            'model_form': model_form,
-            'return_url': self.get_return_url(request),
-            'add_url': get_action_url(model, 'add'),
-            **self.get_extra_context(request),
-        }
 
     #
     # Request handlers
@@ -302,25 +267,19 @@ class BulkCreateView(GetReturnURLMixin, BaseMultiObjectView):
         form = self.form()
         model_form = self.model_form(initial=initial)
 
-        # HTMX partial: only re-render the model form fields
-        if htmx_partial(request):
-            return render(request, self.htmx_template_name, {
-                'model_form': model_form,
-            })
-
-        return render(request, self.template_name, self._get_context(request, form, model_form))
+        return render(request, self.template_name, {
+            'obj_type': self.model_form._meta.model._meta.verbose_name,
+            'form': form,
+            'model_form': model_form,
+            'return_url': self.get_return_url(request),
+            **self.get_extra_context(request),
+        })
 
     def post(self, request):
         logger = logging.getLogger('netbox.views.BulkCreateView')
         model = self.queryset.model
         form = self.form(request.POST)
         model_form = self.model_form(request.POST)
-
-        # HTMX partial: only re-render the model form fields
-        if htmx_partial(request):
-            return render(request, self.htmx_template_name, {
-                'model_form': model_form,
-            })
 
         if form.is_valid():
             logger.debug("Form validation was successful")
@@ -353,7 +312,13 @@ class BulkCreateView(GetReturnURLMixin, BaseMultiObjectView):
         else:
             logger.debug("Form validation failed")
 
-        return render(request, self.template_name, self._get_context(request, form, model_form))
+        return render(request, self.template_name, {
+            'form': form,
+            'model_form': model_form,
+            'obj_type': model._meta.verbose_name,
+            'return_url': self.get_return_url(request),
+            **self.get_extra_context(request),
+        })
 
 
 class BulkImportView(GetReturnURLMixin, BaseMultiObjectView):
@@ -386,7 +351,7 @@ class BulkImportView(GetReturnURLMixin, BaseMultiObjectView):
         for field in form.visible_fields():
             if field.is_hidden:
                 continue
-            if field.field.required:
+            elif field.field.required:
                 required_fields[field.name] = field.field
             else:
                 optional_fields[field.name] = field.field
@@ -471,11 +436,17 @@ class BulkImportView(GetReturnURLMixin, BaseMultiObjectView):
         """
         return object_form.save()
 
-    def _process_import_records(self, form, request, records, prefetched_objects):
-        """
-        Process CSV import records and save objects.
-        """
+    def create_and_update_objects(self, form, request):
         saved_objects = []
+
+        records = list(form.cleaned_data['data'])
+
+        # Prefetch objects to be updated, if any
+        prefetch_ids = [int(record['id']) for record in records if record.get('id')]
+        prefetched_objects = {
+            obj.pk: obj
+            for obj in self.queryset.model.objects.filter(id__in=prefetch_ids)
+        } if prefetch_ids else {}
 
         for i, record in enumerate(records, start=1):
             object_id = int(record.pop('id')) if record.get('id') else None
@@ -499,11 +470,12 @@ class BulkImportView(GetReturnURLMixin, BaseMultiObjectView):
             else:
                 instance = self.queryset.model()
 
-                # For newly created objects, apply any default values for custom fields
-                for cf in CustomField.objects.get_for_model(self.queryset.model):
-                    if cf.ui_editable != CustomFieldUIEditableChoices.YES:
-                        # Skip custom fields which are not editable via the UI
-                        continue
+                # For newly created objects, apply any default custom field values
+                custom_fields = CustomField.objects.filter(
+                    object_types=ContentType.objects.get_for_model(self.queryset.model),
+                    ui_editable=CustomFieldUIEditableChoices.YES
+                )
+                for cf in custom_fields:
                     field_name = f'cf_{cf.name}'
                     if field_name not in record:
                         record[field_name] = cf.default
@@ -537,37 +509,6 @@ class BulkImportView(GetReturnURLMixin, BaseMultiObjectView):
                 raise ValidationError(
                     self._compile_form_errors(model_form.errors, index=i)
                 )
-
-        return saved_objects
-
-    def create_and_update_objects(self, form, request):
-        records = list(form.cleaned_data['data'])
-
-        # Prefetch objects to be updated, if any
-        prefetch_ids = [int(record['id']) for record in records if record.get('id')]
-
-        # check for duplicate IDs
-        duplicate_pks = [pk for pk, count in Counter(prefetch_ids).items() if count > 1]
-        if duplicate_pks:
-            error_msg = _(
-                "Duplicate objects found: {model} with ID(s) {ids} appears multiple times"
-            ).format(
-                model=title(self.queryset.model._meta.verbose_name),
-                ids=', '.join(str(pk) for pk in sorted(duplicate_pks))
-            )
-            raise ValidationError(error_msg)
-
-        prefetched_objects = {
-            obj.pk: obj
-            for obj in self.queryset.model.objects.filter(id__in=prefetch_ids)
-        } if prefetch_ids else {}
-
-        # For MPTT models, delay tree updates until all saves are complete
-        if issubclass(self.queryset.model, MPTTModel):
-            with self.queryset.model.objects.delay_mptt_updates():
-                saved_objects = self._process_import_records(form, request, records, prefetched_objects)
-        else:
-            saved_objects = self._process_import_records(form, request, records, prefetched_objects)
 
         return saved_objects
 
@@ -627,7 +568,7 @@ class BulkImportView(GetReturnURLMixin, BaseMultiObjectView):
                 # Handle background job
                 if is_background_request(request):
                     request.job.logger.info(msg)
-                    return None
+                    return
 
                 messages.success(request, msg)
                 return redirect(f"{redirect_url}?modified_by_request={request.id}")
@@ -833,7 +774,7 @@ class BulkEditView(GetReturnURLMixin, BaseMultiObjectView):
                     # Handle background job
                     if is_background_request(request):
                         request.job.logger.info(msg)
-                        return None
+                        return
 
                     messages.success(self.request, msg)
                     return redirect(self.get_return_url(request))
@@ -886,14 +827,8 @@ class BulkRenameView(GetReturnURLMixin, BaseMultiObjectView):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        # Use the changelog-aware form for models that support change logging
-        base_form = (
-            NetBoxModelBulkRenameForm
-            if issubclass(self.queryset.model, ChangeLoggingMixin)
-            else BulkRenameForm
-        )
-
-        class _Form(base_form):
+        # Create a new Form class from BulkRenameForm
+        class _Form(BulkRenameForm):
             pk = ModelMultipleChoiceField(
                 queryset=self.queryset,
                 widget=MultipleHiddenInput()
@@ -946,18 +881,9 @@ class BulkRenameView(GetReturnURLMixin, BaseMultiObjectView):
                         renamed_pks = self._rename_objects(form, selected_objects)
 
                         if '_apply' in request.POST:
-                            # For MPTT models, delay tree updates until all saves are complete
-                            if issubclass(self.queryset.model, MPTTModel):
-                                with self.queryset.model.objects.delay_mptt_updates():
-                                    for obj in selected_objects:
-                                        setattr(obj, self.field_name, obj.new_name)
-                                        obj._changelog_message = form.cleaned_data.get('changelog_message', '')
-                                        obj.save()
-                            else:
-                                for obj in selected_objects:
-                                    setattr(obj, self.field_name, obj.new_name)
-                                    obj._changelog_message = form.cleaned_data.get('changelog_message', '')
-                                    obj.save()
+                            for obj in selected_objects:
+                                setattr(obj, self.field_name, obj.new_name)
+                                obj.save()
 
                             # Enforce constrained permissions
                             if self.queryset.filter(pk__in=renamed_pks).count() != len(selected_objects):
@@ -1071,7 +997,7 @@ class BulkDeleteView(GetReturnURLMixin, BaseMultiObjectView):
                     # Handle background job
                     if is_background_request(request):
                         request.job.logger.info(msg)
-                        return None
+                        return
 
                     messages.success(request, msg)
 
@@ -1093,7 +1019,8 @@ class BulkDeleteView(GetReturnURLMixin, BaseMultiObjectView):
 
                 return redirect(self.get_return_url(request))
 
-            logger.debug("Form validation failed")
+            else:
+                logger.debug("Form validation failed")
 
         else:
             form = BulkDeleteForm(model, initial={
@@ -1165,19 +1092,8 @@ class BulkComponentCreateView(GetReturnURLMixin, BaseMultiObjectView):
             if form.is_valid():
                 logger.debug("Form validation was successful")
 
-                # If indicated, defer this request to a background job & redirect the user
-                if form.cleaned_data['background_job']:
-                    job_name = _('Bulk add {count} {object_type}').format(
-                        count=len(form.cleaned_data['pk']),
-                        object_type=self.queryset.model._meta.verbose_name_plural,
-                    )
-                    if process_request_as_job(self.__class__, request, name=job_name):
-                        return redirect(self.get_return_url(request))
-
                 new_components = []
                 data = deepcopy(form.cleaned_data)
-                changelog_message = data.pop('changelog_message', '')
-                data.pop('background_job', None)
                 replication_data = {
                     field: data.pop(field) for field in form.replication_fields
                 }
@@ -1199,18 +1115,13 @@ class BulkComponentCreateView(GetReturnURLMixin, BaseMultiObjectView):
 
                                 component_form = self.model_form(component_data)
                                 if component_form.is_valid():
-                                    if changelog_message:
-                                        component_form.instance._changelog_message = changelog_message
                                     instance = component_form.save()
                                     logger.debug(f"Created {instance} on {instance.parent_object}")
                                     new_components.append(instance)
                                 else:
                                     for field, errors in component_form.errors.as_data().items():
                                         for e in errors:
-                                            err_msg = '{}: {}'.format(obj, ', '.join(e))
-                                            form.add_error(field, err_msg)
-                                            if is_background_request(request):
-                                                request.job.logger.error(err_msg)
+                                            form.add_error(field, '{}: {}'.format(obj, ', '.join(e)))
 
                         # Enforce object-level permissions
                         component_ids = [obj.pk for obj in new_components]
@@ -1219,32 +1130,20 @@ class BulkComponentCreateView(GetReturnURLMixin, BaseMultiObjectView):
 
                 except IntegrityError:
                     clear_events.send(sender=self)
-                    if is_background_request(request):
-                        request.job.logger.error(_("An integrity error occurred while creating components"))
-                        raise JobFailed
 
                 except (AbortRequest, PermissionsViolation) as e:
                     logger.debug(e.message)
                     form.add_error(None, e.message)
                     clear_events.send(sender=self)
-                    if is_background_request(request):
-                        request.job.logger.error(e.message)
-                        raise JobFailed
 
                 if not form.errors:
-                    msg = _("Added {count} {component} to {parent_count} {parent}.").format(
-                        count=len(new_components),
-                        component=model_name,
-                        parent_count=len(form.cleaned_data['pk']),
-                        parent=parent_model_name,
+                    msg = "Added {} {} to {} {}.".format(
+                        len(new_components),
+                        model_name,
+                        len(form.cleaned_data['pk']),
+                        parent_model_name
                     )
                     logger.info(msg)
-
-                    # Handle background job
-                    if is_background_request(request):
-                        request.job.logger.info(msg)
-                        return None
-
                     messages.success(request, msg)
 
                     return redirect(self.get_return_url(request))

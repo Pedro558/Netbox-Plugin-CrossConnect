@@ -10,7 +10,6 @@ __all__ = (
     'IKEModeEnum',
     'IKEVersionEnum',
     'IPSecModeEnum',
-    'L2VPNStatusEnum',
     'L2VPNTypeEnum',
     'TunnelEncapsulationEnum',
     'TunnelStatusEnum',
@@ -25,7 +24,6 @@ EncryptionAlgorithmEnum = strawberry.enum(EncryptionAlgorithmChoices.as_enum(pre
 IKEModeEnum = strawberry.enum(IKEModeChoices.as_enum())
 IKEVersionEnum = strawberry.enum(IKEVersionChoices.as_enum(prefix='version'))
 IPSecModeEnum = strawberry.enum(IPSecModeChoices.as_enum())
-L2VPNStatusEnum = strawberry.enum(L2VPNStatusChoices.as_enum(prefix='status'))
 L2VPNTypeEnum = strawberry.enum(L2VPNTypeChoices.as_enum(prefix='type'))
 TunnelEncapsulationEnum = strawberry.enum(TunnelEncapsulationChoices.as_enum(prefix='encap'))
 TunnelStatusEnum = strawberry.enum(TunnelStatusChoices.as_enum(prefix='status'))

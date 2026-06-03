@@ -1,12 +1,12 @@
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site
+from dcim.models import Interface, Device, DeviceRole, DeviceType, Manufacturer, Site
 from ipam.models import VLAN
 from vpn.models import *
 
 
-class L2VPNTerminationTestCase(TestCase):
+class TestL2VPNTermination(TestCase):
 
     @classmethod
     def setUpTestData(cls):

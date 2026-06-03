@@ -1,39 +1,17 @@
 import logging
 
-from django.db.models import Q
-from django.db.models.signals import post_delete, post_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 
 from dcim.choices import CableEndChoices, LinkStatusChoices
-from ipam.models import Prefix
-from virtualization.models import Cluster, VMInterface
-from wireless.models import WirelessLAN
-
+from virtualization.models import VMInterface
 from .models import (
-    Cable,
-    CablePath,
-    CableTermination,
-    ConsolePort,
-    ConsoleServerPort,
-    Device,
-    DeviceBay,
-    FrontPort,
-    Interface,
-    InventoryItem,
-    Location,
-    ModuleBay,
-    PathEndpoint,
-    PortMapping,
-    PowerOutlet,
-    PowerPanel,
-    PowerPort,
-    Rack,
-    RearPort,
-    Site,
+    Cable, CablePath, CableTermination, ConsolePort, ConsoleServerPort, Device, DeviceBay, FrontPort, Interface,
+    InventoryItem, ModuleBay, PathEndpoint, PowerOutlet, PowerPanel, PowerPort, Rack, RearPort, Location,
     VirtualChassis,
 )
 from .models.cables import trace_paths
-from .utils import create_cablepaths, rebuild_paths
+from .utils import create_cablepath, rebuild_paths
 
 COMPONENT_MODELS = (
     ConsolePort,
@@ -66,9 +44,6 @@ def handle_location_site_change(instance, created, **kwargs):
         Device.objects.filter(location__in=locations).update(site=instance.site)
         PowerPanel.objects.filter(location__in=locations).update(site=instance.site)
         CableTermination.objects.filter(_location__in=locations).update(_site=instance.site)
-        # Update component models for devices in these locations
-        for model in COMPONENT_MODELS:
-            model.objects.filter(device__location__in=locations).update(_site=instance.site)
 
 
 @receiver(post_save, sender=Rack)
@@ -78,12 +53,6 @@ def handle_rack_site_change(instance, created, **kwargs):
     """
     if not created:
         Device.objects.filter(rack=instance).update(site=instance.site, location=instance.location)
-        # Update component models for devices in this rack
-        for model in COMPONENT_MODELS:
-            model.objects.filter(device__rack=instance).update(
-                _site=instance.site,
-                _location=instance.location,
-            )
 
 
 @receiver(post_save, sender=Device)
@@ -145,7 +114,7 @@ def update_connected_endpoints(instance, created, raw=False, **kwargs):
             if not nodes:
                 continue
             if isinstance(nodes[0], PathEndpoint):
-                create_cablepaths(nodes)
+                create_cablepath(nodes)
             else:
                 rebuild_paths(nodes)
 
@@ -166,17 +135,6 @@ def retrace_cable_paths(instance, **kwargs):
         cablepath.retrace()
 
 
-@receiver((post_delete, post_save), sender=PortMapping)
-def update_passthrough_port_paths(instance, **kwargs):
-    """
-    When a PortMapping is created or deleted, retrace any CablePaths which traverse its front and/or rear ports.
-    """
-    for cablepath in CablePath.objects.filter(
-        Q(_nodes__contains=instance.front_port) | Q(_nodes__contains=instance.rear_port)
-    ):
-        cablepath.retrace()
-
-
 @receiver(post_delete, sender=CableTermination)
 def nullify_connected_endpoints(instance, **kwargs):
     """
@@ -185,19 +143,22 @@ def nullify_connected_endpoints(instance, **kwargs):
     model = instance.termination_type.model_class()
     model.objects.filter(pk=instance.termination_id).update(cable=None, cable_end='')
 
-    # If the parent Cable is being deleted in this same operation, skip the
-    # per-termination retrace; retrace_cable_paths() will retrace each affected
-    # path once after the Cable is deleted.
-    if Cable._is_being_deleted(instance.cable_id):
-        return
-
     for cablepath in CablePath.objects.filter(_nodes__contains=instance.cable):
         # Remove the deleted CableTermination if it's one of the path's originating nodes
         if instance.termination in cablepath.origins:
             cablepath.origins.remove(instance.termination)
-            # Clear _path on the removed origin to prevent stale connection display
-            model.objects.filter(pk=instance.termination_id, _path=cablepath.pk).update(_path=None)
         cablepath.retrace()
+
+
+@receiver(post_save, sender=FrontPort)
+def extend_rearport_cable_paths(instance, created, raw, **kwargs):
+    """
+    When a new FrontPort is created, add it to any CablePaths which end at its corresponding RearPort.
+    """
+    if created and not raw:
+        rearport = instance.rear_port
+        for cablepath in CablePath.objects.filter(_nodes__contains=rearport):
+            cablepath.retrace()
 
 
 @receiver(post_save, sender=Interface)
@@ -210,44 +171,3 @@ def update_mac_address_interface(instance, created, raw, **kwargs):
     if created and not raw and instance.primary_mac_address:
         instance.primary_mac_address.assigned_object = instance
         instance.primary_mac_address.save()
-
-
-@receiver(post_save, sender=Location)
-@receiver(post_save, sender=Site)
-def sync_cached_scope_fields(instance, created, **kwargs):
-    """
-    Rebuild cached scope fields for all CachedScopeMixin-based models
-    affected by a change in a Region, SiteGroup, Site, or Location.
-
-    This method is safe to run for objects created in the past and does
-    not rely on incremental updates. Cached fields are recomputed from
-    authoritative relationships.
-    """
-    if created:
-        return
-
-    if isinstance(instance, Location):
-        filters = {'_location': instance}
-    elif isinstance(instance, Site):
-        filters = {'_site': instance}
-    else:
-        return
-
-    # These models are explicitly listed because they all subclass CachedScopeMixin
-    # and therefore require their cached scope fields to be recomputed.
-    for model in (Prefix, Cluster, WirelessLAN):
-        qs = model.objects.filter(**filters)
-
-        # Bulk update cached fields to avoid O(N) performance issues with large datasets.
-        # This does not trigger post_save signals, avoiding spurious change log entries.
-        objects_to_update = []
-        for obj in qs:
-            # Recompute cache using the same logic as save()
-            obj.cache_related_objects()
-            objects_to_update.append(obj)
-
-        if objects_to_update:
-            model.objects.bulk_update(
-                objects_to_update,
-                ['_location', '_site', '_site_group', '_region']
-            )

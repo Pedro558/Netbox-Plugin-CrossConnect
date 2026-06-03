@@ -1,15 +1,14 @@
 from datetime import timedelta
 
 from django.core.exceptions import ValidationError
-from django.test import TestCase, override_settings
+from django.test import TestCase
 from django.utils import timezone
 
-from users.choices import TokenVersionChoices
-from users.models import Token, User
+from users.models import User, Token
 from utilities.testing import create_test_user
 
 
-class TokenTestCase(TestCase):
+class TokenTest(TestCase):
     """
     Test class for testing the functionality of the Token model.
     """
@@ -20,32 +19,6 @@ class TokenTestCase(TestCase):
         Set up test data for the Token model.
         """
         cls.user = create_test_user('User 1')
-
-    def test_is_active(self):
-        """
-        Test the is_active property.
-        """
-        # Token with enabled status and no expiration date
-        token = Token(user=self.user, enabled=True, expires=None)
-        self.assertTrue(token.is_active)
-
-        # Token with disabled status
-        token.enabled = False
-        self.assertFalse(token.is_active)
-
-        # Token with enabled status and future expiration
-        future_date = timezone.now() + timedelta(days=1)
-        token = Token(user=self.user, enabled=True, expires=future_date)
-        self.assertTrue(token.is_active)
-
-        # Token with past expiration
-        token.expires = timezone.now() - timedelta(days=1)
-        self.assertFalse(token.is_active)
-
-        # Token with disabled status and past expiration
-        past_date = timezone.now() - timedelta(days=1)
-        token = Token(user=self.user, enabled=False, expires=past_date)
-        self.assertFalse(token.is_active)
 
     def test_is_expired(self):
         """
@@ -95,17 +68,8 @@ class TokenTestCase(TestCase):
         token.refresh_from_db()
         self.assertEqual(token.description, 'New Description')
 
-    @override_settings(API_TOKEN_PEPPERS={})
-    def test_v2_without_peppers_configured(self):
-        """
-        Attempting to save a v2 token without API_TOKEN_PEPPERS defined should raise a ValidationError.
-        """
-        token = Token(version=TokenVersionChoices.V2)
-        with self.assertRaises(ValidationError):
-            token.clean()
 
-
-class UserConfigTestCase(TestCase):
+class UserConfigTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):

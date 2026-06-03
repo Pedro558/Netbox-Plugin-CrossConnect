@@ -2,13 +2,12 @@ from django.test import override_settings
 from django.urls import reverse
 
 from core.models import ObjectType
-from users.constants import TOKEN_DEFAULT_LENGTH
-from users.models import Group, ObjectPermission, Owner, OwnerGroup, Token, User
+from users.models import Group, ObjectPermission, Token, User
 from utilities.data import deepmerge
-from utilities.testing import APITestCase, APIViewTestCases, create_test_user
+from utilities.testing import APIViewTestCases, APITestCase, create_test_user
 
 
-class AppTestCase(APITestCase):
+class AppTest(APITestCase):
 
     def test_root(self):
 
@@ -17,7 +16,7 @@ class AppTestCase(APITestCase):
         self.assertEqual(response.status_code, 200)
 
 
-class UserTestCase(APIViewTestCases.APIViewTestCase):
+class UserTest(APIViewTestCases.APIViewTestCase):
     model = User
     brief_fields = ['display', 'id', 'url', 'username']
     validation_excluded_fields = ['password']
@@ -137,7 +136,7 @@ class UserTestCase(APIViewTestCases.APIViewTestCase):
         self.assertEqual(response.status_code, 400)
 
 
-class GroupTestCase(APIViewTestCases.APIViewTestCase):
+class GroupTest(APIViewTestCases.APIViewTestCase):
     model = Group
     brief_fields = ['description', 'display', 'id', 'name', 'url']
 
@@ -189,16 +188,16 @@ class GroupTestCase(APIViewTestCases.APIViewTestCase):
         return
 
 
-class TokenTestCase(
+class TokenTest(
     # No GraphQL support for Token
     APIViewTestCases.GetObjectViewTestCase,
     APIViewTestCases.ListObjectsViewTestCase,
     APIViewTestCases.CreateObjectViewTestCase,
     APIViewTestCases.UpdateObjectViewTestCase,
-    APIViewTestCases.DeleteObjectViewTestCase,
+    APIViewTestCases.DeleteObjectViewTestCase
 ):
     model = Token
-    brief_fields = ['description', 'display', 'enabled', 'id', 'key', 'url', 'version', 'write_enabled']
+    brief_fields = ['description', 'display', 'id', 'key', 'url', 'write_enabled']
     bulk_update_data = {
         'description': 'New description',
     }
@@ -212,9 +211,9 @@ class TokenTestCase(
     @classmethod
     def setUpTestData(cls):
         users = (
-            create_test_user('User 1'),
-            create_test_user('User 2'),
-            create_test_user('User 3'),
+            create_test_user('User1'),
+            create_test_user('User2'),
+            create_test_user('User3'),
         )
 
         tokens = (
@@ -229,22 +228,14 @@ class TokenTestCase(
         cls.create_data = [
             {
                 'user': users[0].pk,
-                'enabled': True,
             },
             {
                 'user': users[1].pk,
-                'enabled': False,
             },
             {
                 'user': users[2].pk,
-                'enabled': True,
-                'write_enabled': False,
             },
         ]
-
-        cls.update_data = {
-            'description': 'Token 1',
-        }
 
     def test_provision_token_valid(self):
         """
@@ -265,14 +256,12 @@ class TokenTestCase(
 
         response = self.client.post(url, data, format='json', **self.header)
         self.assertEqual(response.status_code, 201)
-        self.assertIn('token', response.data)
-        self.assertEqual(len(response.data['token']), TOKEN_DEFAULT_LENGTH)
+        self.assertIn('key', response.data)
+        self.assertEqual(len(response.data['key']), 40)
         self.assertEqual(response.data['description'], data['description'])
         self.assertEqual(response.data['expires'], data['expires'])
         token = Token.objects.get(user=user)
         self.assertEqual(token.key, response.data['key'])
-        self.assertEqual(token.enabled, response.data['enabled'])
-        self.assertEqual(token.write_enabled, response.data['write_enabled'])
 
     def test_provision_token_invalid(self):
         """
@@ -310,74 +299,8 @@ class TokenTestCase(
         response = self.client.post(url, data, format='json', **self.header)
         self.assertEqual(response.status_code, 201)
 
-    def test_create_token_returns_plaintext(self):
-        """
-        Creating a Token via the REST API must return the usable plaintext value in the response.
-        For v2 tokens this value cannot be recovered later because the database stores only an
-        HMAC digest.
-        """
-        self.add_permissions('users.add_token')
-        user = User.objects.create_user(username='token_plaintext_user')
-        url = reverse('users-api:token-list')
 
-        response = self.client.post(url, {'user': user.pk}, format='json', **self.header)
-        self.assertEqual(response.status_code, 201)
-        self.assertIsNotNone(response.data['token'])
-        self.assertEqual(len(response.data['token']), TOKEN_DEFAULT_LENGTH)
-
-        # The returned plaintext must authenticate against the stored token
-        token = Token.objects.get(pk=response.data['id'])
-        self.assertTrue(token.validate(response.data['token']))
-
-    def test_bulk_create_tokens_returns_plaintexts(self):
-        """
-        Bulk-creating Tokens via the REST API must return the plaintext value for each created
-        Token in the response.
-        """
-        self.add_permissions('users.add_token')
-        users = [
-            User.objects.create_user(username='token_bulk_user1'),
-            User.objects.create_user(username='token_bulk_user2'),
-        ]
-        data = [{'user': u.pk} for u in users]
-        url = reverse('users-api:token-list')
-
-        response = self.client.post(url, data, format='json', **self.header)
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(len(response.data), len(data))
-
-        plaintexts = set()
-        for obj in response.data:
-            self.assertIsNotNone(obj['token'])
-            self.assertEqual(len(obj['token']), TOKEN_DEFAULT_LENGTH)
-            plaintexts.add(obj['token'])
-            token = Token.objects.get(pk=obj['id'])
-            self.assertTrue(token.validate(obj['token']))
-
-        # Each token should be unique
-        self.assertEqual(len(plaintexts), len(data))
-
-    def test_reassign_token(self):
-        """
-        Check that a Token cannot be reassigned to another User.
-        """
-        user1 = User.objects.get(username='User 1')
-        user2 = User.objects.get(username='User 2')
-        token1 = Token.objects.filter(user=user1).first()
-        self.add_permissions('users.change_token')
-
-        data = {
-            'user': user2.pk,
-        }
-        url = self._get_detail_url(token1)
-        response = self.client.patch(url, data, format='json', **self.header)
-        # Response should succeed because the read-only `user` field is ignored
-        self.assertEqual(response.status_code, 200)
-        token1.refresh_from_db()
-        self.assertEqual(token1.user, user1, "Token's user should not have changed")
-
-
-class ObjectPermissionTestCase(
+class ObjectPermissionTest(
     # No GraphQL support for ObjectPermission
     APIViewTestCases.GetObjectViewTestCase,
     APIViewTestCases.ListObjectsViewTestCase,
@@ -450,7 +373,7 @@ class ObjectPermissionTestCase(
         }
 
 
-class UserConfigTestCase(APITestCase):
+class UserConfigTest(APITestCase):
 
     def test_get(self):
         """
@@ -501,112 +424,3 @@ class UserConfigTestCase(APITestCase):
         self.assertDictEqual(response.data, new_data)
         userconfig.refresh_from_db()
         self.assertDictEqual(userconfig.data, new_data)
-
-
-class OwnerGroupTestCase(APIViewTestCases.APIViewTestCase):
-    model = OwnerGroup
-    brief_fields = ['description', 'display', 'id', 'name', 'url']
-    bulk_update_data = {
-        'description': 'New description',
-    }
-
-    @classmethod
-    def setUpTestData(cls):
-        owner_groups = (
-            OwnerGroup(name='Owner Group 1'),
-            OwnerGroup(name='Owner Group 2'),
-            OwnerGroup(name='Owner Group 3'),
-        )
-        OwnerGroup.objects.bulk_create(owner_groups)
-
-        cls.create_data = [
-            {
-                'name': 'Owner Group 4',
-                'description': 'Fourth owner group',
-            },
-            {
-                'name': 'Owner Group 5',
-                'description': 'Fifth owner group',
-            },
-            {
-                'name': 'Owner Group 6',
-                'description': 'Sixth owner group',
-            },
-        ]
-
-
-class OwnerTestCase(APIViewTestCases.APIViewTestCase):
-    model = Owner
-    brief_fields = ['description', 'display', 'id', 'name', 'url']
-
-    @classmethod
-    def setUpTestData(cls):
-        owner_groups = (
-            OwnerGroup(name='Owner Group 1'),
-            OwnerGroup(name='Owner Group 2'),
-            OwnerGroup(name='Owner Group 3'),
-            OwnerGroup(name='Owner Group 4'),
-        )
-        OwnerGroup.objects.bulk_create(owner_groups)
-
-        groups = (
-            Group(name='Group 1'),
-            Group(name='Group 2'),
-            Group(name='Group 3'),
-            Group(name='Group 4'),
-        )
-        Group.objects.bulk_create(groups)
-
-        users = (
-            User(username='User 1'),
-            User(username='User 2'),
-            User(username='User 3'),
-            User(username='User 4'),
-        )
-        User.objects.bulk_create(users)
-
-        owners = (
-            Owner(name='Owner 1'),
-            Owner(name='Owner 2'),
-            Owner(name='Owner 3'),
-        )
-        Owner.objects.bulk_create(owners)
-
-        # Assign users and groups to owners
-        owners[0].user_groups.add(groups[0])
-        owners[1].user_groups.add(groups[1])
-        owners[2].user_groups.add(groups[2])
-        owners[0].users.add(users[0])
-        owners[1].users.add(users[1])
-        owners[2].users.add(users[2])
-
-        cls.create_data = [
-            {
-                'name': 'Owner 4',
-                'description': 'Fourth owner',
-                'group': owner_groups[3].pk,
-                'user_groups': [groups[3].pk],
-                'users': [users[3].pk],
-            },
-            {
-                'name': 'Owner 5',
-                'description': 'Fifth owner',
-                'group': owner_groups[3].pk,
-                'user_groups': [groups[3].pk],
-                'users': [users[3].pk],
-            },
-            {
-                'name': 'Owner 6',
-                'description': 'Sixth owner',
-                'group': owner_groups[3].pk,
-                'user_groups': [groups[3].pk],
-                'users': [users[3].pk],
-            },
-        ]
-
-        cls.bulk_update_data = {
-            'group': owner_groups[3].pk,
-            'user_groups': [groups[3].pk],
-            'users': [users[3].pk],
-            'description': 'New description',
-        }

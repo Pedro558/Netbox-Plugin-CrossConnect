@@ -2,15 +2,17 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404
 from django.utils.translation import gettext_lazy as _
 from django_rq.queues import get_redis_connection
-from django_rq.settings import get_queues_list
+from django_rq.settings import QUEUES_LIST
 from django_rq.utils import get_statistics
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from rest_framework.routers import APIRootView
+from rest_framework.viewsets import ReadOnlyModelViewSet
 from rq.job import Job as RQ_Job
 from rq.worker import Worker
 
@@ -22,7 +24,6 @@ from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.metadata import ContentTypeMetadata
 from netbox.api.pagination import LimitOffsetListPagination
 from netbox.api.viewsets import NetBoxModelViewSet, NetBoxReadOnlyModelViewSet
-from utilities.api import IsSuperuser
 
 from . import serializers
 
@@ -64,7 +65,7 @@ class DataFileViewSet(NetBoxReadOnlyModelViewSet):
     filterset_class = filtersets.DataFileFilterSet
 
 
-class JobViewSet(NetBoxReadOnlyModelViewSet):
+class JobViewSet(ReadOnlyModelViewSet):
     """
     Retrieve a list of job results
     """
@@ -73,20 +74,19 @@ class JobViewSet(NetBoxReadOnlyModelViewSet):
     filterset_class = filtersets.JobFilterSet
 
 
-class ObjectChangeViewSet(NetBoxReadOnlyModelViewSet):
+class ObjectChangeViewSet(ReadOnlyModelViewSet):
     """
     Retrieve a list of recent changes.
     """
     metadata_class = ContentTypeMetadata
-    queryset = ObjectChange.objects.all()
     serializer_class = serializers.ObjectChangeSerializer
     filterset_class = filtersets.ObjectChangeFilterSet
 
     def get_queryset(self):
-        return super().get_queryset().valid_models()
+        return ObjectChange.objects.valid_models()
 
 
-class ObjectTypeViewSet(NetBoxReadOnlyModelViewSet):
+class ObjectTypeViewSet(ReadOnlyModelViewSet):
     """
     Read-only list of ObjectTypes.
     """
@@ -95,22 +95,12 @@ class ObjectTypeViewSet(NetBoxReadOnlyModelViewSet):
     serializer_class = serializers.ObjectTypeSerializer
     filterset_class = filtersets.ObjectTypeFilterSet
 
-    def initial(self, request, *args, **kwargs):
-        """
-        Override initial() to skip the restrict() call since ObjectType (a ContentType proxy)
-        doesn't use RestrictedQuerySet and is publicly accessible metadata.
-        """
-        # Call GenericViewSet.initial() directly, skipping BaseViewSet.initial()
-        # which would try to call restrict() on the queryset
-        from rest_framework.viewsets import GenericViewSet
-        GenericViewSet.initial(self, request, *args, **kwargs)
-
 
 class BaseRQViewSet(viewsets.ViewSet):
     """
     Base class for RQ view sets. Provides a list() method. Subclasses must implement get_data().
     """
-    permission_classes = [IsSuperuser]
+    permission_classes = [IsAdminUser]
     serializer_class = None
 
     def get_data(self):
@@ -195,7 +185,7 @@ class BackgroundWorkerViewSet(BaseRQViewSet):
         return 'Background Workers'
 
     def get_data(self):
-        config = get_queues_list()[0]
+        config = QUEUES_LIST[0]
         return Worker.all(get_redis_connection(config['connection_config']))
 
     @extend_schema(
@@ -205,7 +195,7 @@ class BackgroundWorkerViewSet(BaseRQViewSet):
     )
     def retrieve(self, request, name):
         # all the RQ queues should use the same connection
-        config = get_queues_list()[0]
+        config = QUEUES_LIST[0]
         workers = Worker.all(get_redis_connection(config['connection_config']))
         worker = next((item for item in workers if item.name == name), None)
         if not worker:
@@ -229,7 +219,7 @@ class BackgroundTaskViewSet(BaseRQViewSet):
         return get_rq_jobs()
 
     def get_task_from_id(self, task_id):
-        config = get_queues_list()[0]
+        config = QUEUES_LIST[0]
         task = RQ_Job.fetch(task_id, connection=get_redis_connection(config['connection_config']))
         if not task:
             raise Http404
@@ -285,4 +275,5 @@ class BackgroundTaskViewSet(BaseRQViewSet):
         stopped_jobs = stop_rq_job(id)
         if len(stopped_jobs) == 1:
             return HttpResponse(status=200)
-        return HttpResponse(status=204)
+        else:
+            return HttpResponse(status=204)

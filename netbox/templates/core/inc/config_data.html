@@ -95,7 +95,7 @@
   <tr>
     <th scope="row" class="ps-3">{% trans "Custom validators" %}</th>
     {% if config.CUSTOM_VALIDATORS %}
-      <td><pre class="p-0">{{ config.CUSTOM_VALIDATORS }}</pre></td>
+      <td><pre>{{ config.CUSTOM_VALIDATORS }}</pre></td>
     {% else %}
       <td>{{ ''|placeholder }}</td>
     {% endif %}
@@ -103,7 +103,7 @@
   <tr>
     <th scope="row" class="border-0 ps-3">{% trans "Protection rules" %}</th>
     {% if config.PROTECTION_RULES %}
-      <td class="border-0"><pre class="p-0">{{ config.PROTECTION_RULES }}</pre></td>
+      <td class="border-0"><pre>{{ config.PROTECTION_RULES }}</pre></td>
     {% else %}
       <td class="border-0">{{ ''|placeholder }}</td>
     {% endif %}
@@ -116,23 +116,10 @@
   <tr>
     <th scope="row" class="border-0 ps-3">{% trans "Default preferences" %}</th>
     {% if config.DEFAULT_USER_PREFERENCES %}
-      <td class="border-0"><pre class="p-0">{{ config.DEFAULT_USER_PREFERENCES }}</pre></td>
+      <td class="border-0"><pre>{{ config.DEFAULT_USER_PREFERENCES|json }}</pre></td>
     {% else %}
       <td class="border-0">{{ ''|placeholder }}</td>
     {% endif %}
-  </tr>
-
-  {# Changelog #}
-  <tr>
-    <td colspan="2" class="bg-secondary-subtle fs-5 fw-bold border-0 py-1">{% trans "Change log" %}</td>
-  </tr>
-  <tr>
-    <th scope="row" class="ps-3">{% trans "Changelog retention" %}</th>
-    <td>{{ config.CHANGELOG_RETENTION }}</td>
-  </tr>
-  <tr>
-    <th scope="row" class="ps-3">{% trans "Changelog retain create & last update records" %}</th>
-    <td>{% checkmark config.CHANGELOG_RETAIN_CREATE_LAST_UPDATE %}</td>
   </tr>
 
   {# Miscellaneous #}
@@ -149,6 +136,10 @@
   <tr>
     <th scope="row" class="ps-3">{% trans "GraphQL enabled" %}</th>
     <td>{% checkmark config.GRAPHQL_ENABLED %}</td>
+  </tr>
+  <tr>
+    <th scope="row" class="ps-3">{% trans "Changelog retention" %}</th>
+    <td>{{ config.CHANGELOG_RETENTION }}</td>
   </tr>
   <tr>
     <th scope="row" class="ps-3">{% trans "Job retention" %}</th>

@@ -1,10 +1,9 @@
-import django_tables2 as tables
 from django.utils.translation import gettext_lazy as _
+import django_tables2 as tables
 from django_tables2.utils import Accessor
 
-from dcim.models import ConsolePort, Interface, PowerPort
 from netbox.tables import BaseTable, columns
-
+from dcim.models import ConsolePort, Interface, PowerPort
 from .devices import PathEndpointTable
 
 __all__ = (

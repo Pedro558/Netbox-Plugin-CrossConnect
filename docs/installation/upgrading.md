@@ -4,20 +4,7 @@ Upgrading NetBox to a new version is pretty simple, however users are cautioned 
 
 NetBox can generally be upgraded directly to any newer release with no interim steps, with the one exception being incrementing major versions. This can be done only from the most recent _minor_ release of the major version. For example, NetBox v2.11.8 can be upgraded to version 3.3.2 following the steps below. However, a deployment of NetBox v2.10.10 or earlier must first be upgraded to any v2.11 release, and then to any v3.x release. (This is to accommodate the consolidation of database schema migrations effected by a major version change).
 
-```mermaid
-block-beta
-    columns 10
-    v29["v2.9"] v210["v2.10"] v211["v2.11"] v30["v3.0"] v31["v3.1"] dots["..."] v36["v3.6"] v37["v3.7"] v40["v4.0"] v41["v4.1"]
-    v2arrow["<span style='color:#fff'>To any v2.x release ➜</span>"]:3 space:7
-    space:2 v3arrow["<span style='color:#fff'>To any v3.x release ➜</span>"]:6 space:2
-    space:7 v4arrow["<span style='color:#fff'>To any v4.x release ➜</span>"]:3
-    classDef orange fill:#b45309,stroke:#78350f,color:#fff
-    classDef green fill:#0f766e,stroke:#134e4a,color:#fff
-    classDef blue fill:#1d4ed8,stroke:#1e3a8a,color:#fff
-    class v2arrow orange
-    class v3arrow green
-    class v4arrow blue
-```
+[![Upgrade paths](../media/installation/upgrade_paths.png)](../media/installation/upgrade_paths.png)
 
 !!! warning "Perform a Backup"
     Always be sure to save a backup of your current NetBox deployment prior to starting the upgrade process.
@@ -32,18 +19,14 @@ NetBox requires the following dependencies:
 
 | Dependency | Supported Versions |
 |------------|--------------------|
-| Python     | 3.12, 3.13, 3.14   |
-| PostgreSQL | 14+ [^1]           |
+| Python     | 3.10, 3.11, 3.12   |
+| PostgreSQL | 14+                |
 | Redis      | 4.0+               |
-
-[^1]: Support for PostgreSQL 14 is deprecated and will be removed in NetBox v4.7. PostgreSQL 15 or later will be required.
 
 ### Version History
 
 | NetBox Version | Python min | Python max | PostgreSQL min | Redis min |                                       Documentation                                       |
 |:--------------:|:----------:|:----------:|:--------------:|:---------:|:-----------------------------------------------------------------------------------------:|
-|      4.6       |    3.12    |    3.14    |       14       |    4.0    | [Link](https://github.com/netbox-community/netbox/blob/v4.6.0/docs/installation/index.md) |
-|      4.5       |    3.12    |    3.14    |       14       |    4.0    | [Link](https://github.com/netbox-community/netbox/blob/v4.5.0/docs/installation/index.md) |
 |      4.4       |    3.10    |    3.12    |       14       |    4.0    | [Link](https://github.com/netbox-community/netbox/blob/v4.4.0/docs/installation/index.md) |
 |      4.3       |    3.10    |    3.12    |       14       |    4.0    | [Link](https://github.com/netbox-community/netbox/blob/v4.3.0/docs/installation/index.md) |
 |      4.2       |    3.10    |    3.12    |       13       |    4.0    | [Link](https://github.com/netbox-community/netbox/blob/v4.2.0/docs/installation/index.md) |
@@ -81,7 +64,7 @@ Download and extract the latest version:
 
 ```no-highlight
 # Set $NEWVER to the NetBox version being installed
-NEWVER=4.5.0
+NEWVER=3.5.0
 wget https://github.com/netbox-community/netbox/archive/v$NEWVER.tar.gz
 sudo tar -xzf v$NEWVER.tar.gz -C /opt
 sudo ln -sfn /opt/netbox-$NEWVER/ /opt/netbox
@@ -91,7 +74,7 @@ Copy `local_requirements.txt`, `configuration.py`, and `ldap_config.py` (if pres
 
 ```no-highlight
 # Set $OLDVER to the NetBox version currently installed
-OLDVER=4.4.10
+OLDVER=3.4.9
 sudo cp /opt/netbox-$OLDVER/local_requirements.txt /opt/netbox/
 sudo cp /opt/netbox-$OLDVER/netbox/netbox/configuration.py /opt/netbox/netbox/netbox/
 sudo cp /opt/netbox-$OLDVER/netbox/netbox/ldap_config.py /opt/netbox/netbox/netbox/
@@ -132,7 +115,7 @@ Check out the desired release by specifying its tag. For example:
 ```
 cd /opt/netbox && \
 sudo git fetch --tags && \
-sudo git checkout v4.5.0
+sudo git checkout v4.2.7
 ```
 
 ## 4. Run the Upgrade Script
@@ -144,10 +127,10 @@ sudo ./upgrade.sh
 ```
 
 !!! warning
-    If the default version of Python is not **at least 3.12**, you'll need to pass the path to a supported Python version as an environment variable when calling the upgrade script. For example:
+    If the default version of Python is not at least 3.10, you'll need to pass the path to a supported Python version as an environment variable when calling the upgrade script. For example:
 
     ```no-highlight
-    sudo PYTHON=/usr/bin/python3.12 ./upgrade.sh
+    sudo PYTHON=/usr/bin/python3.10 ./upgrade.sh
     ```
 
 !!! note

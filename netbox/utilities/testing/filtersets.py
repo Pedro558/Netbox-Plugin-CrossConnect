@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from itertools import chain
 
 import django_filters
@@ -10,7 +10,7 @@ from mptt.models import MPTTModel
 from taggit.managers import TaggableManager
 
 from extras.filters import TagFilter
-from utilities.filters import MultiValueContentTypeFilter, TreeNodeMultipleChoiceFilter
+from utilities.filters import ContentTypeFilter, TreeNodeMultipleChoiceFilter
 
 __all__ = (
     'BaseFilterSetTests',
@@ -66,7 +66,7 @@ class BaseFilterSetTests:
             return [(f'{filter_name}_id', django_filters.ModelMultipleChoiceFilter)]
 
         # Many-to-many relationships (forward & backward)
-        if type(field) in (ManyToManyField, ManyToManyRel):
+        elif type(field) in (ManyToManyField, ManyToManyRel):
             filter_name = self.get_m2m_filter_name(field)
             filter_name = self.filter_name_map.get(filter_name, filter_name)
 
@@ -75,7 +75,7 @@ class BaseFilterSetTests:
                 # Standardize on object_type for filter name even though it's technically a ContentType
                 filter_name = 'object_type'
                 return [
-                    (filter_name, MultiValueContentTypeFilter),
+                    (filter_name, ContentTypeFilter),
                     (f'{filter_name}_id', django_filters.ModelMultipleChoiceFilter),
                 ]
 
@@ -156,12 +156,12 @@ class ChangeLoggedFilterSetTests(BaseFilterSetTests):
 
     def test_created(self):
         pk_list = self.queryset.values_list('pk', flat=True)[:2]
-        self.queryset.filter(pk__in=pk_list).update(created=datetime(2021, 1, 1, 0, 0, 0, tzinfo=UTC))
+        self.queryset.filter(pk__in=pk_list).update(created=datetime(2021, 1, 1, 0, 0, 0, tzinfo=timezone.utc))
         params = {'created': ['2021-01-01T00:00:00']}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)
 
     def test_last_updated(self):
         pk_list = self.queryset.values_list('pk', flat=True)[:2]
-        self.queryset.filter(pk__in=pk_list).update(last_updated=datetime(2021, 1, 2, 0, 0, 0, tzinfo=UTC))
+        self.queryset.filter(pk__in=pk_list).update(last_updated=datetime(2021, 1, 2, 0, 0, 0, tzinfo=timezone.utc))
         params = {'last_updated': ['2021-01-02T00:00:00']}
         self.assertEqual(self.filterset(params, self.queryset).qs.count(), 2)

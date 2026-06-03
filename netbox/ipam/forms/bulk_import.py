@@ -2,27 +2,23 @@ from django import forms
 from django.contrib.contenttypes.models import ContentType
 from django.utils.translation import gettext_lazy as _
 
-from dcim.forms.mixins import ScopedImportForm
 from dcim.models import Device, Interface, Site
+from dcim.forms.mixins import ScopedImportForm
 from ipam.choices import *
 from ipam.constants import *
 from ipam.models import *
-from netbox.forms import NetBoxModelImportForm, OrganizationalModelImportForm, PrimaryModelImportForm
+from netbox.forms import NetBoxModelImportForm
 from tenancy.models import Tenant
 from utilities.forms.fields import (
-    CSVChoiceField,
-    CSVContentTypeField,
-    CSVModelChoiceField,
-    CSVModelMultipleChoiceField,
+    CSVChoiceField, CSVContentTypeField, CSVModelChoiceField, CSVModelMultipleChoiceField, SlugField,
     NumericRangeArrayField,
-    SlugField,
 )
 from virtualization.models import VirtualMachine, VMInterface
 
 __all__ = (
+    'AggregateImportForm',
     'ASNImportForm',
     'ASNRangeImportForm',
-    'AggregateImportForm',
     'FHRPGroupImportForm',
     'IPAddressImportForm',
     'IPRangeImportForm',
@@ -32,15 +28,15 @@ __all__ = (
     'RouteTargetImportForm',
     'ServiceImportForm',
     'ServiceTemplateImportForm',
-    'VLANGroupImportForm',
     'VLANImportForm',
+    'VLANGroupImportForm',
     'VLANTranslationPolicyImportForm',
     'VLANTranslationRuleImportForm',
     'VRFImportForm',
 )
 
 
-class VRFImportForm(PrimaryModelImportForm):
+class VRFImportForm(NetBoxModelImportForm):
     tenant = CSVModelChoiceField(
         label=_('Tenant'),
         queryset=Tenant.objects.all(),
@@ -64,12 +60,12 @@ class VRFImportForm(PrimaryModelImportForm):
     class Meta:
         model = VRF
         fields = (
-            'name', 'rd', 'tenant', 'enforce_unique', 'description', 'import_targets', 'export_targets', 'owner',
-            'comments', 'tags',
+            'name', 'rd', 'tenant', 'enforce_unique', 'description', 'import_targets', 'export_targets', 'comments',
+            'tags',
         )
 
 
-class RouteTargetImportForm(PrimaryModelImportForm):
+class RouteTargetImportForm(NetBoxModelImportForm):
     tenant = CSVModelChoiceField(
         label=_('Tenant'),
         queryset=Tenant.objects.all(),
@@ -80,18 +76,18 @@ class RouteTargetImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = RouteTarget
-        fields = ('name', 'tenant', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'tenant', 'description', 'comments', 'tags')
 
 
-class RIRImportForm(OrganizationalModelImportForm):
+class RIRImportForm(NetBoxModelImportForm):
     slug = SlugField()
 
     class Meta:
         model = RIR
-        fields = ('name', 'slug', 'is_private', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'is_private', 'description', 'tags')
 
 
-class AggregateImportForm(PrimaryModelImportForm):
+class AggregateImportForm(NetBoxModelImportForm):
     rir = CSVModelChoiceField(
         label=_('RIR'),
         queryset=RIR.objects.all(),
@@ -108,10 +104,10 @@ class AggregateImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = Aggregate
-        fields = ('prefix', 'rir', 'tenant', 'date_added', 'description', 'owner', 'comments', 'tags')
+        fields = ('prefix', 'rir', 'tenant', 'date_added', 'description', 'comments', 'tags')
 
 
-class ASNRangeImportForm(OrganizationalModelImportForm):
+class ASNRangeImportForm(NetBoxModelImportForm):
     rir = CSVModelChoiceField(
         label=_('RIR'),
         queryset=RIR.objects.all(),
@@ -128,22 +124,15 @@ class ASNRangeImportForm(OrganizationalModelImportForm):
 
     class Meta:
         model = ASNRange
-        fields = ('name', 'slug', 'rir', 'start', 'end', 'tenant', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'rir', 'start', 'end', 'tenant', 'description', 'tags')
 
 
-class ASNImportForm(PrimaryModelImportForm):
+class ASNImportForm(NetBoxModelImportForm):
     rir = CSVModelChoiceField(
         label=_('RIR'),
         queryset=RIR.objects.all(),
         to_field_name='name',
         help_text=_('Assigned RIR')
-    )
-    role = CSVModelChoiceField(
-        label=_('Role'),
-        queryset=Role.objects.all(),
-        required=False,
-        to_field_name='name',
-        help_text=_('Functional role')
     )
     tenant = CSVModelChoiceField(
         label=_('Tenant'),
@@ -155,17 +144,18 @@ class ASNImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = ASN
-        fields = ('asn', 'rir', 'role', 'tenant', 'description', 'owner', 'comments', 'tags')
+        fields = ('asn', 'rir', 'tenant', 'description', 'comments', 'tags')
 
 
-class RoleImportForm(OrganizationalModelImportForm):
+class RoleImportForm(NetBoxModelImportForm):
+    slug = SlugField()
 
     class Meta:
         model = Role
-        fields = ('name', 'slug', 'weight', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'slug', 'weight', 'description', 'tags')
 
 
-class PrefixImportForm(ScopedImportForm, PrimaryModelImportForm):
+class PrefixImportForm(ScopedImportForm, NetBoxModelImportForm):
     vrf = CSVModelChoiceField(
         label=_('VRF'),
         queryset=VRF.objects.all(),
@@ -217,8 +207,8 @@ class PrefixImportForm(ScopedImportForm, PrimaryModelImportForm):
     class Meta:
         model = Prefix
         fields = (
-            'prefix', 'vrf', 'tenant', 'vlan_group', 'vlan_site', 'vlan', 'status', 'role', 'scope_type', 'scope_name',
-            'scope_id', 'is_pool', 'mark_utilized', 'description', 'owner', 'comments', 'tags',
+            'prefix', 'vrf', 'tenant', 'vlan_group', 'vlan_site', 'vlan', 'status', 'role', 'scope_type', 'scope_id',
+            'is_pool', 'mark_utilized', 'description', 'comments', 'tags',
         )
         labels = {
             'scope_id': _('Scope ID'),
@@ -240,6 +230,10 @@ class PrefixImportForm(ScopedImportForm, PrimaryModelImportForm):
             query |= Q(**{
                 f"site__{self.fields['vlan_site'].to_field_name}": vlan_site
             })
+            # Don't Forget to include VLANs without a site in the filter
+            query |= Q(**{
+                f"site__{self.fields['vlan_site'].to_field_name}__isnull": True
+            })
 
         if vlan_group:
             query &= Q(**{
@@ -250,7 +244,7 @@ class PrefixImportForm(ScopedImportForm, PrimaryModelImportForm):
         self.fields['vlan'].queryset = queryset
 
 
-class IPRangeImportForm(PrimaryModelImportForm):
+class IPRangeImportForm(NetBoxModelImportForm):
     vrf = CSVModelChoiceField(
         label=_('VRF'),
         queryset=VRF.objects.all(),
@@ -282,11 +276,11 @@ class IPRangeImportForm(PrimaryModelImportForm):
         model = IPRange
         fields = (
             'start_address', 'end_address', 'vrf', 'tenant', 'status', 'role', 'mark_populated', 'mark_utilized',
-            'description', 'owner', 'comments', 'tags',
+            'description', 'comments', 'tags',
         )
 
 
-class IPAddressImportForm(PrimaryModelImportForm):
+class IPAddressImportForm(NetBoxModelImportForm):
     vrf = CSVModelChoiceField(
         label=_('VRF'),
         queryset=VRF.objects.all(),
@@ -355,7 +349,7 @@ class IPAddressImportForm(PrimaryModelImportForm):
         model = IPAddress
         fields = [
             'address', 'vrf', 'tenant', 'status', 'role', 'device', 'virtual_machine', 'interface', 'fhrp_group',
-            'is_primary', 'is_oob', 'dns_name', 'description', 'owner', 'comments', 'tags',
+            'is_primary', 'is_oob', 'dns_name', 'description', 'comments', 'tags',
         ]
 
     def __init__(self, data=None, *args, **kwargs):
@@ -379,13 +373,15 @@ class IPAddressImportForm(PrimaryModelImportForm):
         # Make sure is_primary is None when it's not included in the uploaded data
         if 'is_primary' not in self.data:
             return None
-        return self.cleaned_data['is_primary']
+        else:
+            return self.cleaned_data['is_primary']
 
     def clean_is_oob(self):
         # Make sure is_oob is None when it's not included in the uploaded data
         if 'is_oob' not in self.data:
             return None
-        return self.cleaned_data['is_oob']
+        else:
+            return self.cleaned_data['is_oob']
 
     def clean(self):
         super().clean()
@@ -431,41 +427,22 @@ class IPAddressImportForm(PrimaryModelImportForm):
         # Set as primary for device/VM
         if self.cleaned_data.get('is_primary') is not None:
             parent = self.cleaned_data.get('device') or self.cleaned_data.get('virtual_machine')
-            if self.cleaned_data.get('is_primary'):
-                parent.snapshot()
-                if self.instance.address.version == 4:
-                    parent.primary_ip4 = ipaddress
-                elif self.instance.address.version == 6:
-                    parent.primary_ip6 = ipaddress
-                parent.save()
-            else:
-                # Only clear the primary IP if this IP is currently set as primary
-                if self.instance.address.version == 4 and parent.primary_ip4 == ipaddress:
-                    parent.snapshot()
-                    parent.primary_ip4 = None
-                    parent.save()
-                elif self.instance.address.version == 6 and parent.primary_ip6 == ipaddress:
-                    parent.snapshot()
-                    parent.primary_ip6 = None
-                    parent.save()
+            if self.instance.address.version == 4:
+                parent.primary_ip4 = ipaddress if self.cleaned_data.get('is_primary') else None
+            elif self.instance.address.version == 6:
+                parent.primary_ip6 = ipaddress if self.cleaned_data.get('is_primary') else None
+            parent.save()
 
         # Set as OOB for device
         if self.cleaned_data.get('is_oob') is not None:
             parent = self.cleaned_data.get('device')
-            if self.cleaned_data.get('is_oob'):
-                parent.snapshot()
-                parent.oob_ip = ipaddress
-                parent.save()
-            elif parent.oob_ip == ipaddress:
-                # Only clear OOB if this IP is currently set as the OOB IP
-                parent.snapshot()
-                parent.oob_ip = None
-                parent.save()
+            parent.oob_ip = ipaddress if self.cleaned_data.get('is_oob') else None
+            parent.save()
 
         return ipaddress
 
 
-class FHRPGroupImportForm(PrimaryModelImportForm):
+class FHRPGroupImportForm(NetBoxModelImportForm):
     protocol = CSVChoiceField(
         label=_('Protocol'),
         choices=FHRPGroupProtocolChoices
@@ -478,11 +455,11 @@ class FHRPGroupImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = FHRPGroup
-        fields = ('protocol', 'group_id', 'auth_type', 'auth_key', 'name', 'description', 'owner', 'comments', 'tags')
+        fields = ('protocol', 'group_id', 'auth_type', 'auth_key', 'name', 'description', 'comments', 'tags')
 
 
-class VLANGroupImportForm(ScopedImportForm, OrganizationalModelImportForm):
-    # Override ScopedImportForm.scope_type to set custom queryset
+class VLANGroupImportForm(NetBoxModelImportForm):
+    slug = SlugField()
     scope_type = CSVContentTypeField(
         queryset=ContentType.objects.filter(model__in=VLANGROUP_SCOPE_TYPES),
         required=False,
@@ -501,16 +478,13 @@ class VLANGroupImportForm(ScopedImportForm, OrganizationalModelImportForm):
 
     class Meta:
         model = VLANGroup
-        fields = (
-            'name', 'slug', 'scope_type', 'scope_name', 'scope_id', 'vid_ranges', 'tenant', 'description', 'owner',
-            'comments', 'tags',
-        )
+        fields = ('name', 'slug', 'scope_type', 'scope_id', 'vid_ranges', 'tenant', 'description', 'tags')
         labels = {
-            'scope_id': _('Scope ID'),
+            'scope_id': 'Scope ID',
         }
 
 
-class VLANImportForm(PrimaryModelImportForm):
+class VLANImportForm(NetBoxModelImportForm):
     site = CSVModelChoiceField(
         label=_('Site'),
         queryset=Site.objects.all(),
@@ -562,15 +536,15 @@ class VLANImportForm(PrimaryModelImportForm):
         model = VLAN
         fields = (
             'site', 'group', 'vid', 'name', 'tenant', 'status', 'role', 'description', 'qinq_role', 'qinq_svlan',
-            'owner', 'comments', 'tags',
+            'comments', 'tags',
         )
 
 
-class VLANTranslationPolicyImportForm(PrimaryModelImportForm):
+class VLANTranslationPolicyImportForm(NetBoxModelImportForm):
 
     class Meta:
         model = VLANTranslationPolicy
-        fields = ('name', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'description', 'tags')
 
 
 class VLANTranslationRuleImportForm(NetBoxModelImportForm):
@@ -586,7 +560,7 @@ class VLANTranslationRuleImportForm(NetBoxModelImportForm):
         fields = ('policy', 'local_vid', 'remote_vid')
 
 
-class ServiceTemplateImportForm(PrimaryModelImportForm):
+class ServiceTemplateImportForm(NetBoxModelImportForm):
     protocol = CSVChoiceField(
         label=_('Protocol'),
         choices=ServiceProtocolChoices,
@@ -595,10 +569,10 @@ class ServiceTemplateImportForm(PrimaryModelImportForm):
 
     class Meta:
         model = ServiceTemplate
-        fields = ('name', 'protocol', 'ports', 'description', 'owner', 'comments', 'tags')
+        fields = ('name', 'protocol', 'ports', 'description', 'comments', 'tags')
 
 
-class ServiceImportForm(PrimaryModelImportForm):
+class ServiceImportForm(NetBoxModelImportForm):
     parent_object_type = CSVContentTypeField(
         queryset=ContentType.objects.filter(SERVICE_ASSIGNMENT_MODELS),
         required=True,
@@ -630,7 +604,7 @@ class ServiceImportForm(PrimaryModelImportForm):
     class Meta:
         model = Service
         fields = (
-            'ipaddresses', 'name', 'protocol', 'ports', 'description', 'owner', 'comments', 'tags',
+            'ipaddresses', 'name', 'protocol', 'ports', 'description', 'comments', 'tags',
         )
 
     def __init__(self, data=None, *args, **kwargs):

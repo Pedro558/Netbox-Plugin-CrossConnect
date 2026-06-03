@@ -9,7 +9,7 @@ __all__ = (
     'TableMixin',
 )
 
-# TODO: Remove in NetBox v4.7
+# TODO: Remove in NetBox v4.5
 LEGACY_ACTIONS = {
     'add': object_actions.AddObject,
     'edit': object_actions.EditObject,
@@ -33,21 +33,13 @@ class ActionsMixin:
     """
     actions = tuple()
 
-    # TODO: Remove in NetBox v4.7
+    # TODO: Remove in NetBox v4.5
     def _convert_legacy_actions(self):
         """
         Convert a legacy dictionary mapping action name to required permissions to a list of ObjectAction subclasses.
         """
         if type(self.actions) is not dict:
             return
-
-        import warnings
-        warnings.warn(
-            f"{self.__class__.__name__}.actions is defined as a dictionary, which is deprecated and will be removed "
-            "in NetBox v4.7. Define actions as a list of ObjectAction subclasses instead.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
 
         actions = []
         for name in self.actions.keys():
@@ -64,7 +56,7 @@ class ActionsMixin:
         """
         model = model or self.queryset.model
 
-        # TODO: Remove in NetBox v4.7
+        # TODO: Remove in NetBox v4.5
         # Handle legacy action sets
         self._convert_legacy_actions()
 
@@ -100,7 +92,7 @@ class TableMixin:
                 request.user.config.set(f'tables.{table}.columns', tableconfig.columns)
                 request.user.config.set(f'tables.{table}.ordering', tableconfig.ordering, commit=True)
 
-        table = self.table(data)
+        table = self.table(data, user=request.user)
         if 'pk' in table.base_columns and bulk_actions:
             table.columns.show('pk')
         table.configure(request)

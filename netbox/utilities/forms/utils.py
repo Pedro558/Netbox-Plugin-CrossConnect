@@ -1,5 +1,4 @@
 import re
-import warnings
 
 from django import forms
 from django.forms.models import fields_for_model
@@ -7,21 +6,19 @@ from django.utils.translation import gettext as _
 
 from utilities.choices import unpack_grouped_choices
 from utilities.querysets import RestrictedQuerySet
-
 from .constants import *
 
 __all__ = (
     'add_blank_choice',
     'expand_alphanumeric_pattern',
-    'expand_ipnetwork_pattern',
+    'expand_ipaddress_pattern',
     'form_from_model',
-    'get_capacity_unit_label',
     'get_field_value',
     'get_selected_values',
     'parse_alphanumeric_range',
-    'parse_csv',
     'parse_numeric_range',
     'restrict_form_fields',
+    'parse_csv',
     'validate_csv',
 )
 
@@ -108,9 +105,9 @@ def expand_alphanumeric_pattern(string):
             yield "{}{}{}".format(lead, i, remnant)
 
 
-def expand_ipnetwork_pattern(string, family):
+def expand_ipaddress_pattern(string, family):
     """
-    Expand an IP network pattern into a list of strings. Examples:
+    Expand an IP address pattern into a list of strings. Examples:
       '192.0.2.[1,2,100-250]/24' => ['192.0.2.1/24', '192.0.2.2/24', '192.0.2.100/24' ... '192.0.2.250/24']
       '2001:db8:0:[0,fd-ff]::/64' => ['2001:db8:0:0::/64', '2001:db8:0:fd::/64', ... '2001:db8:0:ff::/64']
     """
@@ -126,17 +123,10 @@ def expand_ipnetwork_pattern(string, family):
     parsed_range = parse_numeric_range(pattern, base)
     for i in parsed_range:
         if re.search(regex, remnant):
-            for string in expand_ipnetwork_pattern(remnant, family):
+            for string in expand_ipaddress_pattern(remnant, family):
                 yield ''.join([lead, format(i, 'x' if family == 6 else 'd'), string])
         else:
             yield ''.join([lead, format(i, 'x' if family == 6 else 'd'), remnant])
-
-
-def get_capacity_unit_label(divisor=1000):
-    """
-    Return the appropriate base unit label: 'MiB' for binary (1024), 'MB' for decimal (1000).
-    """
-    return 'MiB' if divisor == 1024 else 'MB'
 
 
 def get_field_value(form, field_name):
@@ -148,7 +138,7 @@ def get_field_value(form, field_name):
 
     if form.is_bound and field_name in form.data:
         if (value := form.data[field_name]) is None:
-            return None
+            return
         if hasattr(field, 'valid_value') and field.valid_value(value):
             return value
 
@@ -295,15 +285,3 @@ def validate_csv(headers, fields, required_fields):
         for f in required_fields:
             if f not in headers:
                 raise forms.ValidationError(_('Required column header "{header}" not found.').format(header=f))
-
-
-# TODO: Remove in NetBox v4.7.0
-def __getattr__(name):
-    if name == 'expand_ipaddress_pattern':
-        warnings.warn(
-            "expand_ipaddress_pattern() has been renamed to expand_ipnetwork_pattern(). "
-            "expand_ipaddress_pattern() will be removed in NetBox v4.7.0.",
-            DeprecationWarning,
-        )
-        return expand_ipnetwork_pattern
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -1,7 +1,6 @@
-from urllib.parse import urlparse
-
 from django.conf import settings
 from django.utils.module_loading import import_string
+from urllib.parse import urlparse
 
 __all__ = (
     'DefaultProxyRouter',
@@ -54,4 +53,3 @@ def resolve_proxies(url=None, protocol=None, context=None):
         router = import_string(item) if type(item) is str else item
         if proxies := router().route(url=url, protocol=protocol, context=context):
             return proxies
-    return None

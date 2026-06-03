@@ -18,8 +18,7 @@ They can also be used as a mechanism for validating the integrity of data within
 Custom scripts are Python code which exists outside the NetBox code base, so they can be updated and changed without interfering with the core NetBox installation. And because they're completely custom, there is no inherent limitation on what a script can accomplish.
 
 !!! danger "Only install trusted scripts"
-    Custom scripts have unrestricted access to change anything in the database and are inherently unsafe and should only be installed and run from trusted sources.  You should also review and set permissions for who can run scripts if the script can modify any data.
-
+    Custom scripts have unrestricted access to change anything in the databse and are inherently unsafe and should only be installed and run from trusted sources.  You should also review and set permissions for who can run scripts if the script can modify any data.
 
 ## Writing Custom Scripts
 
@@ -115,20 +114,6 @@ commit_default = False
 
 By default, a script can be scheduled for execution at a later time. Setting `scheduling_enabled` to False disables this ability: Only immediate execution will be possible. (This also disables the ability to set a recurring execution interval.)
 
-### `notifications_default`
-
-By default, a notification is generated for the requesting user each time a script finishes running. This attribute sets the initial value for the notifications field when running a script. Valid values are `always` (default), `on_failure`, and `never`.
-
-```python
-notifications_default = 'on_failure'
-```
-
-| Value | Behavior |
-|-------|----------|
-| `always` | Notify on every completion (default) |
-| `on_failure` | Notify only when the job fails or errors |
-| `never` | Never send a notification |
-
 ### `job_timeout`
 
 Set the maximum allowed runtime for the script. If not set, `RQ_DEFAULT_TIMEOUT` will be used.
@@ -145,6 +130,17 @@ self.log_info(f"Running as user {username} (IP: {ip_address})...")
 ```
 
 For a complete list of available request parameters, please see the [Django documentation](https://docs.djangoproject.com/en/stable/ref/request-response/).
+
+## Reading Data from Files
+
+The Script class provides two convenience methods for reading data from files:
+
+* `load_yaml`
+* `load_json`
+
+These two methods will load data in YAML or JSON format, respectively, from files within the local path (i.e. `SCRIPTS_ROOT`).
+
+**Note:** These convenience methods are deprecated and will be removed in NetBox v4.4.  These only work if running scripts within the local path, they will not work if using a storage other than ScriptFileSystemStorage.
 
 ## Logging
 
@@ -229,7 +225,6 @@ if obj.pk and hasattr(obj, 'snapshot'):
     obj.snapshot()
 
 obj.property = "New Value"
-obj._changelog_message = 'Example Message Text' # Optional
 obj.full_clean()
 obj.save()
 ```
@@ -397,18 +392,6 @@ A calendar date. Returns a `datetime.date` object.
 ### DateTimeVar
 
 A complete date & time. Returns a `datetime.datetime` object.
-
-## Uploading Scripts via the API
-
-Script modules can be uploaded to NetBox via the REST API by sending a `multipart/form-data` POST request to `/api/extras/scripts/upload/`. The caller must have the `extras.add_scriptmodule` and `core.add_managedfile` permissions.
-
-```no-highlight
-curl -X POST \
--H "Authorization: Token $TOKEN" \
--H "Accept: application/json; indent=4" \
--F "file=@/path/to/myscript.py" \
-http://netbox/api/extras/scripts/upload/
-```
 
 ## Running Custom Scripts
 

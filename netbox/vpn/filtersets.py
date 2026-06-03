@@ -4,13 +4,11 @@ from django.utils.translation import gettext as _
 
 from core.models import ObjectType
 from dcim.models import Device, Interface
-from ipam.models import VLAN, IPAddress, RouteTarget
-from netbox.filtersets import NetBoxModelFilterSet, OrganizationalModelFilterSet, PrimaryModelFilterSet
+from ipam.models import IPAddress, RouteTarget, VLAN
+from netbox.filtersets import NetBoxModelFilterSet, OrganizationalModelFilterSet
 from tenancy.filtersets import ContactModelFilterSet, TenancyFilterSet
-from utilities.filters import MultiValueCharFilter, MultiValueContentTypeFilter, MultiValueNumberFilter
-from utilities.filtersets import register_filterset
+from utilities.filters import ContentTypeFilter, MultiValueCharFilter, MultiValueNumberFilter
 from virtualization.models import VirtualMachine, VMInterface
-
 from .choices import *
 from .models import *
 
@@ -28,7 +26,6 @@ __all__ = (
 )
 
 
-@register_filterset
 class TunnelGroupFilterSet(OrganizationalModelFilterSet, ContactModelFilterSet):
 
     class Meta:
@@ -36,37 +33,30 @@ class TunnelGroupFilterSet(OrganizationalModelFilterSet, ContactModelFilterSet):
         fields = ('id', 'name', 'slug', 'description')
 
 
-@register_filterset
-class TunnelFilterSet(PrimaryModelFilterSet, TenancyFilterSet, ContactModelFilterSet):
+class TunnelFilterSet(NetBoxModelFilterSet, TenancyFilterSet, ContactModelFilterSet):
     status = django_filters.MultipleChoiceFilter(
-        choices=TunnelStatusChoices,
-        distinct=False,
+        choices=TunnelStatusChoices
     )
     group_id = django_filters.ModelMultipleChoiceFilter(
         queryset=TunnelGroup.objects.all(),
-        distinct=False,
         label=_('Tunnel group (ID)'),
     )
     group = django_filters.ModelMultipleChoiceFilter(
         field_name='group__slug',
         queryset=TunnelGroup.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('Tunnel group (slug)'),
     )
     encapsulation = django_filters.MultipleChoiceFilter(
-        choices=TunnelEncapsulationChoices,
-        distinct=False,
+        choices=TunnelEncapsulationChoices
     )
     ipsec_profile_id = django_filters.ModelMultipleChoiceFilter(
         queryset=IPSecProfile.objects.all(),
-        distinct=False,
         label=_('IPSec profile (ID)'),
     )
     ipsec_profile = django_filters.ModelMultipleChoiceFilter(
         field_name='ipsec_profile__name',
         queryset=IPSecProfile.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('IPSec profile (name)'),
     )
@@ -85,26 +75,22 @@ class TunnelFilterSet(PrimaryModelFilterSet, TenancyFilterSet, ContactModelFilte
         )
 
 
-@register_filterset
 class TunnelTerminationFilterSet(NetBoxModelFilterSet):
     tunnel_id = django_filters.ModelMultipleChoiceFilter(
         field_name='tunnel',
         queryset=Tunnel.objects.all(),
-        distinct=False,
         label=_('Tunnel (ID)'),
     )
     tunnel = django_filters.ModelMultipleChoiceFilter(
         field_name='tunnel__name',
         queryset=Tunnel.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('Tunnel (name)'),
     )
     role = django_filters.MultipleChoiceFilter(
-        choices=TunnelTerminationRoleChoices,
-        distinct=False,
+        choices=TunnelTerminationRoleChoices
     )
-    termination_type = MultiValueContentTypeFilter()
+    termination_type = ContentTypeFilter()
     interface = django_filters.ModelMultipleChoiceFilter(
         field_name='interface__name',
         queryset=Interface.objects.all(),
@@ -130,7 +116,6 @@ class TunnelTerminationFilterSet(NetBoxModelFilterSet):
     outside_ip_id = django_filters.ModelMultipleChoiceFilter(
         field_name='outside_ip',
         queryset=IPAddress.objects.all(),
-        distinct=False,
         label=_('Outside IP (ID)'),
     )
 
@@ -139,8 +124,7 @@ class TunnelTerminationFilterSet(NetBoxModelFilterSet):
         fields = ('id', 'termination_id')
 
 
-@register_filterset
-class IKEProposalFilterSet(PrimaryModelFilterSet):
+class IKEProposalFilterSet(NetBoxModelFilterSet):
     ike_policy_id = django_filters.ModelMultipleChoiceFilter(
         field_name='ike_policies',
         queryset=IKEPolicy.objects.all(),
@@ -153,20 +137,16 @@ class IKEProposalFilterSet(PrimaryModelFilterSet):
         label=_('IKE policy (name)'),
     )
     authentication_method = django_filters.MultipleChoiceFilter(
-        choices=AuthenticationMethodChoices,
-        distinct=False,
+        choices=AuthenticationMethodChoices
     )
     encryption_algorithm = django_filters.MultipleChoiceFilter(
-        choices=EncryptionAlgorithmChoices,
-        distinct=False,
+        choices=EncryptionAlgorithmChoices
     )
     authentication_algorithm = django_filters.MultipleChoiceFilter(
-        choices=AuthenticationAlgorithmChoices,
-        distinct=False,
+        choices=AuthenticationAlgorithmChoices
     )
     group = django_filters.MultipleChoiceFilter(
-        choices=DHGroupChoices,
-        distinct=False,
+        choices=DHGroupChoices
     )
 
     class Meta:
@@ -183,15 +163,12 @@ class IKEProposalFilterSet(PrimaryModelFilterSet):
         )
 
 
-@register_filterset
-class IKEPolicyFilterSet(PrimaryModelFilterSet):
+class IKEPolicyFilterSet(NetBoxModelFilterSet):
     version = django_filters.MultipleChoiceFilter(
-        choices=IKEVersionChoices,
-        distinct=False,
+        choices=IKEVersionChoices
     )
     mode = django_filters.MultipleChoiceFilter(
-        choices=IKEModeChoices,
-        distinct=False,
+        choices=IKEModeChoices
     )
     ike_proposal_id = django_filters.ModelMultipleChoiceFilter(
         field_name='proposals',
@@ -217,8 +194,7 @@ class IKEPolicyFilterSet(PrimaryModelFilterSet):
         )
 
 
-@register_filterset
-class IPSecProposalFilterSet(PrimaryModelFilterSet):
+class IPSecProposalFilterSet(NetBoxModelFilterSet):
     ipsec_policy_id = django_filters.ModelMultipleChoiceFilter(
         field_name='ipsec_policies',
         queryset=IPSecPolicy.objects.all(),
@@ -231,12 +207,10 @@ class IPSecProposalFilterSet(PrimaryModelFilterSet):
         label=_('IPSec policy (name)'),
     )
     encryption_algorithm = django_filters.MultipleChoiceFilter(
-        choices=EncryptionAlgorithmChoices,
-        distinct=False,
+        choices=EncryptionAlgorithmChoices
     )
     authentication_algorithm = django_filters.MultipleChoiceFilter(
-        choices=AuthenticationAlgorithmChoices,
-        distinct=False,
+        choices=AuthenticationAlgorithmChoices
     )
 
     class Meta:
@@ -253,11 +227,9 @@ class IPSecProposalFilterSet(PrimaryModelFilterSet):
         )
 
 
-@register_filterset
-class IPSecPolicyFilterSet(PrimaryModelFilterSet):
+class IPSecPolicyFilterSet(NetBoxModelFilterSet):
     pfs_group = django_filters.MultipleChoiceFilter(
-        choices=DHGroupChoices,
-        distinct=False,
+        choices=DHGroupChoices
     )
     ipsec_proposal_id = django_filters.ModelMultipleChoiceFilter(
         field_name='proposals',
@@ -283,33 +255,27 @@ class IPSecPolicyFilterSet(PrimaryModelFilterSet):
         )
 
 
-@register_filterset
-class IPSecProfileFilterSet(PrimaryModelFilterSet):
+class IPSecProfileFilterSet(NetBoxModelFilterSet):
     mode = django_filters.MultipleChoiceFilter(
-        choices=IPSecModeChoices,
-        distinct=False,
+        choices=IPSecModeChoices
     )
     ike_policy_id = django_filters.ModelMultipleChoiceFilter(
         queryset=IKEPolicy.objects.all(),
-        distinct=False,
         label=_('IKE policy (ID)'),
     )
     ike_policy = django_filters.ModelMultipleChoiceFilter(
         field_name='ike_policy__name',
         queryset=IKEPolicy.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('IKE policy (name)'),
     )
     ipsec_policy_id = django_filters.ModelMultipleChoiceFilter(
         queryset=IPSecPolicy.objects.all(),
-        distinct=False,
         label=_('IPSec policy (ID)'),
     )
     ipsec_policy = django_filters.ModelMultipleChoiceFilter(
         field_name='ipsec_policy__name',
         queryset=IPSecPolicy.objects.all(),
-        distinct=False,
         to_field_name='name',
         label=_('IPSec policy (name)'),
     )
@@ -328,16 +294,13 @@ class IPSecProfileFilterSet(PrimaryModelFilterSet):
         )
 
 
-@register_filterset
-class L2VPNFilterSet(PrimaryModelFilterSet, TenancyFilterSet, ContactModelFilterSet):
+class L2VPNFilterSet(NetBoxModelFilterSet, TenancyFilterSet, ContactModelFilterSet):
     type = django_filters.MultipleChoiceFilter(
         choices=L2VPNTypeChoices,
-        distinct=False,
         null_value=None
     )
     status = django_filters.MultipleChoiceFilter(
         choices=L2VPNStatusChoices,
-        distinct=False,
     )
     import_target_id = django_filters.ModelMultipleChoiceFilter(
         field_name='import_targets',
@@ -377,17 +340,14 @@ class L2VPNFilterSet(PrimaryModelFilterSet, TenancyFilterSet, ContactModelFilter
         return queryset.filter(qs_filter)
 
 
-@register_filterset
 class L2VPNTerminationFilterSet(NetBoxModelFilterSet):
     l2vpn_id = django_filters.ModelMultipleChoiceFilter(
         queryset=L2VPN.objects.all(),
-        distinct=False,
         label=_('L2VPN (ID)'),
     )
     l2vpn = django_filters.ModelMultipleChoiceFilter(
         field_name='l2vpn__slug',
         queryset=L2VPN.objects.all(),
-        distinct=False,
         to_field_name='slug',
         label=_('L2VPN (slug)'),
     )
@@ -472,10 +432,9 @@ class L2VPNTerminationFilterSet(NetBoxModelFilterSet):
     )
     assigned_object_type_id = django_filters.ModelMultipleChoiceFilter(
         queryset=ObjectType.objects.all(),
-        distinct=False,
         field_name='assigned_object_type'
     )
-    assigned_object_type = MultiValueContentTypeFilter()
+    assigned_object_type = ContentTypeFilter()
 
     class Meta:
         model = L2VPNTermination

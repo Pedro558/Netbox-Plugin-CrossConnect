@@ -7,7 +7,7 @@ from django.test import tag
 from django.urls import reverse
 from rest_framework import status
 
-from core.models import ObjectChange, ObjectType
+from core.models import ObjectType
 from dcim.filtersets import SiteFilterSet
 from dcim.forms import SiteImportForm
 from dcim.models import Manufacturer, Rack, Site
@@ -19,7 +19,7 @@ from utilities.testing import APITestCase, TestCase
 from virtualization.models import VirtualMachine
 
 
-class CustomFieldTestCase(TestCase):
+class CustomFieldTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -399,73 +399,6 @@ class CustomFieldTestCase(TestCase):
         instance.refresh_from_db()
         self.assertIsNone(instance.custom_field_data.get(cf.name))
 
-    def test_choice_set_colors(self):
-        choice_set = CustomFieldChoiceSet(
-            name='Test Choice Set',
-            extra_choices=(
-                ('a', 'Option A'),
-                ('b', 'Option B'),
-            ),
-            choice_colors={
-                'a': CustomFieldChoiceColorChoices.RED,
-                'b': CustomFieldChoiceColorChoices.GREEN,
-            },
-        )
-        choice_set.full_clean()
-
-        self.assertEqual(
-            choice_set.colors,
-            {
-                'a': CustomFieldChoiceColorChoices.RED,
-                'b': CustomFieldChoiceColorChoices.GREEN,
-            },
-        )
-
-    def test_choice_set_invalid_color_mapping_value(self):
-        choice_set = CustomFieldChoiceSet(
-            name='Test Choice Set',
-            extra_choices=(
-                ('a', 'Option A'),
-                ('b', 'Option B'),
-            ),
-            choice_colors={'c': CustomFieldChoiceColorChoices.RED},
-        )
-
-        with self.assertRaises(ValidationError) as cm:
-            choice_set.full_clean()
-
-        self.assertIn('choice_colors', cm.exception.message_dict)
-
-    def test_choice_set_invalid_color_value(self):
-        choice_set = CustomFieldChoiceSet(
-            name='Test Choice Set',
-            extra_choices=(
-                ('a', 'Option A'),
-                ('b', 'Option B'),
-            ),
-            choice_colors={'a': 'magenta'},
-        )
-
-        with self.assertRaises(ValidationError) as cm:
-            choice_set.full_clean()
-
-        self.assertIn('choice_colors', cm.exception.message_dict)
-
-    def test_choice_set_invalid_color_mapping_structure(self):
-        choice_set = CustomFieldChoiceSet(
-            name='Test Choice Set',
-            extra_choices=(
-                ('a', 'Option A'),
-                ('b', 'Option B'),
-            ),
-            choice_colors=['a:red'],
-        )
-
-        with self.assertRaises(ValidationError) as cm:
-            choice_set.full_clean()
-
-        self.assertIn('choice_colors', cm.exception.message_dict)
-
     def test_remove_selected_choice(self):
         """
         Removing a ChoiceSet choice that is referenced by an object should raise
@@ -722,47 +655,8 @@ class CustomFieldTestCase(TestCase):
                 default=["xxx"]
             ).full_clean()
 
-    def test_validation_schema_only_for_json_type(self):
-        schema = {
-            'type': 'object',
-            'properties': {
-                'name': {'type': 'string'},
-            },
-        }
 
-        # Valid: schema on a JSON field
-        CustomField(name='test', type=CustomFieldTypeChoices.TYPE_JSON, validation_schema=schema).full_clean()
-
-        # Invalid: schema on a non-JSON field
-        with self.assertRaises(ValidationError):
-            CustomField(name='test', type=CustomFieldTypeChoices.TYPE_TEXT, validation_schema=schema).full_clean()
-        with self.assertRaises(ValidationError):
-            CustomField(name='test', type=CustomFieldTypeChoices.TYPE_INTEGER, validation_schema=schema).full_clean()
-
-    def test_json_schema_default_validation(self):
-        schema = {
-            'type': 'object',
-            'properties': {
-                'name': {'type': 'string'},
-            },
-            'required': ['name'],
-        }
-
-        # Valid default
-        CustomField(
-            name='test', type=CustomFieldTypeChoices.TYPE_JSON,
-            validation_schema=schema, default={'name': 'test'}
-        ).full_clean()
-
-        # Invalid default (missing required 'name')
-        with self.assertRaises(ValidationError):
-            CustomField(
-                name='test', type=CustomFieldTypeChoices.TYPE_JSON,
-                validation_schema=schema, default={'age': 25}
-            ).full_clean()
-
-
-class CustomFieldManagerTestCase(TestCase):
+class CustomFieldManagerTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -776,7 +670,7 @@ class CustomFieldManagerTestCase(TestCase):
         self.assertEqual(CustomField.objects.get_for_model(VirtualMachine).count(), 0)
 
 
-class CustomFieldAPITestCase(APITestCase):
+class CustomFieldAPITest(APITestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -1300,82 +1194,6 @@ class CustomFieldAPITestCase(APITestCase):
             list(original_cfvs['multiobject_field'])
         )
 
-    @tag('regression')
-    def test_update_single_object_rejects_unknown_custom_fields(self):
-        site2 = Site.objects.get(name='Site 2')
-        original_cf_data = {**site2.custom_field_data}
-        url = reverse('dcim-api:site-detail', kwargs={'pk': site2.pk})
-        self.add_permissions('dcim.change_site')
-
-        data = {
-            'custom_fields': {
-                'text_field': 'valid',
-                'thisfieldshouldntexist': 'random text here',
-            },
-        }
-
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('custom_fields', response.data)
-        self.assertIn('thisfieldshouldntexist', response.data['custom_fields'])
-
-        # Ensure the object was not modified
-        site2.refresh_from_db()
-        self.assertEqual(site2.custom_field_data, original_cf_data)
-
-    @tag('regression')
-    def test_update_single_object_prunes_stale_custom_field_data_from_database_and_postchange_data(self):
-        stale_key = 'thisfieldshouldntexist'
-        stale_value = 'random text here'
-        updated_text_value = 'ABCD'
-
-        site2 = Site.objects.get(name='Site 2')
-        original_text_value = site2.custom_field_data['text_field']
-        object_type = ObjectType.objects.get_for_model(Site)
-
-        # Seed stale custom field data directly in the database to mimic a polluted row.
-        Site.objects.filter(pk=site2.pk).update(
-            custom_field_data={
-                **site2.custom_field_data,
-                stale_key: stale_value,
-            }
-        )
-        site2.refresh_from_db()
-        self.assertIn(stale_key, site2.custom_field_data)
-
-        existing_change_ids = set(
-            ObjectChange.objects.filter(
-                changed_object_type=object_type,
-                changed_object_id=site2.pk,
-            ).values_list('pk', flat=True)
-        )
-
-        url = reverse('dcim-api:site-detail', kwargs={'pk': site2.pk})
-        self.add_permissions('dcim.change_site')
-        data = {
-            'custom_fields': {
-                'text_field': updated_text_value,
-            },
-        }
-
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        site2.refresh_from_db()
-        self.assertEqual(site2.cf['text_field'], updated_text_value)
-        self.assertNotIn(stale_key, site2.custom_field_data)
-
-        object_changes = ObjectChange.objects.filter(
-            changed_object_type=object_type,
-            changed_object_id=site2.pk,
-        ).exclude(pk__in=existing_change_ids)
-        self.assertEqual(object_changes.count(), 1)
-
-        object_change = object_changes.get()
-        self.assertEqual(object_change.prechange_data['custom_fields']['text_field'], original_text_value)
-        self.assertEqual(object_change.postchange_data['custom_fields']['text_field'], updated_text_value)
-        self.assertNotIn(stale_key, object_change.postchange_data['custom_fields'])
-
     def test_specify_related_object_by_attr(self):
         site1 = Site.objects.get(name='Site 1')
         vlans = VLAN.objects.all()[:3]
@@ -1504,42 +1322,6 @@ class CustomFieldAPITestCase(APITestCase):
         response = self.client.patch(url, data, format='json', **self.header)
         self.assertHttpStatus(response, status.HTTP_200_OK)
 
-    def test_json_schema_validation(self):
-        site2 = Site.objects.get(name='Site 2')
-        url = reverse('dcim-api:site-detail', kwargs={'pk': site2.pk})
-        self.add_permissions('dcim.change_site')
-
-        cf_json = CustomField.objects.get(name='json_field')
-        cf_json.validation_schema = {
-            'type': 'object',
-            'properties': {
-                'name': {'type': 'string'},
-                'age': {'type': 'integer'},
-            },
-            'required': ['name'],
-        }
-        cf_json.save()
-
-        # Invalid: missing required 'name' property
-        data = {'custom_fields': {'json_field': {'age': 25}}}
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-        # Invalid: 'age' is not an integer
-        data = {'custom_fields': {'json_field': {'name': 'test', 'age': 'not_an_int'}}}
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_400_BAD_REQUEST)
-
-        # Valid: conforms to schema
-        data = {'custom_fields': {'json_field': {'name': 'test', 'age': 25}}}
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
-        # Valid: null value (schema not enforced on empty)
-        data = {'custom_fields': {'json_field': None}}
-        response = self.client.patch(url, data, format='json', **self.header)
-        self.assertHttpStatus(response, status.HTTP_200_OK)
-
     def test_uniqueness_validation(self):
         # Create a unique custom field
         cf_text = CustomField.objects.get(name='text_field')
@@ -1564,7 +1346,7 @@ class CustomFieldAPITestCase(APITestCase):
         self.assertHttpStatus(response, status.HTTP_200_OK)
 
 
-class CustomFieldImportTestCase(TestCase):
+class CustomFieldImportTest(TestCase):
     user_permissions = (
         'dcim.view_site',
         'dcim.add_site',
@@ -1694,7 +1476,7 @@ class CustomFieldImportTestCase(TestCase):
         self.assertIn('cf_select', form.errors)
 
 
-class CustomFieldModelTestCase(TestCase):
+class CustomFieldModelTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -1724,17 +1506,18 @@ class CustomFieldModelTestCase(TestCase):
 
     def test_invalid_data(self):
         """
-        Any invalid or stale custom field data should be removed from the instance.
+        Setting custom field data for a non-applicable (or non-existent) CustomField should raise a ValidationError.
         """
         site = Site(name='Test Site', slug='test-site')
 
         # Set custom field data
         site.custom_field_data['foo'] = 'abc'
         site.custom_field_data['bar'] = 'def'
-        site.clean()
+        with self.assertRaises(ValidationError):
+            site.clean()
 
-        self.assertIn('foo', site.custom_field_data)
-        self.assertNotIn('bar', site.custom_field_data)
+        del site.custom_field_data['bar']
+        site.clean()
 
     def test_missing_required_field(self):
         """
@@ -1755,7 +1538,7 @@ class CustomFieldModelTestCase(TestCase):
         site.clean()
 
 
-class CustomFieldModelFilterTestCase(TestCase):
+class CustomFieldModelFilterTest(TestCase):
     queryset = Site.objects.all()
     filterset = SiteFilterSet
 

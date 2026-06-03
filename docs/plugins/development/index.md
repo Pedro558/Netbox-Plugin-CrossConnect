@@ -74,7 +74,7 @@ The plugin source directory contains all the actual Python code and other resour
 
 The `PluginConfig` class is a NetBox-specific wrapper around Django's built-in [`AppConfig`](https://docs.djangoproject.com/en/stable/ref/applications/) class. It is used to declare NetBox plugin functionality within a Python package. Each plugin should provide its own subclass, defining its name, metadata, and default and required configuration parameters. An example is below:
 
-```python title="__init__.py"
+```python
 from netbox.plugins import PluginConfig
 
 class FooBarConfig(PluginConfig):
@@ -116,10 +116,9 @@ NetBox looks for the `config` variable within a plugin's `__init__.py` to load i
 | `middleware`          | A list of middleware classes to append after NetBox's build-in middleware                                                          |
 | `queues`              | A list of custom background task queues to create                                                                                  |
 | `events_pipeline`     | A list of handlers to add to [`EVENTS_PIPELINE`](../../configuration/miscellaneous.md#events_pipeline), identified by dotted paths |
-| `search_indexes`      | The dotted path to the list of search index classes (default: `search.indexes`)                                                    |
+| `search_extensions`   | The dotted path to the list of search index classes (default: `search.indexes`)                                                    |
 | `data_backends`       | The dotted path to the list of data source backend classes (default: `data_backends.backends`)                                     |
 | `template_extensions` | The dotted path to the list of template extension classes (default: `template_content.template_extensions`)                        |
-| `menu`                | The dotted path to a top-level navigation menu provided by the plugin (default: `navigation.menu`)                                 |
 | `menu_items`          | The dotted path to the list of menu items provided by the plugin (default: `navigation.menu_items`)                                |
 | `graphql_schema`      | The dotted path to the plugin's GraphQL schema class, if any (default: `graphql.schema`)                                           |
 | `user_preferences`    | The dotted path to the dictionary mapping of user preferences defined by the plugin (default: `preferences.preferences`)           |
@@ -152,7 +151,7 @@ Any additional apps must be installed within the same Python environment as NetB
 
 An example `pyproject.toml` is below:
 
-```toml title="pyproject.toml"
+```
 # See PEP 518 for the spec of this file
 # https://www.python.org/dev/peps/pep-0518/
 
@@ -174,29 +173,16 @@ classifiers=[
     'Intended Audience :: Developers',
     'Natural Language :: English',
     "Programming Language :: Python :: 3 :: Only",
+    'Programming Language :: Python :: 3.10',
+    'Programming Language :: Python :: 3.11',
     'Programming Language :: Python :: 3.12',
-    'Programming Language :: Python :: 3.13',
-    'Programming Language :: Python :: 3.14',
 ]
 
-requires-python = ">=3.12.0"
+requires-python = ">=3.10.0"
+
 ```
 
 Many of these are self-explanatory, but for more information, see the [pyproject.toml documentation](https://packaging.python.org/en/latest/specifications/pyproject-toml/).
-
-## Compatibility Matrix
-
-Consider adding a file named `COMPATIBILITY.md` to your plugin project root (alongside `pyproject.toml`). This file should contain a table listing the minimum and maximum supported versions of NetBox (`min_version` and `max_version`) for each release. This serves as a handy reference for users who are upgrading from a previous version of your plugin. An example is shown below:
-
-```markdown title="COMPATIBILITY.md"
-# Compatibility Matrix
-
-| Release | Minimum NetBox Version | Maximum NetBox Version |
-|---------|------------------------|------------------------|
-| 0.2.0   | 4.4.0                  | 4.5.x                  |
-| 0.1.1   | 4.3.0                  | 4.4.x                  |
-| 0.1.0   | 4.3.0                  | 4.4.x                  |
-```
 
 ## Create a Virtual Environment
 
@@ -209,7 +195,7 @@ python3 -m venv ~/.virtualenvs/my_plugin
 You can make NetBox available within this environment by creating a path file pointing to its location. This will add NetBox to the Python path upon activation. (Be sure to adjust the command below to specify your actual virtual environment path, Python version, and NetBox installation.)
 
 ```shell
-echo /opt/netbox/netbox > $VENV/lib/python3.12/site-packages/netbox.pth
+echo /opt/netbox/netbox > $VENV/lib/python3.10/site-packages/netbox.pth
 ```
 
 ## Development Installation

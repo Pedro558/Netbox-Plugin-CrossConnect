@@ -2,10 +2,10 @@ from django.utils.translation import gettext_lazy as _
 
 from utilities.choices import ChoiceSet
 
+
 #
 # Data sources
 #
-
 
 class DataSourceStatusChoices(ChoiceSet):
     NEW = 'new'
@@ -69,18 +69,6 @@ class JobStatusChoices(ChoiceSet):
         STATUS_COMPLETED,
         STATUS_ERRORED,
         STATUS_FAILED,
-    )
-
-
-class JobNotificationChoices(ChoiceSet):
-    NOTIFICATION_ALWAYS = 'always'
-    NOTIFICATION_ON_FAILURE = 'on_failure'
-    NOTIFICATION_NEVER = 'never'
-
-    CHOICES = (
-        (NOTIFICATION_ALWAYS, _('Always')),
-        (NOTIFICATION_ON_FAILURE, _('On failure')),
-        (NOTIFICATION_NEVER, _('Never')),
     )
 
 

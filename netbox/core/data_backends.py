@@ -15,29 +15,15 @@ from netbox.utils import register_data_backend
 from utilities.constants import HTTP_PROXY_SUPPORTED_SCHEMAS, HTTP_PROXY_SUPPORTED_SOCK_SCHEMAS
 from utilities.proxy import resolve_proxies
 from utilities.socks import ProxyPoolManager
-
 from .exceptions import SyncError
 
 __all__ = (
     'GitBackend',
     'LocalBackend',
     'S3Backend',
-    'url_has_embedded_credentials',
 )
 
 logger = logging.getLogger('netbox.data_backends')
-
-
-def url_has_embedded_credentials(url):
-    """
-    Check if a URL contains embedded credentials (username in the URL).
-
-    URLs like 'https://user@bitbucket.org/...' have embedded credentials.
-    This is used to avoid passing explicit credentials to dulwich when the
-    URL already contains them, which would cause authentication conflicts.
-    """
-    parsed = urlparse(url)
-    return bool(parsed.username)
 
 
 @register_data_backend()
@@ -116,9 +102,7 @@ class GitBackend(DataBackend):
             clone_args['pool_manager'] = ProxyPoolManager(self.socks_proxy)
 
         if self.url_scheme in ('http', 'https'):
-            # Only pass explicit credentials if URL doesn't already contain embedded username
-            # to avoid credential conflicts (see #20902)
-            if not url_has_embedded_credentials(self.url) and self.params.get('username'):
+            if self.params.get('username'):
                 clone_args.update(
                     {
                         "username": self.params.get('username'),

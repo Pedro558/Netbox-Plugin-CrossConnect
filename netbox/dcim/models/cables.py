@@ -1,17 +1,10 @@
 import itertools
-import logging
-import threading
-from collections import Counter
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
-from django.contrib.postgres.fields import ArrayField
-from django.contrib.postgres.indexes import GinIndex
 from django.core.exceptions import ValidationError
-from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.dispatch import Signal
-from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from core.models import ObjectType
@@ -27,47 +20,16 @@ from utilities.exceptions import AbortRequest
 from utilities.fields import ColorField, GenericArrayForeignKey
 from utilities.querysets import RestrictedQuerySet
 from utilities.serialization import deserialize_object, serialize_object
-from utilities.validators import CrossConnectIDValidator
 from wireless.models import WirelessLink
-
-from .device_components import FrontPort, PathEndpoint, PortMapping, RearPort
+from .device_components import FrontPort, RearPort, PathEndpoint
 
 __all__ = (
     'Cable',
-    'CableBundle',
     'CablePath',
     'CableTermination',
 )
 
-logger = logging.getLogger(f'netbox.{__name__}')
-
 trace_paths = Signal()
-
-
-#
-# Cable bundles
-#
-
-class CableBundle(PrimaryModel):
-    """
-    A logical grouping of individual cables.
-    """
-    name = models.CharField(
-        verbose_name=_('name'),
-        max_length=100,
-        unique=True,
-    )
-
-    class Meta:
-        ordering = ('name',)
-        verbose_name = _('cable bundle')
-        verbose_name_plural = _('cable bundles')
-
-    def __str__(self):
-        return self.name
-
-    def get_absolute_url(self):
-        return reverse('dcim:cablebundle', args=[self.pk])
 
 
 #
@@ -78,11 +40,6 @@ class Cable(PrimaryModel):
     """
     A physical connection between two endpoints.
     """
-    # Per-thread tracking of Cable PKs currently in delete(); referenced by
-    # dcim.signals.nullify_connected_endpoints to skip per-CableTermination
-    # cable path retracing during cascade (retrace_cable_paths handles it once).
-    _deletion_tracking = threading.local()
-
     type = models.CharField(
         verbose_name=_('type'),
         max_length=50,
@@ -96,12 +53,6 @@ class Cable(PrimaryModel):
         choices=LinkStatusChoices,
         default=LinkStatusChoices.STATUS_CONNECTED
     )
-    profile = models.CharField(
-        verbose_name=_('profile'),
-        max_length=50,
-        choices=CableProfileChoices,
-        blank=True,
-    )
     tenant = models.ForeignKey(
         to='tenancy.Tenant',
         on_delete=models.PROTECT,
@@ -112,7 +63,7 @@ class Cable(PrimaryModel):
     label = models.CharField(
         verbose_name=_('label'),
         max_length=100,
-        validators=(CrossConnectIDValidator,),
+        blank=True
     )
     color = ColorField(
         verbose_name=_('color'),
@@ -139,16 +90,8 @@ class Cable(PrimaryModel):
         blank=True,
         null=True
     )
-    bundle = models.ForeignKey(
-        to='dcim.CableBundle',
-        on_delete=models.SET_NULL,
-        related_name='cables',
-        blank=True,
-        null=True,
-        verbose_name=_('bundle'),
-    )
 
-    clone_fields = ('tenant', 'type', 'profile', 'bundle')
+    clone_fields = ('tenant', 'type',)
 
     class Meta:
         ordering = ('pk',)
@@ -161,9 +104,8 @@ class Cable(PrimaryModel):
         # A copy of the PK to be used by __str__ in case the object is deleted
         self._pk = self.__dict__.get('id')
 
-        # Cache the original profile & status so we can check later whether either has been changed
+        # Cache the original status so we can check later if it's been changed
         self._orig_status = self.__dict__.get('status')
-        self._orig_profile = self.__dict__.get('profile')
 
         self._terminations_modified = False
 
@@ -179,37 +121,6 @@ class Cable(PrimaryModel):
 
     def get_status_color(self):
         return LinkStatusChoices.colors.get(self.status)
-
-    @property
-    def profile_class(self):
-        from dcim import cable_profiles
-        return {
-            CableProfileChoices.SINGLE_1C1P: cable_profiles.Single1C1PCableProfile,
-            CableProfileChoices.SINGLE_1C2P: cable_profiles.Single1C2PCableProfile,
-            CableProfileChoices.SINGLE_1C4P: cable_profiles.Single1C4PCableProfile,
-            CableProfileChoices.SINGLE_1C6P: cable_profiles.Single1C6PCableProfile,
-            CableProfileChoices.SINGLE_1C8P: cable_profiles.Single1C8PCableProfile,
-            CableProfileChoices.SINGLE_1C12P: cable_profiles.Single1C12PCableProfile,
-            CableProfileChoices.SINGLE_1C16P: cable_profiles.Single1C16PCableProfile,
-            CableProfileChoices.TRUNK_2C1P: cable_profiles.Trunk2C1PCableProfile,
-            CableProfileChoices.TRUNK_2C2P: cable_profiles.Trunk2C2PCableProfile,
-            CableProfileChoices.TRUNK_2C4P: cable_profiles.Trunk2C4PCableProfile,
-            CableProfileChoices.TRUNK_2C4P_SHUFFLE: cable_profiles.Trunk2C4PShuffleCableProfile,
-            CableProfileChoices.TRUNK_2C6P: cable_profiles.Trunk2C6PCableProfile,
-            CableProfileChoices.TRUNK_2C8P: cable_profiles.Trunk2C8PCableProfile,
-            CableProfileChoices.TRUNK_2C12P: cable_profiles.Trunk2C12PCableProfile,
-            CableProfileChoices.TRUNK_4C1P: cable_profiles.Trunk4C1PCableProfile,
-            CableProfileChoices.TRUNK_4C2P: cable_profiles.Trunk4C2PCableProfile,
-            CableProfileChoices.TRUNK_4C4P: cable_profiles.Trunk4C4PCableProfile,
-            CableProfileChoices.TRUNK_4C4P_SHUFFLE: cable_profiles.Trunk4C4PShuffleCableProfile,
-            CableProfileChoices.TRUNK_4C6P: cable_profiles.Trunk4C6PCableProfile,
-            CableProfileChoices.TRUNK_4C8P: cable_profiles.Trunk4C8PCableProfile,
-            CableProfileChoices.TRUNK_8C4P: cable_profiles.Trunk8C4PCableProfile,
-            CableProfileChoices.BREAKOUT_1C2P_2C1P: cable_profiles.Breakout1C2Px2C1PCableProfile,
-            CableProfileChoices.BREAKOUT_1C4P_4C1P: cable_profiles.Breakout1C4Px4C1PCableProfile,
-            CableProfileChoices.BREAKOUT_1C6P_6C1P: cable_profiles.Breakout1C6Px6C1PCableProfile,
-            CableProfileChoices.BREAKOUT_2C4P_8C1P_SHUFFLE: cable_profiles.Breakout2C4Px8C1PShuffleCableProfile,
-        }.get(self.profile)
 
     def _get_x_terminations(self, side):
         """
@@ -283,10 +194,6 @@ class Cable(PrimaryModel):
         if self._state.adding and self.pk is None and (not self.a_terminations or not self.b_terminations):
             raise ValidationError(_("Must define A and B terminations when creating a new cable."))
 
-        # Validate terminations against the assigned cable profile (if any)
-        if self.profile:
-            self.profile_class().clean(self)
-
         if self._terminations_modified:
 
             # Check that all termination objects for either end are of the same type
@@ -338,9 +245,7 @@ class Cable(PrimaryModel):
             # Update the private PK used in __str__()
             self._pk = self.pk
 
-        if self._orig_profile != self.profile:
-            self.update_terminations(force=True)
-        elif self._terminations_modified:
+        if self._terminations_modified:
             self.update_terminations()
 
         super().save(*args, force_update=True, using=using, update_fields=update_fields)
@@ -349,70 +254,6 @@ class Cable(PrimaryModel):
             trace_paths.send(Cable, instance=self, created=_created)
         except UnsupportedCablePath as e:
             raise AbortRequest(e)
-
-    def delete(self, *args, **kwargs):
-        # Track this Cable as being deleted so the post_delete signal handler
-        # for cascaded CableTerminations can skip redundant path retracing;
-        # retrace_cable_paths() will retrace each affected path once after the
-        # Cable itself is deleted. Cache the PK locally because super().delete()
-        # clears self.pk before the finally block runs. The tracking set lives
-        # on a threading.local() to isolate concurrent deletions across threads.
-        if not hasattr(Cable._deletion_tracking, 'pks'):
-            Cable._deletion_tracking.pks = set()
-        pk = self.pk
-        Cable._deletion_tracking.pks.add(pk)
-        try:
-            return super().delete(*args, **kwargs)
-        finally:
-            Cable._deletion_tracking.pks.discard(pk)
-
-    @classmethod
-    def _is_being_deleted(cls, pk):
-        return pk in getattr(cls._deletion_tracking, 'pks', ())
-
-    def clone(self):
-        """
-        Return attributes suitable for cloning this cable.
-
-        In addition to the fields defined in `clone_fields`, include the termination
-        type and parent selector fields used by dcim.forms.connections.get_cable_form().
-        """
-        attrs = super().clone()
-
-        # Mirror dcim.forms.connections.get_cable_form() parent-field logic
-        for cable_end, terminations in (('a', self.a_terminations), ('b', self.b_terminations)):
-            if not terminations:
-                continue
-
-            term_cls = type(terminations[0])
-            term_label = term_cls._meta.label_lower
-
-            # Matches CableForm choices: "<app_label>.<model>"
-            attrs[f'{cable_end}_terminations_type'] = term_label
-
-            # Device component
-            if hasattr(term_cls, 'device'):
-                device_ids = sorted({t.device_id for t in terminations if t.device_id})
-                if device_ids:
-                    attrs[f'termination_{cable_end}_device'] = device_ids
-
-            # PowerFeed
-            elif term_label == 'dcim.powerfeed':
-                powerpanel_ids = sorted({t.power_panel_id for t in terminations if t.power_panel_id})
-                if powerpanel_ids:
-                    attrs[f'termination_{cable_end}_powerpanel'] = powerpanel_ids
-
-            # CircuitTermination
-            elif term_label == 'circuits.circuittermination':
-                circuit_ids = sorted({t.circuit_id for t in terminations if t.circuit_id})
-                if circuit_ids:
-                    attrs[f'termination_{cable_end}_circuit'] = circuit_ids
-
-        # Never clone the actual terminations, as they are already occupied
-        attrs.pop('a_terminations', None)
-        attrs.pop('b_terminations', None)
-
-        return attrs
 
     def serialize_object(self, exclude=None):
         data = serialize_object(self, exclude=exclude or [])
@@ -458,61 +299,27 @@ class Cable(PrimaryModel):
 
         return a_terminations, b_terminations
 
-    def update_terminations(self, force=False):
+    def update_terminations(self):
         """
         Create/delete CableTerminations for this Cable to reflect its current state.
-
-        Args:
-            force: Force the recreation of all CableTerminations, even if no changes have been made. Needed e.g. when
-                altering a Cable's assigned profile.
         """
         a_terminations, b_terminations = self.get_terminations()
 
-        # When force-recreating terminations (e.g. after a profile change), cache the termination objects
-        # from the database before deleting, so they are available for recreation. Without this, the
-        # a_terminations/b_terminations properties would query the DB after deletion and return empty lists.
-        if force:
-            if not hasattr(self, '_a_terminations'):
-                self._a_terminations = list(a_terminations.keys())
-            if not hasattr(self, '_b_terminations'):
-                self._b_terminations = list(b_terminations.keys())
-
         # Delete any stale CableTerminations
         for termination, ct in a_terminations.items():
-            if force or (termination.pk and termination not in self.a_terminations):
+            if termination.pk and termination not in self.a_terminations:
                 ct.delete()
         for termination, ct in b_terminations.items():
-            if force or (termination.pk and termination not in self.b_terminations):
+            if termination.pk and termination not in self.b_terminations:
                 ct.delete()
 
         # Save any new CableTerminations
-        profile = self.profile_class() if self.profile else None
-        for i, termination in enumerate(self.a_terminations, start=1):
-            if force or not termination.pk or termination not in a_terminations:
-                connector = positions = None
-                if profile:
-                    connector = i
-                    positions = profile.get_position_list(profile.a_connectors[i])
-                CableTermination(
-                    cable=self,
-                    cable_end=CableEndChoices.SIDE_A,
-                    connector=connector,
-                    positions=positions,
-                    termination=termination
-                ).save()
-        for i, termination in enumerate(self.b_terminations, start=1):
-            if force or not termination.pk or termination not in b_terminations:
-                connector = positions = None
-                if profile:
-                    connector = i
-                    positions = profile.get_position_list(profile.b_connectors[i])
-                CableTermination(
-                    cable=self,
-                    cable_end=CableEndChoices.SIDE_B,
-                    connector=connector,
-                    positions=positions,
-                    termination=termination
-                ).save()
+        for termination in self.a_terminations:
+            if not termination.pk or termination not in a_terminations:
+                CableTermination(cable=self, cable_end='A', termination=termination).save()
+        for termination in self.b_terminations:
+            if not termination.pk or termination not in b_terminations:
+                CableTermination(cable=self, cable_end='B', termination=termination).save()
 
 
 class CableTermination(ChangeLoggedModel):
@@ -538,24 +345,6 @@ class CableTermination(ChangeLoggedModel):
     termination = GenericForeignKey(
         ct_field='termination_type',
         fk_field='termination_id'
-    )
-    connector = models.PositiveSmallIntegerField(
-        blank=True,
-        null=True,
-        validators=(
-            MinValueValidator(CABLE_CONNECTOR_MIN),
-            MaxValueValidator(CABLE_CONNECTOR_MAX)
-        ),
-    )
-    positions = ArrayField(
-        base_field=models.PositiveSmallIntegerField(
-            validators=(
-                MinValueValidator(CABLE_POSITION_MIN),
-                MaxValueValidator(CABLE_POSITION_MAX)
-            )
-        ),
-        blank=True,
-        null=True,
     )
 
     # Cached associations to enable efficient filtering
@@ -587,15 +376,11 @@ class CableTermination(ChangeLoggedModel):
     objects = RestrictedQuerySet.as_manager()
 
     class Meta:
-        ordering = ('cable', 'cable_end', 'connector', 'pk')
+        ordering = ('cable', 'cable_end', 'pk')
         constraints = (
             models.UniqueConstraint(
                 fields=('termination_type', 'termination_id'),
                 name='%(app_label)s_%(class)s_unique_termination'
-            ),
-            models.UniqueConstraint(
-                fields=('cable', 'cable_end', 'connector'),
-                name='%(app_label)s_%(class)s_unique_connector'
             ),
         )
         verbose_name = _('cable termination')
@@ -658,7 +443,8 @@ class CableTermination(ChangeLoggedModel):
         # Set the cable on the terminating object
         termination = self.termination._meta.model.objects.get(pk=self.termination_id)
         termination.snapshot()
-        termination.set_cable_termination(self)
+        termination.cable = self.cable
+        termination.cable_end = self.cable_end
         termination.save()
 
     def delete(self, *args, **kwargs):
@@ -666,7 +452,8 @@ class CableTermination(ChangeLoggedModel):
         # Delete the cable association on the terminating object
         termination = self.termination._meta.model.objects.get(pk=self.termination_id)
         termination.snapshot()
-        termination.clear_cable_termination(self)
+        termination.cable = None
+        termination.cable_end = None
         termination.save()
 
         super().delete(*args, **kwargs)
@@ -758,11 +545,6 @@ class CablePath(models.Model):
     _netbox_private = True
 
     class Meta:
-        indexes = (
-            # GIN index supports @> operator used by `_nodes__contains` lookups,
-            # which fire on every cable/termination delete and path retrace.
-            GinIndex(fields=('_nodes',)),
-        )
         verbose_name = _('cable path')
         verbose_name_plural = _('cable paths')
 
@@ -781,29 +563,17 @@ class CablePath(models.Model):
         origin_ids = [decompile_path_node(node)[1] for node in self.path[0]]
         origin_model.objects.filter(pk__in=origin_ids).update(_path=self.pk)
 
-    def delete(self, *args, **kwargs):
-        # Mirror save() - clear _path on origins to prevent stale references
-        # in table views that render _path.destinations
-        if self.path:
-            origin_model = self.origin_type.model_class()
-            origin_ids = [decompile_path_node(node)[1] for node in self.path[0]]
-            origin_model.objects.filter(pk__in=origin_ids, _path=self.pk).update(_path=None)
-
-        super().delete(*args, **kwargs)
-
     @property
     def origin_type(self):
         if self.path:
             ct_id, _ = decompile_path_node(self.path[0][0])
             return ContentType.objects.get_for_id(ct_id)
-        return None
 
     @property
     def destination_type(self):
         if self.is_complete:
             ct_id, _ = decompile_path_node(self.path[-1][0])
             return ContentType.objects.get_for_id(ct_id)
-        return None
 
     @property
     def _path_decompiled(self):
@@ -844,7 +614,7 @@ class CablePath(models.Model):
         Cable or WirelessLink connects (interfaces, console ports, circuit termination, etc.). All terminations must be
         of the same type and must belong to the same parent object.
         """
-        from circuits.models import Circuit, CircuitTermination
+        from circuits.models import CircuitTermination, Circuit
 
         if not terminations:
             return None
@@ -859,13 +629,7 @@ class CablePath(models.Model):
         is_active = True
         is_split = False
 
-        logger.debug(f'Tracing cable path from {terminations}...')
-
-        segment = 0
         while terminations:
-            segment += 1
-            logger.debug(f'[Path segment #{segment}] Position stack: {position_stack}')
-            logger.debug(f'[Path segment #{segment}] Local terminations: {terminations}')
 
             # Terminations must all be of the same type
             if not all(isinstance(t, type(terminations[0])) for t in terminations[1:]):
@@ -891,15 +655,9 @@ class CablePath(models.Model):
             path.append([
                 object_to_path_node(t) for t in terminations
             ])
-            # If not null, push cable positions onto the stack
-            if isinstance(terminations[0], PathEndpoint) and terminations[0].cable_positions:
-                position_stack.append(list(terminations[0].cable_positions))
 
             # Step 2: Determine the attached links (Cable or WirelessLink), if any
-            links = list(dict.fromkeys(
-                termination.link for termination in terminations if termination.link is not None
-            ))
-            logger.debug(f'[Path segment #{segment}] Links: {links}')
+            links = [termination.link for termination in terminations if termination.link is not None]
             if len(links) == 0:
                 if len(path) == 1:
                     # If this is the start of the path and no link exists, return None
@@ -931,83 +689,33 @@ class CablePath(models.Model):
 
             # Step 6: Determine the far-end terminations
             if isinstance(links[0], Cable):
-                # Profile-based tracing
-                if links[0].profile:
-                    cable_profile = links[0].profile_class()
-                    positions = position_stack.pop() if position_stack else [None]
-                    remote_terminations = []
-                    new_positions = []
+                termination_type = ObjectType.objects.get_for_model(terminations[0])
+                local_cable_terminations = CableTermination.objects.filter(
+                    termination_type=termination_type,
+                    termination_id__in=[t.pk for t in terminations]
+                )
 
-                    # Build (termination, position) pairs by matching stacked positions
-                    # to each termination's cable_positions. This correctly handles
-                    # multiple terminations on different connectors of the same cable.
-                    remaining = Counter(positions)
-                    term_position_pairs = []
-                    for term in terminations:
-                        if term.cable_positions:
-                            for cp in term.cable_positions:
-                                if remaining[cp]:
-                                    term_position_pairs.append((term, cp))
-                                    remaining[cp] -= 1
+                q_filter = Q()
+                for lct in local_cable_terminations:
+                    cable_end = 'A' if lct.cable_end == 'B' else 'B'
+                    q_filter |= Q(cable=lct.cable, cable_end=cable_end)
 
-                    # Fallback for when positions don't match cable_positions
-                    # (e.g., empty position stack yielding [None])
-                    if not term_position_pairs:
-                        term_position_pairs = [(terminations[0], pos) for pos in positions]
+                # Make sure this filter has been populated; if not, we have probably been given invalid data
+                if not q_filter:
+                    break
 
-                    peer_results = cable_profile.get_peer_terminations(term_position_pairs)
-                    seen = set()
-                    for peer, new_pos in peer_results:
-                        # Deduplicate peer terminations by model type & PK.
-                        key = None if peer is None else (peer._meta.concrete_model, peer.pk)
-                        if key not in seen:
-                            seen.add(key)
-                            remote_terminations.append(peer)
-                        new_positions.append(new_pos)
-
-                    # If all peers resolved to None (no far-end terminations exist),
-                    # treat as an empty result so the path is recorded as incomplete
-                    # rather than falling through to the endpoint check with a stale
-                    # None entry.
-                    if remote_terminations and all(peer is None for peer in remote_terminations):
-                        remote_terminations = []
-
-                    position_stack.append(new_positions)
-
-                # Legacy (positionless) behavior
-                else:
-                    termination_type = ObjectType.objects.get_for_model(terminations[0])
-                    local_cable_terminations = CableTermination.objects.filter(
-                        termination_type=termination_type,
-                        termination_id__in=[t.pk for t in terminations]
-                    )
-
-                    q_filter = Q()
-                    for lct in local_cable_terminations:
-                        cable_end = 'A' if lct.cable_end == 'B' else 'B'
-                        q_filter |= Q(cable=lct.cable, cable_end=cable_end)
-
-                    # Make sure this filter has been populated; if not, we have probably been given invalid data
-                    if not q_filter:
-                        break
-
-                    remote_cable_terminations = CableTermination.objects.filter(q_filter).prefetch_related(
-                        'termination'
-                    )
-                    remote_terminations = [ct.termination for ct in remote_cable_terminations]
+                remote_cable_terminations = CableTermination.objects.filter(q_filter)
+                remote_terminations = [ct.termination for ct in remote_cable_terminations]
             else:
                 # WirelessLink
                 remote_terminations = [
                     link.interface_b if link.interface_a is terminations[0] else link.interface_a for link in links
                 ]
 
-            logger.debug(f'[Path segment #{segment}] Remote terminations: {remote_terminations}')
-
             # Remote Terminations must all be of the same type, otherwise return a split path
             if not all(isinstance(t, type(remote_terminations[0])) for t in remote_terminations[1:]):
                 is_complete = False
                 is_split = True
-                logger.debug('Remote termination types differ; aborting trace.')
                 break
 
             # Step 7: Record the far-end termination object(s)
@@ -1021,53 +729,58 @@ class CablePath(models.Model):
 
             if isinstance(remote_terminations[0], FrontPort):
                 # Follow FrontPorts to their corresponding RearPorts
-                if remote_terminations[0].positions > 1 and position_stack:
-                    positions = position_stack.pop()
-                    q_filter = Q()
-                    for rt in remote_terminations:
-                        q_filter |= Q(front_port=rt, front_port_position__in=positions)
-                    port_mappings = PortMapping.objects.filter(q_filter)
-                elif remote_terminations[0].positions > 1:
-                    is_split = True
-                    logger.debug(
-                        'Encountered front port mapped to multiple rear ports but position stack is empty; aborting '
-                        'trace.'
-                    )
-                    break
-                else:
-                    port_mappings = PortMapping.objects.filter(front_port__in=remote_terminations)
-                if not port_mappings:
-                    break
+                rear_ports = RearPort.objects.filter(
+                    pk__in=[t.rear_port_id for t in remote_terminations]
+                )
+                if len(rear_ports) > 1 or rear_ports[0].positions > 1:
+                    position_stack.append([fp.rear_port_position for fp in remote_terminations])
 
-                # Compile the list of RearPorts without duplication or altering their ordering
-                terminations = list(dict.fromkeys(mapping.rear_port for mapping in port_mappings))
-                if any(t.positions > 1 for t in terminations):
-                    position_stack.append([mapping.rear_port_position for mapping in port_mappings])
+                terminations = rear_ports
 
             elif isinstance(remote_terminations[0], RearPort):
-                # Follow RearPorts to their corresponding FrontPorts
-                if remote_terminations[0].positions > 1 and position_stack:
+                if len(remote_terminations) == 1 and remote_terminations[0].positions == 1:
+                    front_ports = FrontPort.objects.filter(
+                        rear_port_id__in=[rp.pk for rp in remote_terminations],
+                        rear_port_position=1
+                    )
+                # Obtain the individual front ports based on the termination and all positions
+                elif len(remote_terminations) > 1 and position_stack:
                     positions = position_stack.pop()
+
+                    # Ensure we have a number of positions equal to the amount of remote terminations
+                    if len(remote_terminations) != len(positions):
+                        raise UnsupportedCablePath(
+                            _("All positions counts within the path on opposite ends of links must match")
+                        )
+
+                    # Get our front ports
                     q_filter = Q()
                     for rt in remote_terminations:
-                        q_filter |= Q(rear_port=rt, rear_port_position__in=positions)
-                    port_mappings = PortMapping.objects.filter(q_filter)
-                elif remote_terminations[0].positions > 1:
-                    is_split = True
-                    logger.debug(
-                        'Encountered rear port mapped to multiple front ports but position stack is empty; aborting '
-                        'trace.'
+                        position = positions.pop()
+                        q_filter |= Q(rear_port_id=rt.pk, rear_port_position=position)
+                    if q_filter is Q():
+                        raise UnsupportedCablePath(_("Remote termination position filter is missing"))
+                    front_ports = FrontPort.objects.filter(q_filter)
+                # Obtain the individual front ports based on the termination and position
+                elif position_stack:
+                    front_ports = FrontPort.objects.filter(
+                        rear_port_id=remote_terminations[0].pk,
+                        rear_port_position__in=position_stack.pop()
                     )
-                    break
+                # If all rear ports have a single position, we can just get the front ports
+                elif all([rp.positions == 1 for rp in remote_terminations]):
+                    front_ports = FrontPort.objects.filter(rear_port_id__in=[rp.pk for rp in remote_terminations])
+
+                    if len(front_ports) != len(remote_terminations):
+                        # Some rear ports does not have a front port
+                        is_split = True
+                        break
                 else:
-                    port_mappings = PortMapping.objects.filter(rear_port__in=remote_terminations)
-                if not port_mappings:
+                    # No position indicated: path has split, so we stop at the RearPorts
+                    is_split = True
                     break
 
-                # Compile the list of FrontPorts without duplication or altering their ordering
-                terminations = list(dict.fromkeys(mapping.front_port for mapping in port_mappings))
-                if any(t.positions > 1 for t in terminations):
-                    position_stack.append([mapping.front_port_position for mapping in port_mappings])
+                terminations = front_ports
 
             elif isinstance(remote_terminations[0], CircuitTermination):
                 # Follow a CircuitTermination to its corresponding CircuitTermination (A to Z or vice versa)
@@ -1083,7 +796,7 @@ class CablePath(models.Model):
 
                 if not circuit_terminations.exists():
                     break
-                if all([ct._provider_network for ct in circuit_terminations]):
+                elif all([ct._provider_network for ct in circuit_terminations]):
                     # Circuit terminates to a ProviderNetwork
                     path.extend([
                         [object_to_path_node(ct) for ct in circuit_terminations],
@@ -1091,14 +804,14 @@ class CablePath(models.Model):
                     ])
                     is_complete = True
                     break
-                if all([ct.termination and not ct.cable for ct in circuit_terminations]):
+                elif all([ct.termination and not ct.cable for ct in circuit_terminations]):
                     # Circuit terminates to a Region/Site/etc.
                     path.extend([
                         [object_to_path_node(ct) for ct in circuit_terminations],
                         [object_to_path_node(ct.termination) for ct in circuit_terminations],
                     ])
                     break
-                if any([ct.cable in links for ct in circuit_terminations]):
+                elif any([ct.cable in links for ct in circuit_terminations]):
                     # No valid path
                     is_split = True
                     break
@@ -1115,7 +828,6 @@ class CablePath(models.Model):
                     # Unsupported topology, mark as split and exit
                     is_complete = False
                     is_split = True
-                    logger.warning('Encountered an unsupported topology; aborting trace.')
                 break
 
         return cls(
@@ -1194,23 +906,16 @@ class CablePath(models.Model):
 
         # RearPort splitting to multiple FrontPorts with no stack position
         if type(nodes[0]) is RearPort:
-            return [
-                mapping.front_port for mapping in
-                PortMapping.objects.filter(rear_port__in=nodes).prefetch_related('front_port')
-            ]
+            return FrontPort.objects.filter(rear_port__in=nodes)
         # Cable terminating to multiple FrontPorts mapped to different
         # RearPorts connected to different cables
-        if type(nodes[0]) is FrontPort:
-            return [
-                mapping.rear_port for mapping in
-                PortMapping.objects.filter(front_port__in=nodes).prefetch_related('rear_port')
-            ]
+        elif type(nodes[0]) is FrontPort:
+            return RearPort.objects.filter(pk__in=[fp.rear_port_id for fp in nodes])
         # Cable terminating to multiple CircuitTerminations
-        if type(nodes[0]) is CircuitTermination:
+        elif type(nodes[0]) is CircuitTermination:
             return [
                 ct.get_peer_termination() for ct in nodes
             ]
-        return []
 
     def get_asymmetric_nodes(self):
         """

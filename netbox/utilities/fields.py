@@ -6,6 +6,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import models
 from django.db.models.fields.mixins import FieldCacheMixin
 from django.utils.functional import cached_property
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from .forms.widgets import ColorSelect
@@ -30,6 +31,7 @@ class ColorField(models.CharField):
 
     def formfield(self, **kwargs):
         kwargs['widget'] = ColorSelect
+        kwargs['help_text'] = mark_safe(_('RGB color in hexadecimal. Example: ') + '<code>00ff00</code>')
         return super().formfield(**kwargs)
 
 
@@ -131,14 +133,15 @@ class RestrictedGenericForeignKey(GenericForeignKey):
             ct_id = getattr(obj, ct_attname)
             if ct_id is None:
                 return None
-            if model := self.get_content_type(
-                id=ct_id, using=obj._state.db
-            ).model_class():
-                return (
-                    model._meta.pk.get_prep_value(getattr(obj, self.fk_field)),
-                    model,
-                )
-            return None
+            else:
+                if model := self.get_content_type(
+                    id=ct_id, using=obj._state.db
+                ).model_class():
+                    return (
+                        model._meta.pk.get_prep_value(getattr(obj, self.fk_field)),
+                        model,
+                    )
+                return None
 
         return (
             ret_val,

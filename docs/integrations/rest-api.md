@@ -80,7 +80,7 @@ Likewise, the site, rack, and device objects are located under the "DCIM" applic
 
 The full hierarchy of available endpoints can be viewed by navigating to the API root in a web browser.
 
-Each model generally has two views associated with it: a list view and a detail view. The list view is used to retrieve a list of multiple objects and to create new objects. The detail view is used to retrieve, update, or delete a single existing object. All objects are referenced by their numeric primary key (`id`).
+Each model generally has two views associated with it: a list view and a detail view. The list view is used to retrieve a list of multiple objects and to create new objects. The detail view is used to retrieve, update, or delete an single existing object. All objects are referenced by their numeric primary key (`id`).
 
 * `/api/dcim/devices/` - List existing devices or create a new device
 * `/api/dcim/devices/123/` - Retrieve, update, or delete the device with ID 123
@@ -215,51 +215,9 @@ http://netbox/api/ipam/ip-addresses/ \
 
 If we wanted to assign this IP address to a virtual machine interface instead, we would have set `assigned_object_type` to `virtualization.vminterface` and updated the object ID appropriately.
 
-### Specifying Fields
+### Brief Format
 
-A REST API response will include all available fields for the object type by default. If you wish to return only a subset of the available fields, you can append `?fields=` to the URL followed by a comma-separated list of field names. For example, the following request will return only the `id`, `name`, `status`, and `region` fields for each site in the response.
-
-```
-GET /api/dcim/sites/?fields=id,name,status,region
-```
-
-```json
-{
-    "id": 1,
-    "name": "DM-NYC",
-    "status": {
-        "value": "active",
-        "label": "Active"
-    },
-    "region": {
-        "id": 43,
-        "url": "http://netbox:8000/api/dcim/regions/43/",
-        "display": "New York",
-        "name": "New York",
-        "slug": "us-ny",
-        "description": "",
-        "site_count": 0,
-        "_depth": 2
-    }
-}
-```
-
-Similarly, you can opt to omit only specific fields by passing the `omit` parameter:
-
-```
-GET /api/dcim/sites/?omit=circuit_count,device_count,virtualmachine_count
-```
-
-!!! note "The `omit` parameter was introduced in NetBox v4.5.2."
-
-Strategic use of the `fields` and `omit` parameters can drastically improve REST API performance, as the exclusion of fields which reference related objects reduces the number and complexity of underlying database queries needed to generate the response.
-
-!!! note
-    The `fields` and `omit` parameters should be considered mutually exclusive. If both are passed, `fields` takes precedence.
-
-#### Brief Format
-
-Most API endpoints support an optional "brief" format, which returns only a minimal representation of each object in the response. This is useful when you need only a list of available objects without any related data, such as when populating a drop-down list in a form. It's also more convenient than listing out individual fields via the `fields` or `omit` parameters. As an example, the default (complete) format of a prefix looks like this:
+Most API endpoints support an optional "brief" format, which returns only a minimal representation of each object in the response. This is useful when you need only a list of available objects without any related data, such as when populating a drop-down list in a form. As an example, the default (complete) format of a prefix looks like this:
 
 ```no-highlight
 GET /api/ipam/prefixes/13980/
@@ -312,10 +270,10 @@ GET /api/ipam/prefixes/13980/
 }
 ```
 
-The brief format includes only a few fields:
+The brief format is much more terse:
 
 ```no-highlight
-GET /api/ipam/prefixes/13980/?brief=true
+GET /api/ipam/prefixes/13980/?brief=1
 ```
 
 ```json
@@ -341,7 +299,7 @@ When retrieving devices and virtual machines via the REST API, each will include
 
 ## Pagination
 
-API responses which contain a list of many objects will be paginated for efficiency. NetBox employs offset-based pagination by default, which forms a page by skipping the number of objects indicated by the `offset` URL parameter. The root JSON object returned by a list endpoint contains the following attributes:
+API responses which contain a list of many objects will be paginated for efficiency. The root JSON object returned by a list endpoint contains the following attributes:
 
 * `count`: The total number of all objects matching the query
 * `next`: A hyperlink to the next page of results (if applicable)
@@ -397,49 +355,6 @@ The maximum number of objects that can be returned is limited by the [`MAX_PAGE_
 
 !!! warning
     Disabling the page size limit introduces a potential for very resource-intensive requests, since one API request can effectively retrieve an entire table from the database.
-
-### Cursor-Based Pagination
-
-For large datasets, offset-based pagination can become inefficient because the database must scan all rows up to the offset. As an alternative, cursor-based pagination uses the `start` query parameter to filter results by primary key (PK), enabling efficient keyset pagination.
-
-To use cursor-based pagination, pass `start` (the minimum PK value) and `limit` (the page size):
-
-```
-http://netbox/api/dcim/devices/?start=0&limit=100
-```
-
-This returns objects with an `id` greater than or equal to zero, ordered by PK, limited to 100 results. Below is an example showing an arbitrary `start` value.
-
-```json
-{
-    "count": null,
-    "next": "http://netbox/api/dcim/devices/?start=356&limit=100",
-    "previous": null,
-    "results": [
-        {
-            "id": 109,
-            "name": "dist-router07",
-            ...
-        },
-        ...
-        {
-            "id": 356,
-            "name": "acc-switch492",
-            ...
-        }
-    ]
-}
-```
-
-To iterate through all results, use the `id` of the last object in each response plus one as the `start` value for the next request. Continue until `next` is null.
-
-!!! info
-    Some important differences from offset-based pagination:
-
-    * `start` and `offset` are **mutually exclusive**; specifying both will result in a 400 error.
-    * Results are always ordered by primary key when using `start`. This is required to ensure deterministic behavior.
-    * `count` is always `null` in cursor mode, as counting all matching rows would partially negate its performance benefit.
-    * `previous` is always `null`: cursor-based pagination supports only forward navigation.
 
 ## Interacting with Objects
 
@@ -663,51 +578,6 @@ Note that there is no requirement for the attributes to be identical among objec
 !!! note
     The bulk update of objects is an all-or-none operation, meaning that if NetBox fails to successfully update any of the specified objects (e.g. due a validation error), the entire operation will be aborted and none of the objects will be updated.
 
-### Concurrent Update Protection
-
-!!! info "This feature was introduced in NetBox v4.6."
-
-To guard against the lost-update problem when multiple clients modify the same object, NetBox returns a weak `ETag` response header on detail-view responses (`GET`, `POST`, `PATCH`, `PUT`) for individual objects. Clients may supply this value back on a subsequent `PATCH` or `PUT` request via the `If-Match` request header. If the object's current ETag does not match any of the values supplied, the server rejects the request with a `412 Precondition Failed` response and includes the current ETag in the response so the client can retry.
-
-```no-highlight
-# Capture the ETag returned with the object
-$ curl -s -i -H "Authorization: Bearer $TOKEN" http://netbox/api/dcim/sites/1/ | grep -i ^etag
-ETag: W/"2026-05-01T17:42:11.123456+00:00"
-
-# Submit an update with If-Match referencing that ETag
-$ curl -s -X PATCH \
-    -H "Authorization: Bearer $TOKEN" \
-    -H "Content-Type: application/json" \
-    -H 'If-Match: W/"2026-05-01T17:42:11.123456+00:00"' \
-    http://netbox/api/dcim/sites/1/ \
-    --data '{"status": "decommissioning"}'
-```
-
-A literal `If-Match: *` value matches any current ETag and may be used to assert simply that the object exists. Submitting `If-Match` is optional; requests without the header retain prior (last-write-wins) behavior.
-
-### Adding and Removing Tags
-
-!!! info "This feature was introduced in NetBox v4.6."
-
-In addition to replacing an object's tag set wholesale via the `tags` field, taggable models accept two write-only fields, `add_tags` and `remove_tags`, which apply only the specified additions or removals without disturbing existing tags. This is convenient when concurrent clients each manage a distinct subset of an object's tags.
-
-```no-highlight
-curl -s -X PATCH \
--H "Authorization: Bearer $TOKEN" \
--H "Content-Type: application/json" \
-http://netbox/api/dcim/sites/1/ \
---data '{
-    "add_tags": [{"name": "production"}],
-    "remove_tags": [{"name": "staging"}]
-}'
-```
-
-Constraints:
-
-* `tags` may not be combined with `add_tags` or `remove_tags` in the same request.
-* `remove_tags` is only valid on updates; it cannot be used when creating a new object.
-* The same tag may not appear in both `add_tags` and `remove_tags`.
-
 ### Deleting an Object
 
 To delete an object from NetBox, make a `DELETE` request to the model's _detail_ endpoint specifying its unique numeric ID. The `Authorization` header must be included to specify an authorization token, however this type of request does not support passing any data in the body.
@@ -740,7 +610,9 @@ http://netbox/api/dcim/sites/ \
 
 ## Changelog Messages
 
-Most objects in NetBox support [change logging](../features/change-logging.md), which generates a detailed record each time an object is created, modified, or deleted. Additionally, users can attach a message to the change record as well. This is accomplished via the REST API by including a `changelog_message` field in the object representation.
+!!! info "This feature was introduced in NetBox v4.4."
+
+Most objects in NetBox support [change logging](../features/change-logging.md), which generates a detailed record each time an object is created, modified, or deleted. Beginning in NetBox v4.4, users can attach a message to the change record as well. This is accomplished via the REST API by including a `changelog_message` field in the object representation.
 
 For example, the following API request will create a new site and record a message in the resulting changelog entry:
 
@@ -756,7 +628,7 @@ http://netbox/api/dcim/sites/ \
 }'
 ```
 
-This approach works when creating, modifying, or deleting objects, either individually or in bulk. For more information about change logging, see [Change Logging](../features/change-logging.md).
+This approach works when creating, modifying, or deleting objects, either individually or in bulk.
 
 ## Uploading Files
 
@@ -781,25 +653,18 @@ The NetBox REST API primarily employs token-based authentication. For convenienc
 
 ### Tokens
 
-A token is a secret, unique identifier mapped to a NetBox user account. Each user may have one or more tokens which he or she can use for authentication when making REST API requests. To create a token, navigate to the API tokens page under your user profile. When creating a token, NetBox will automatically populate a randomly-generated token value.
-
-!!! note "Tokens cannot be retrieved once created"
-    Once a token has been created, its plaintext value cannot be retrieved. For this reason, you must take care to securely record the token locally immediately upon its creation. If a token plaintext is lost, it cannot be recovered: A new token must be created.
+A token is a unique identifier mapped to a NetBox user account. Each user may have one or more tokens which he or she can use for authentication when making REST API requests. To create a token, navigate to the API tokens page under your user profile.
 
 By default, all users can create and manage their own REST API tokens under the user control panel in the UI or via the REST API. This ability can be disabled by overriding the [`DEFAULT_PERMISSIONS`](../configuration/security.md#default_permissions) configuration parameter.
 
+Each token contains a 160-bit key represented as 40 hexadecimal characters. When creating a token, you'll typically leave the key field blank so that a random key will be automatically generated. However, NetBox allows you to specify a key in case you need to restore a previously deleted token to operation.
+
 Additionally, a token can be set to expire at a specific time. This can be useful if an external client needs to be granted temporary access to NetBox.
 
-#### v1 and v2 Tokens
+!!! info "Restricting Token Retrieval"
+    The ability to retrieve the key value of a previously-created API token can be restricted by disabling the [`ALLOW_TOKEN_RETRIEVAL`](../configuration/security.md#allow_token_retrieval) configuration parameter.
 
-!!! warning "v1 Tokens Are Deprecated"
-    v1 API tokens are deprecated as of NetBox v4.6 and will be removed in NetBox v5.0. All users should migrate to v2 tokens.
-
-Beginning with NetBox v4.5, two versions of API token are supported, denoted as v1 and v2. Users are strongly encouraged to create only v2 tokens and to discontinue the use of v1 tokens.
-
-v2 API tokens offer much stronger security. The token plaintext given at creation time is hashed together with a configured [cryptographic pepper](../configuration/required-parameters.md#api_token_peppers) to generate a unique checksum. This checksum is irreversible; the token plaintext is never stored on the server and thus cannot be retrieved even with database-level access.
-
-#### Restricting Write Operations
+### Restricting Write Operations
 
 By default, a token can be used to perform all actions via the API that a user would be permitted to do via the web UI. Deselecting the "write enabled" option will restrict API requests made with the token to read operations (e.g. GET) only.
 
@@ -816,22 +681,10 @@ It is possible to provision authentication tokens for other users via the REST A
 
 ### Authenticating to the API
 
-An authentication token is included with a request in its `Authorization` header. The format of the header value depends on the version of token in use. v2 tokens use the following form, concatenating the token's prefix (`nbt_`) and key with its plaintext value, separated by a period:
+An authentication token is attached to a request by setting the `Authorization` header to the string `Token` followed by a space and the user's token:
 
 ```
-Authorization: Bearer nbt_<key>.<token>
-```
-
-Legacy v1 tokens use the prefix `Token` rather than `Bearer`, and include only the token plaintext. (v1 tokens do not have a key.)
-
-```
-Authorization: Token <token>
-```
-
-Below is an example REST API request utilizing a v2 token.
-
-```
-$ curl -H "Authorization: Bearer nbt_4F9DAouzURLb.zjebxBPzICiPbWz0Wtx0fTL7bCKXKGTYhNzkgC2S" \
+$ curl -H "Authorization: Token $TOKEN" \
 -H "Accept: application/json; indent=4" \
 https://netbox/api/dcim/sites/
 {
@@ -919,11 +772,3 @@ GET /api/dcim/sites/?created_by_request=e39c84bc-f169-4d5f-bc1c-94487a1b18b5
 
 !!! note
     This header is included with _all_ NetBox responses, although it is most practical when working with an API.
-
-### `ETag`
-
-A weak entity tag (e.g. `W/"2026-05-01T17:42:11.123456+00:00"`) returned on detail-view responses for individual objects. The value is derived from the object's `last_updated` timestamp (or `created`, if the object has no `last_updated`). Clients may supply this value on a subsequent write request via the `If-Match` header to perform a conditional update. See [Concurrent Update Protection](#concurrent-update-protection) for details.
-
-### `If-Match`
-
-A request header which may be supplied on `PATCH` or `PUT` requests targeting a single object. If the object's current ETag does not match any value supplied, the request is rejected with a `412 Precondition Failed` response. A literal value of `*` matches any existing object. See [Concurrent Update Protection](#concurrent-update-protection) for details.

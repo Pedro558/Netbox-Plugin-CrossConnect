@@ -4,7 +4,7 @@ from django.db import transaction
 from django.test import TestCase, override_settings
 
 from dcim.choices import SiteStatusChoices
-from dcim.models import Region, Site
+from dcim.models import Site, Region
 from extras.validators import CustomValidator
 from ipam.models import ASN, RIR
 from users.models import User
@@ -98,7 +98,7 @@ request_validator = CustomValidator({
 custom_validator = MyValidator()
 
 
-class CustomValidatorTestCase(TestCase):
+class CustomValidatorTest(TestCase):
 
     @classmethod
     def setUpTestData(cls):
@@ -207,7 +207,7 @@ class CustomValidatorTestCase(TestCase):
         request_validator(site, request)
 
 
-class CustomValidatorConfigTestCase(TestCase):
+class CustomValidatorConfigTest(TestCase):
 
     @override_settings(
         CUSTOM_VALIDATORS={
@@ -242,7 +242,7 @@ class CustomValidatorConfigTestCase(TestCase):
             Site(name='bar', slug='bar').clean()
 
 
-class ProtectionRulesConfigTestCase(TestCase):
+class ProtectionRulesConfigTest(TestCase):
 
     @override_settings(
         PROTECTION_RULES={

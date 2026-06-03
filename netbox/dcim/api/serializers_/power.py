@@ -1,9 +1,8 @@
 from dcim.choices import *
 from dcim.models import PowerFeed, PowerPanel
 from netbox.api.fields import ChoiceField, RelatedObjectCountField
-from netbox.api.serializers import PrimaryModelSerializer
+from netbox.api.serializers import NetBoxModelSerializer
 from tenancy.api.serializers_.tenants import TenantSerializer
-
 from .base import ConnectedEndpointsSerializer
 from .cables import CabledObjectSerializer
 from .racks import RackSerializer
@@ -15,7 +14,7 @@ __all__ = (
 )
 
 
-class PowerPanelSerializer(PrimaryModelSerializer):
+class PowerPanelSerializer(NetBoxModelSerializer):
     site = SiteSerializer(nested=True)
     location = LocationSerializer(
         nested=True,
@@ -30,13 +29,13 @@ class PowerPanelSerializer(PrimaryModelSerializer):
     class Meta:
         model = PowerPanel
         fields = [
-            'id', 'url', 'display_url', 'display', 'site', 'location', 'name', 'description', 'owner', 'comments',
-            'tags', 'custom_fields', 'powerfeed_count', 'created', 'last_updated',
+            'id', 'url', 'display_url', 'display', 'site', 'location', 'name', 'description', 'comments', 'tags',
+            'custom_fields', 'powerfeed_count', 'created', 'last_updated',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'description', 'powerfeed_count')
 
 
-class PowerFeedSerializer(PrimaryModelSerializer, CabledObjectSerializer, ConnectedEndpointsSerializer):
+class PowerFeedSerializer(NetBoxModelSerializer, CabledObjectSerializer, ConnectedEndpointsSerializer):
     power_panel = PowerPanelSerializer(nested=True)
     rack = RackSerializer(
         nested=True,
@@ -72,7 +71,6 @@ class PowerFeedSerializer(PrimaryModelSerializer, CabledObjectSerializer, Connec
             'id', 'url', 'display_url', 'display', 'power_panel', 'rack', 'name', 'status', 'type', 'supply',
             'phase', 'voltage', 'amperage', 'max_utilization', 'mark_connected', 'cable', 'cable_end', 'link_peers',
             'link_peers_type', 'connected_endpoints', 'connected_endpoints_type', 'connected_endpoints_reachable',
-            'description', 'tenant', 'owner', 'comments', 'tags', 'custom_fields', 'created', 'last_updated',
-            '_occupied',
+            'description', 'tenant', 'comments', 'tags', 'custom_fields', 'created', 'last_updated', '_occupied',
         ]
         brief_fields = ('id', 'url', 'display', 'name', 'description', 'cable', '_occupied')

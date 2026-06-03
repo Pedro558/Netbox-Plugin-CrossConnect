@@ -1,5 +1,16 @@
 # Security & Authentication Parameters
 
+## ALLOW_TOKEN_RETRIEVAL
+
+Default: `False`
+
+!!! note
+    The default value of this parameter changed from `True` to `False` in NetBox v4.3.0.
+
+If disabled, the values of API tokens will not be displayed after each token's initial creation. A user **must** record the value of a token prior to its creation, or it will be lost. Note that this affects _all_ users, regardless of assigned permissions.
+
+---
+
 ## ALLOWED_URL_SCHEMES
 
 !!! tip "Dynamic Configuration Parameter"
@@ -153,16 +164,13 @@ EXEMPT_VIEW_PERMISSIONS = ['*']
 
 Default: `False`
 
-If `True`, the lifetime of a user's authentication session will be automatically reset upon each valid request. For example, if [`LOGIN_TIMEOUT`](#login_timeout) is configured to 14 days, and a user whose session is due to expire in five days makes a NetBox request (with a valid session cookie), the session's lifetime will be reset to 14 days.
+If `True`, the lifetime of a user's authentication session will be automatically reset upon each valid request. For example, if [`LOGIN_TIMEOUT`](#login_timeout) is configured to 14 days (the default), and a user whose session is due to expire in five days makes a NetBox request (with a valid session cookie), the session's lifetime will be reset to 14 days.
 
 Note that enabling this setting causes NetBox to update a user's session in the database (or file, as configured per [`SESSION_FILE_PATH`](#session_file_path)) with each request, which may introduce significant overhead in very active environments. It also permits an active user to remain authenticated to NetBox indefinitely.
 
 ---
 
 ## LOGIN_REQUIRED
-
-!!! warning "Legacy Configuration Parameter"
-    The `LOGIN_REQUIRED` configuration parameter is deprecated and will be removed in NetBox v5.0. Unauthenticated access to the application will no longer be supported once this configuration parameter is removed.
 
 Default: `True`
 
@@ -175,9 +183,9 @@ When enabled, only authenticated users are permitted to access any part of NetBo
 
 ## LOGIN_TIMEOUT
 
-Default: `None`
+Default: `1209600` seconds (14 days)
 
-The lifetime (in seconds) of the authentication cookie issued to a NetBox user upon login. If set to `None` (the default), Django's [`SESSION_COOKIE_AGE`](https://docs.djangoproject.com/en/stable/ref/settings/#session-cookie-age) is used, which defaults to two weeks (1,209,600 seconds).
+The lifetime (in seconds) of the authentication cookie issued to a NetBox user upon login.
 
 ---
 

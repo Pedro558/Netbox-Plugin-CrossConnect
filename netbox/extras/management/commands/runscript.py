@@ -68,7 +68,7 @@ class Command(BaseCommand):
                 'info': logging.INFO,
                 'warning': logging.WARNING,
             }[loglevel])
-        except KeyError:  # pragma: no cover
+        except KeyError:
             raise CommandError(f"Invalid log level: {loglevel}")
 
         # Initialize the script form
@@ -81,7 +81,7 @@ class Command(BaseCommand):
                     logger.error(f'\t{field}: {error.get("message")}')
             raise CommandError()
 
-        # Remove extra fields from ScriptForm before passing data to script
+        # Remove extra fields from ScriptForm before passng data to script
         form.cleaned_data.pop('_schedule_at')
         form.cleaned_data.pop('_interval')
         form.cleaned_data.pop('_commit')
@@ -94,12 +94,10 @@ class Command(BaseCommand):
             data=form.cleaned_data,
             request=NetBoxFakeRequest({
                 'META': {},
-                'COOKIES': {},
                 'POST': data,
                 'GET': {},
                 'FILES': {},
                 'user': user,
-                'method': 'POST',
                 'path': '',
                 'id': uuid.uuid4()
             }),

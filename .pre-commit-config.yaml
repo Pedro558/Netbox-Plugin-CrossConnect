@@ -1,6 +1,6 @@
 repos:
 - repo: https://github.com/astral-sh/ruff-pre-commit
-  rev: v0.15.2
+  rev: v0.14.1
   hooks:
     - id: ruff
       name: "Ruff linter"
@@ -21,11 +21,11 @@ repos:
       language: system
       pass_filenames: false
       types: [python]
-    - id: zensical-build
+    - id: mkdocs-build
       name: "Build documentation"
-      description: "Build the documentation with Zensical"
+      description: "Build the documentation with mkdocs"
       files: 'docs/'
-      entry: zensical build
+      entry: mkdocs build
       language: system
       pass_filenames: false
     - id: yarn-validate

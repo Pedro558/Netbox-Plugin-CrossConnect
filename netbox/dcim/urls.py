@@ -1,7 +1,6 @@
 from django.urls import include, path
 
 from utilities.urls import get_model_urls
-
 from . import views
 
 app_name = 'dcim'
@@ -18,9 +17,6 @@ urlpatterns = [
 
     path('locations/', include(get_model_urls('dcim', 'location', detail=False))),
     path('locations/<int:pk>/', include(get_model_urls('dcim', 'location'))),
-
-    path('rack-groups/', include(get_model_urls('dcim', 'rackgroup', detail=False))),
-    path('rack-groups/<int:pk>/', include(get_model_urls('dcim', 'rackgroup'))),
 
     path('rack-roles/', include(get_model_urls('dcim', 'rackrole', detail=False))),
     path('rack-roles/<int:pk>/', include(get_model_urls('dcim', 'rackrole'))),
@@ -152,9 +148,6 @@ urlpatterns = [
 
     path('cables/', include(get_model_urls('dcim', 'cable', detail=False))),
     path('cables/<int:pk>/', include(get_model_urls('dcim', 'cable'))),
-
-    path('cable-bundles/', include(get_model_urls('dcim', 'cablebundle', detail=False))),
-    path('cable-bundles/<int:pk>/', include(get_model_urls('dcim', 'cablebundle'))),
 
     # Console/power/interface connections (read-only)
     path('console-connections/', views.ConsoleConnectionsListView.as_view(), name='console_connections_list'),

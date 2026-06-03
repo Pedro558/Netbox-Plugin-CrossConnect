@@ -6,20 +6,17 @@ from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.fields import ArrayField, RangeField
 from django.core.exceptions import FieldDoesNotExist
 from django.db import transaction
-from django.db.models import JSONField, ManyToManyField, ManyToManyRel
+from django.db.models import ManyToManyField, ManyToManyRel, JSONField
 from django.forms.models import model_to_dict
-from django.test import Client
-from django.test import TestCase as _TestCase
+from django.test import Client, TestCase as _TestCase
 from netaddr import IPNetwork
 from taggit.managers import TaggableManager
 
-from core.choices import ObjectChangeActionChoices
 from core.models import ObjectType
 from users.models import ObjectPermission, User
 from utilities.data import ranges_to_string
 from utilities.object_types import object_type_identifier
 from utilities.permissions import resolve_permission_type
-
 from .utils import DUMMY_CF_DATA, extract_form_failures
 
 __all__ = (
@@ -70,43 +67,9 @@ class TestCase(_TestCase):
             obj_perm.users.add(self.user)
             obj_perm.object_types.add(object_type)
 
-    def remove_permissions(self, *names):
-        """
-        Remove a set of permissions from the test user. Accepts permission names in the form <app>.<action>_<model>.
-        """
-        for name in names:
-            object_type, action = resolve_permission_type(name)
-            ObjectPermission.objects.filter(
-                actions__contains=[action], object_types=object_type, users=self.user
-            ).delete()
-
     #
     # Custom assertions
     #
-
-    def assertObjectChange(self, objectchange, *, action, message=None):
-        """
-        Assert that an ObjectChange record has the expected attributes. If message is provided, it will be
-        compared against objectchange.message.
-        """
-        # Verify the change action (create, update, delete)
-        self.assertEqual(objectchange.action, action)
-
-        # Verify the changelog message if provided
-        if message is not None:
-            self.assertEqual(objectchange.message, message)
-
-        # Verify pre/postchange data presence and integrity based on action type
-        if action == ObjectChangeActionChoices.ACTION_CREATE:
-            self.assertIsNone(objectchange.prechange_data, "Expected prechange_data to be None for a create")
-            self.assertIsNotNone(objectchange.postchange_data, "Expected postchange_data to be populated for a create")
-        elif action == ObjectChangeActionChoices.ACTION_UPDATE:
-            self.assertIsNotNone(objectchange.prechange_data, "Expected prechange_data to be populated for an update")
-            self.assertIsNotNone(objectchange.postchange_data, "Expected postchange_data to be populated for an update")
-            self.assertNotEqual(objectchange.prechange_data, objectchange.postchange_data)
-        elif action == ObjectChangeActionChoices.ACTION_DELETE:
-            self.assertIsNotNone(objectchange.prechange_data, "Expected prechange_data to be populated for a delete")
-            self.assertIsNone(objectchange.postchange_data, "Expected postchange_data to be None for a delete")
 
     def assertHttpStatus(self, response, expected_status):
         """
@@ -178,8 +141,8 @@ class ModelTestCase(TestCase):
             elif value and type(field) is GenericForeignKey:
                 model_dict[key] = value.pk
 
-            # Handle API output
             elif api:
+
                 # Replace ContentType numeric IDs with <app_label>.<model>
                 if type(getattr(instance, key)) in (ContentType, ObjectType):
                     object_type = ObjectType.objects.get(pk=value)
@@ -189,13 +152,9 @@ class ModelTestCase(TestCase):
                 elif type(value) is IPNetwork:
                     model_dict[key] = str(value)
 
-                # Normalize arrays of numeric ranges (e.g. VLAN IDs or port ranges).
-                # DB uses canonical half-open [lo, hi) via NumericRange; API uses inclusive [lo, hi].
-                # Convert to inclusive pairs for stable API comparisons.
-                elif type(field) is ArrayField and issubclass(type(field.base_field), RangeField):
-                    model_dict[key] = [[r.lower, r.upper - 1] for r in value]
-
             else:
+                field = instance._meta.get_field(key)
+
                 # Convert ArrayFields to CSV strings
                 if type(field) is ArrayField:
                     if getattr(field.base_field, 'choices', None):

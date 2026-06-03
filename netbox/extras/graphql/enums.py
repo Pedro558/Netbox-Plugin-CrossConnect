@@ -3,7 +3,6 @@ import strawberry
 from extras.choices import *
 
 __all__ = (
-    'CustomFieldChoiceColorEnum',
     'CustomFieldChoiceSetBaseEnum',
     'CustomFieldFilterLogicEnum',
     'CustomFieldTypeEnum',
@@ -16,7 +15,6 @@ __all__ = (
 )
 
 
-CustomFieldChoiceColorEnum = strawberry.enum(CustomFieldChoiceColorChoices.as_enum())
 CustomFieldChoiceSetBaseEnum = strawberry.enum(CustomFieldChoiceSetBaseChoices.as_enum())
 CustomFieldFilterLogicEnum = strawberry.enum(CustomFieldFilterLogicChoices.as_enum(prefix='filter'))
 CustomFieldTypeEnum = strawberry.enum(CustomFieldTypeChoices.as_enum(prefix='type'))
