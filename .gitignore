@@ -64,3 +64,4 @@ yarn-error.log*
 .idea/
 .vscode/
 .python-version
+node_modules/
