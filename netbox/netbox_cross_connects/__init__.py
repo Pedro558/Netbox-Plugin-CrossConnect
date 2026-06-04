@@ -7,7 +7,7 @@ class NetBoxCrossConnectsConfig(PluginConfig):
     description = 'NetBox plugin for managing cross connects.'
     version = '0.1.0'
     base_url = 'cross-connects'
-    min_version = '4.6.0'
+    min_version = '4.4.8'
 
 
 config = NetBoxCrossConnectsConfig

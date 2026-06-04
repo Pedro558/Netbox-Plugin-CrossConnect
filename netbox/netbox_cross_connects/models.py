@@ -3,9 +3,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from netbox.models import PrimaryModel
-from utilities.validators import CrossConnectIDValidator
 
 from .choices import CrossConnectStatusChoices
+from .validators import CrossConnectIDValidator
 
 __all__ = ('CrossConnect',)
 

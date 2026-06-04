@@ -3,9 +3,8 @@ from django.db.models import Q
 from django.utils.translation import gettext as _
 
 from dcim.models import Site
-from netbox.filtersets import PrimaryModelFilterSet
+from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Tenant
-from utilities.filtersets import register_filterset
 
 from .choices import CrossConnectStatusChoices
 from .models import CrossConnect
@@ -13,8 +12,7 @@ from .models import CrossConnect
 __all__ = ('CrossConnectFilterSet',)
 
 
-@register_filterset
-class CrossConnectFilterSet(PrimaryModelFilterSet):
+class CrossConnectFilterSet(NetBoxModelFilterSet):
     site_id = django_filters.ModelMultipleChoiceFilter(
         field_name='site',
         queryset=Site.objects.all(),

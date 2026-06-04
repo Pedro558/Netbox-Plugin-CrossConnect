@@ -4,7 +4,7 @@ from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Cable
-from netbox.tables import NetBoxTable, PrimaryModelTable, columns
+from netbox.tables import NetBoxTable, columns
 
 from .models import CrossConnect
 
@@ -14,7 +14,7 @@ __all__ = (
 )
 
 
-class CrossConnectTable(PrimaryModelTable):
+class CrossConnectTable(NetBoxTable):
     cross_connect_id = tables.Column(
         linkify=True,
         verbose_name=_('Cross Connect ID'),
@@ -32,7 +32,7 @@ class CrossConnectTable(PrimaryModelTable):
         url_name='plugins:netbox_cross_connects:crossconnect_list',
     )
 
-    class Meta(PrimaryModelTable.Meta):
+    class Meta(NetBoxTable.Meta):
         model = CrossConnect
         fields = (
             'pk',

@@ -1,6 +1,6 @@
 from dcim.api.serializers_.sites import SiteSerializer
 from netbox.api.fields import ChoiceField
-from netbox.api.serializers import PrimaryModelSerializer
+from netbox.api.serializers import NetBoxModelSerializer
 from tenancy.api.serializers_.tenants import TenantSerializer
 
 from netbox_cross_connects.choices import CrossConnectStatusChoices
@@ -9,7 +9,7 @@ from netbox_cross_connects.models import CrossConnect
 __all__ = ('CrossConnectSerializer',)
 
 
-class CrossConnectSerializer(PrimaryModelSerializer):
+class CrossConnectSerializer(NetBoxModelSerializer):
     status = ChoiceField(choices=CrossConnectStatusChoices, required=False)
     site = SiteSerializer(nested=True)
     tenant = TenantSerializer(nested=True)

@@ -2,7 +2,7 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site
-from netbox.forms import PrimaryModelFilterSetForm, PrimaryModelForm, PrimaryModelImportForm
+from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
 from utilities.forms.fields import (
     CSVChoiceField,
@@ -24,7 +24,7 @@ __all__ = (
 )
 
 
-class CrossConnectForm(PrimaryModelForm):
+class CrossConnectForm(NetBoxModelForm):
     site = DynamicModelChoiceField(
         queryset=Site.objects.all(),
         label=_('Site'),
@@ -48,7 +48,6 @@ class CrossConnectForm(PrimaryModelForm):
             'activation_date',
             'description',
             'comments',
-            'owner',
             'tags',
             name=_('Cross Connect'),
         ),
@@ -66,19 +65,17 @@ class CrossConnectForm(PrimaryModelForm):
             'description',
             'comments',
             'tags',
-            'owner',
         )
         widgets = {
             'activation_date': DatePicker(),
         }
 
 
-class CrossConnectFilterForm(PrimaryModelFilterSetForm):
+class CrossConnectFilterForm(NetBoxModelFilterSetForm):
     model = CrossConnect
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
         FieldSet('status', 'site_id', 'tenant_id', name=_('Attributes')),
-        FieldSet('owner_group_id', 'owner_id', name=_('Ownership')),
     )
     status = forms.MultipleChoiceField(
         choices=CrossConnectStatusChoices,
@@ -98,7 +95,7 @@ class CrossConnectFilterForm(PrimaryModelFilterSetForm):
     tag = TagFilterField(model)
 
 
-class CrossConnectImportForm(PrimaryModelImportForm):
+class CrossConnectImportForm(NetBoxModelImportForm):
     status = CSVChoiceField(
         label=_('Status'),
         choices=CrossConnectStatusChoices,
@@ -128,7 +125,6 @@ class CrossConnectImportForm(PrimaryModelImportForm):
             'activation_date',
             'last_known_path',
             'description',
-            'owner',
             'comments',
             'tags',
         )
