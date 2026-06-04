@@ -3,13 +3,17 @@
 #  only. It is not intended for production use.                   #
 ###################################################################
 
+from .configuration import DATABASES as LOCAL_DATABASES
+
 ALLOWED_HOSTS = ['*']
+
+DEVELOPER = True
 
 DATABASES = {
     'default': {
         'NAME': 'netbox',
         'USER': 'netbox',
-        'PASSWORD': 'netbox',
+        'PASSWORD': LOCAL_DATABASES.get('default', {}).get('PASSWORD', 'netbox'),
         'HOST': 'localhost',
         'PORT': '',
         'CONN_MAX_AGE': 300,
@@ -18,6 +22,7 @@ DATABASES = {
 
 PLUGINS = [
     'netbox.tests.dummy_plugin',
+    'netbox_cross_connects',
 ]
 
 REDIS = {
