@@ -7,6 +7,7 @@ from tenancy.models import Tenant
 from utilities.forms.fields import (
     CSVChoiceField,
     CSVModelChoiceField,
+    CommentField,
     DynamicModelChoiceField,
     DynamicModelMultipleChoiceField,
     TagFilterField,
@@ -37,6 +38,7 @@ class CrossConnectForm(NetBoxModelForm):
         selector=True,
         quick_add=True,
     )
+    comments = CommentField()
 
     fieldsets = (
         FieldSet(

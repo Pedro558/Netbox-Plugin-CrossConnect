@@ -30,6 +30,7 @@ class CrossConnectFilterSetTestCase(TestCase, ChangeLoggedFilterSetTests):
                 site=site1,
                 tenant=tenant1,
                 description='Primary path',
+                comments='Fiber handoff in room A',
             ),
             CrossConnect(
                 cross_connect_id='ID-RJO1-00651',
@@ -38,19 +39,35 @@ class CrossConnectFilterSetTestCase(TestCase, ChangeLoggedFilterSetTests):
                 site=site2,
                 tenant=tenant2,
                 description='Secondary path',
+                comments='Waiting on provider',
             ),
         ))
 
-    def test_q(self):
+    def test_q_matches_cross_connect_id(self):
         self.assertEqual(self.filterset({'q': '00650'}, self.queryset).qs.count(), 1)
+
+    def test_q_matches_ritm(self):
+        self.assertEqual(self.filterset({'q': 'RITM0012346'}, self.queryset).qs.count(), 1)
+
+    def test_q_matches_description(self):
+        self.assertEqual(self.filterset({'q': 'Primary'}, self.queryset).qs.count(), 1)
+
+    def test_q_matches_comments(self):
+        self.assertEqual(self.filterset({'q': 'provider'}, self.queryset).qs.count(), 1)
 
     def test_site_id(self):
         site = Site.objects.get(slug='site-1')
         self.assertEqual(self.filterset({'site_id': [site.pk]}, self.queryset).qs.count(), 1)
 
+    def test_site(self):
+        self.assertEqual(self.filterset({'site': ['site-2']}, self.queryset).qs.count(), 1)
+
     def test_tenant_id(self):
         tenant = Tenant.objects.get(slug='tenant-2')
         self.assertEqual(self.filterset({'tenant_id': [tenant.pk]}, self.queryset).qs.count(), 1)
+
+    def test_tenant(self):
+        self.assertEqual(self.filterset({'tenant': ['tenant-1']}, self.queryset).qs.count(), 1)
 
     def test_status(self):
         self.assertEqual(
