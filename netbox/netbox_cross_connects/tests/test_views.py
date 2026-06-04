@@ -36,6 +36,40 @@ class CrossConnectViewTestCase(TestCase):
         custom_field.object_types.set([ObjectType.objects.get_for_model(Cable)])
         return custom_field
 
+    def _create_cross_connect(self, cross_connect_id='ID-RJO1-00650', ritm='RITM0012345'):
+        return CrossConnect.objects.create(
+            cross_connect_id=cross_connect_id,
+            ritm=ritm,
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+    def _create_interface_cable(self, name_suffix, cross_connect=None):
+        device_a = create_test_device(f'device-a-{name_suffix}', site=self.site)
+        device_b = create_test_device(f'device-b-{name_suffix}', site=self.site)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        custom_field_data = {}
+        if cross_connect:
+            custom_field_data['cross_connect'] = cross_connect.pk
+
+        cable = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[interface_b],
+            custom_field_data=custom_field_data,
+        )
+        cable.save()
+        return cable
+
     def test_cross_connect_form_is_valid(self):
         form = CrossConnectForm(data={
             'cross_connect_id': 'ID-RJO1-00653',
@@ -127,6 +161,25 @@ class CrossConnectViewTestCase(TestCase):
                 response = self.client.get(url)
                 self.assertEqual(response.status_code, 200)
 
+    def test_detail_page_renders_without_related_cables_custom_field(self):
+        user = create_test_user(
+            'crossconnect-missing-cf-user',
+            permissions=('netbox_cross_connects.view_crossconnect',),
+        )
+        self.client.force_login(user)
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00657',
+            ritm='RITM0012357',
+        )
+
+        response = self.client.get(
+            reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Related Cables')
+        self.assertContains(response, 'Create the custom field')
+
     def test_detail_view_includes_related_cables_table(self):
         cross_connect = CrossConnect.objects.create(
             cross_connect_id='ID-RJO1-00650',
@@ -164,6 +217,49 @@ class CrossConnectViewTestCase(TestCase):
 
         self.assertEqual(context['related_cables_custom_field'], custom_field)
         self.assertEqual(next(iter(table.rows)).record.pk, cable.pk)
+
+    def test_detail_view_lists_only_cables_linked_to_cross_connect(self):
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00658',
+            ritm='RITM0012358',
+        )
+        other_cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00659',
+            ritm='RITM0012359',
+        )
+        custom_field = self._create_related_cables_custom_field()
+        linked_cable = self._create_interface_cable('linked', cross_connect=cross_connect)
+        unrelated_cable = self._create_interface_cable('unrelated')
+        other_linked_cable = self._create_interface_cable('other-linked', cross_connect=other_cross_connect)
+
+        request = self.factory.get('/')
+        request.user = self.user
+
+        context = CrossConnectView().get_extra_context(request, cross_connect)
+        table = context['related_cables_table']
+        cable_pks = [row.record.pk for row in table.rows]
+
+        self.assertEqual(context['related_cables_custom_field'], custom_field)
+        self.assertEqual(cable_pks, [linked_cable.pk])
+        self.assertNotIn(unrelated_cable.pk, cable_pks)
+        self.assertNotIn(other_linked_cable.pk, cable_pks)
+
+    def test_detail_view_hides_related_cables_without_cable_permission(self):
+        user = create_test_user('crossconnect-no-cable-perm-user')
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00664',
+            ritm='RITM0012364',
+        )
+        self._create_related_cables_custom_field()
+        self._create_interface_cable('no-perm', cross_connect=cross_connect)
+
+        request = self.factory.get('/')
+        request.user = user
+
+        context = CrossConnectView().get_extra_context(request, cross_connect)
+        table = context['related_cables_table']
+
+        self.assertEqual(len(table.rows), 0)
 
     def test_related_cable_table_renders_termination_a_and_b_columns(self):
         device_a = create_test_device('device-a-render', site=self.site)

@@ -11,11 +11,21 @@
         <table class="table table-hover attr-table">
           <tr>
             <th scope="row">{% trans "Cross Connect ID" %}</th>
-            <td>{{ object.cross_connect_id }}</td>
+            <td>
+              <div class="float-end">
+                {% copy_content "cross_connect_id" %}
+              </div>
+              <span id="cross_connect_id">{{ object.cross_connect_id }}</span>
+            </td>
           </tr>
           <tr>
             <th scope="row">{% trans "RITM" %}</th>
-            <td>{{ object.ritm }}</td>
+            <td>
+              <div class="float-end">
+                {% copy_content "ritm" %}
+              </div>
+              <span id="ritm">{{ object.ritm }}</span>
+            </td>
           </tr>
           <tr>
             <th scope="row">{% trans "Status" %}</th>
@@ -50,6 +60,7 @@
       {% plugin_left_page object %}
     </div>
     <div class="col col-12 col-md-6">
+      {% include 'netbox_cross_connects/panels/trace.html' %}
       <div class="card">
         <h2 class="card-header">{% trans "Last Known Path" %}</h2>
         <div class="card-body">
@@ -60,10 +71,13 @@
           {% endif %}
         </div>
       </div>
-      {% include 'netbox_cross_connects/panels/related_cables.html' %}
-      {% include 'netbox_cross_connects/panels/trace.html' %}
       {% include 'inc/panels/image_attachments.html' %}
       {% plugin_right_page object %}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col col-12">
+      {% include 'netbox_cross_connects/panels/related_cables.html' %}
     </div>
   </div>
   <div class="row">
