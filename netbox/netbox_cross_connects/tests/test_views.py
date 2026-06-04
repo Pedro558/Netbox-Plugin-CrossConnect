@@ -4,7 +4,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from dcim.choices import InterfaceTypeChoices, PortTypeChoices
-from dcim.models import Cable, FrontPort, Interface, PortMapping, RearPort, Region, Site
+from dcim.models import Cable, FrontPort, Interface, RearPort, Region, Site
 from extras.choices import CustomFieldTypeChoices
 from extras.models import CustomField
 from tenancy.models import Tenant, TenantGroup
@@ -93,6 +93,39 @@ class CrossConnectViewTestCase(TestCase):
             reverse('plugins-api:netbox_cross_connects-api:crossconnect-list'),
             '/api/plugins/cross-connects/cross-connects/',
         )
+
+    def test_phase_6_views_load(self):
+        user = create_test_user(
+            'crossconnect-phase6-user',
+            permissions=(
+                'netbox_cross_connects.view_crossconnect',
+                'netbox_cross_connects.add_crossconnect',
+                'netbox_cross_connects.change_crossconnect',
+                'netbox_cross_connects.delete_crossconnect',
+            ),
+        )
+        self.client.force_login(user)
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00656',
+            ritm='RITM0012356',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        urls = (
+            reverse('plugins:netbox_cross_connects:crossconnect_list'),
+            reverse('plugins:netbox_cross_connects:crossconnect_add'),
+            reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk}),
+            reverse('plugins:netbox_cross_connects:crossconnect_edit', kwargs={'pk': cross_connect.pk}),
+            reverse('plugins:netbox_cross_connects:crossconnect_delete', kwargs={'pk': cross_connect.pk}),
+            reverse('plugins:netbox_cross_connects:crossconnect_bulk_import'),
+        )
+
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
 
     def test_detail_view_includes_related_cables_table(self):
         cross_connect = CrossConnect.objects.create(
@@ -185,12 +218,32 @@ class CrossConnectViewTestCase(TestCase):
             name='xe-0/0/1',
             type=InterfaceTypeChoices.TYPE_10GE_FIXED,
         )
-        front_port_1 = FrontPort.objects.create(device=patch_panel_1, name='FP1', type=PortTypeChoices.TYPE_8P8C)
-        rear_port_1 = RearPort.objects.create(device=patch_panel_1, name='RP1', type=PortTypeChoices.TYPE_8P8C)
-        front_port_2 = FrontPort.objects.create(device=patch_panel_2, name='FP1', type=PortTypeChoices.TYPE_8P8C)
-        rear_port_2 = RearPort.objects.create(device=patch_panel_2, name='RP1', type=PortTypeChoices.TYPE_8P8C)
-        PortMapping.objects.create(front_port=front_port_1, rear_port=rear_port_1)
-        PortMapping.objects.create(front_port=front_port_2, rear_port=rear_port_2)
+        rear_port_1 = RearPort.objects.create(
+            device=patch_panel_1,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_1 = FrontPort.objects.create(
+            device=patch_panel_1,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_1,
+            rear_port_position=1,
+        )
+        rear_port_2 = RearPort.objects.create(
+            device=patch_panel_2,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_2 = FrontPort.objects.create(
+            device=patch_panel_2,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_2,
+            rear_port_position=1,
+        )
 
         Cable(
             a_terminations=[interface_a],
@@ -300,9 +353,19 @@ class CrossConnectViewTestCase(TestCase):
             name='xe-0/0/1',
             type=InterfaceTypeChoices.TYPE_10GE_FIXED,
         )
-        front_port = FrontPort.objects.create(device=patch_panel, name='FP1', type=PortTypeChoices.TYPE_8P8C)
-        rear_port = RearPort.objects.create(device=patch_panel, name='RP1', type=PortTypeChoices.TYPE_8P8C)
-        PortMapping.objects.create(front_port=front_port, rear_port=rear_port)
+        rear_port = RearPort.objects.create(
+            device=patch_panel,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port = FrontPort.objects.create(
+            device=patch_panel,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port,
+            rear_port_position=1,
+        )
 
         Cable(
             a_terminations=[interface_a],

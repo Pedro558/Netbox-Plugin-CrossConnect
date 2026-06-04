@@ -11,6 +11,11 @@
         Cable Trace for {{ object_type }} {{ object }}
       {% endblocktrans %}
     </h2>
+    {% if cross_connect %}
+      <div class="text-secondary fs-5 mb-3">
+        {% trans "Cross Connect" %} {{ cross_connect|linkify }}
+      </div>
+    {% endif %}
 
     <div class="row">
 

@@ -1,3 +1,4 @@
+from django.apps import apps
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import EmptyPage, PageNotAnInteger
@@ -160,6 +161,14 @@ class PathTraceView(generic.ObjectView):
 
     def get_extra_context(self, request, instance):
         related_paths = []
+        cross_connect = None
+
+        if cross_connect_id := request.GET.get('cross_connect'):
+            try:
+                CrossConnect = apps.get_model('netbox_cross_connects', 'CrossConnect')
+                cross_connect = CrossConnect.objects.restrict(request.user, 'view').filter(pk=cross_connect_id).first()
+            except LookupError:
+                cross_connect = None
 
         # If tracing a PathEndpoint, locate the CablePath (if one exists) by its origin
         if isinstance(instance, PathEndpoint):
@@ -181,7 +190,8 @@ class PathTraceView(generic.ObjectView):
         # No paths found
         if path is None:
             return {
-                'path': None
+                'path': None,
+                'cross_connect': cross_connect,
             }
 
         # Get the total length of the cable and whether the length is definitive (fully defined)
@@ -197,6 +207,7 @@ class PathTraceView(generic.ObjectView):
             'total_length': total_length,
             'is_definitive': is_definitive,
             'svg_url': svg_url,
+            'cross_connect': cross_connect,
         }
 
 

@@ -1,8 +1,8 @@
-{% extends "ui/panels/_base.html" %}
 {% load helpers %}
 {% load i18n %}
 
-{% block panel_content %}
+<div class="card">
+  <h2 class="card-header">{% trans "Trace" %}</h2>
   <div class="card-body">
     {% if trace_status == 'ready' %}
       <p class="mb-3">
@@ -39,4 +39,4 @@
       </div>
     {% endif %}
   </div>
-{% endblock panel_content %}
+</div>
