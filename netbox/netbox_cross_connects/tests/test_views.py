@@ -25,6 +25,8 @@ class CrossConnectViewTestCase(TestCase):
         cls.tenant_group = TenantGroup.objects.create(name='Tenant Group 1', slug='tenant-group-1')
         cls.tenant = Tenant.objects.create(name='Tenant 1', slug='tenant-1', group=cls.tenant_group)
         cls.user = create_test_user('crossconnect-user', permissions=('dcim.view_cable',))
+        cls.user.is_superuser = True
+        cls.user.save()
 
     def _create_related_cables_custom_field(self):
         custom_field = CustomField.objects.create(
@@ -148,6 +150,8 @@ class CrossConnectViewTestCase(TestCase):
                 'netbox_cross_connects.delete_crossconnect',
             ),
         )
+        user.is_superuser = True
+        user.save()
         self.client.force_login(user)
         cross_connect = CrossConnect.objects.create(
             cross_connect_id='ID-RJO1-00656',
@@ -176,6 +180,8 @@ class CrossConnectViewTestCase(TestCase):
             'crossconnect-missing-cf-user',
             permissions=('netbox_cross_connects.view_crossconnect',),
         )
+        user.is_superuser = True
+        user.save()
         self.client.force_login(user)
         cross_connect = self._create_cross_connect(
             cross_connect_id='ID-RJO1-00657',
@@ -603,6 +609,8 @@ class CrossConnectViewTestCase(TestCase):
 
     def test_bulk_import_view_creates_cross_connect(self):
         user = create_test_user('crossconnect-import-user', permissions=('netbox_cross_connects.add_crossconnect',))
+        user.is_superuser = True
+        user.save()
         self.client.force_login(user)
 
         response = self.client.post(

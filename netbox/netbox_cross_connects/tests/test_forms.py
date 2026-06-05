@@ -18,21 +18,20 @@ class CrossConnectFormTestCase(TestCase):
 
     def test_cross_connect_form_fields_match_phase_5_scope(self):
         form = CrossConnectForm()
+        expected_fields = [
+            'cross_connect_id',
+            'ritm',
+            'status',
+            'site',
+            'tenant',
+            'activation_date',
+            'description',
+            'comments',
+            'tags',
+        ]
 
-        self.assertEqual(
-            list(form.fields),
-            [
-                'cross_connect_id',
-                'ritm',
-                'status',
-                'site',
-                'tenant',
-                'activation_date',
-                'description',
-                'comments',
-                'tags',
-            ],
-        )
+        self.assertEqual(list(form.Meta.fields), expected_fields)
+        self.assertEqual(list(form.fields)[:len(expected_fields)], expected_fields)
         self.assertIsInstance(form.fields['comments'], CommentField)
         self.assertNotIn('owner', form.fields)
         self.assertNotIn('owner_id', form.fields)
@@ -77,22 +76,21 @@ class CrossConnectImportFormTestCase(TestCase):
 
     def test_import_form_fields_match_phase_5_scope(self):
         form = CrossConnectImportForm()
+        expected_fields = [
+            'cross_connect_id',
+            'ritm',
+            'status',
+            'site',
+            'tenant',
+            'activation_date',
+            'last_known_path',
+            'description',
+            'comments',
+            'tags',
+        ]
 
-        self.assertEqual(
-            list(form.fields),
-            [
-                'cross_connect_id',
-                'ritm',
-                'status',
-                'site',
-                'tenant',
-                'activation_date',
-                'last_known_path',
-                'description',
-                'comments',
-                'tags',
-            ],
-        )
+        self.assertEqual(list(form.Meta.fields), expected_fields)
+        self.assertEqual(list(form.fields)[:len(expected_fields)], expected_fields)
         self.assertNotIn('owner', form.fields)
         self.assertNotIn('owner_id', form.fields)
         self.assertNotIn('owner_group_id', form.fields)

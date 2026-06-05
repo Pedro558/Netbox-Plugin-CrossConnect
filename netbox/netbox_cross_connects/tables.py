@@ -108,10 +108,15 @@ class CableEndpointsColumn(tables.Column):
 
 
 class RelatedCableTable(NetBoxTable):
+    exempt_columns = NetBoxTable.exempt_columns + ('label',)
+
     cable = tables.TemplateColumn(
         template_code='<a href="{{ record.get_absolute_url }}">{{ record }}</a>',
         verbose_name=_('Cable'),
         orderable=False,
+    )
+    label = tables.Column(
+        verbose_name=_('Label'),
     )
     termination_a = CableEndpointsColumn(
         side='a',
@@ -129,12 +134,14 @@ class RelatedCableTable(NetBoxTable):
         model = Cable
         fields = (
             'cable',
+            'label',
             'termination_a',
             'termination_b',
             'status',
         )
         default_columns = (
             'cable',
+            'label',
             'termination_a',
             'termination_b',
             'status',

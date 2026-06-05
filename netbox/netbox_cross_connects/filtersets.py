@@ -47,6 +47,7 @@ class CrossConnectFilterSet(NetBoxModelFilterSet):
             'ritm',
             'status',
             'activation_date',
+            'last_known_path',
             'description',
         )
 
