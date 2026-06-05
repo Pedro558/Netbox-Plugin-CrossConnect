@@ -96,11 +96,8 @@ class CrossConnectView(generic.ObjectView):
         if len(a_side_interfaces) == 1 and len(b_side_interfaces) == 1:
             origin = a_side_interfaces[0]
             destination = b_side_interfaces[0]
-            trace_url = f"{reverse('dcim:interface_trace', kwargs={'pk': origin.pk})}?cross_connect={cross_connect.pk}"
-            trace_svg_url = (
-                f"{reverse('dcim-api:interface-trace', kwargs={'pk': origin.pk})}"
-                f"?render=svg&cross_connect={cross_connect.pk}"
-            )
+            trace_url = reverse('dcim:interface_trace', kwargs={'pk': origin.pk})
+            trace_svg_url = f"{reverse('dcim-api:interface-trace', kwargs={'pk': origin.pk})}?render=svg"
             return {
                 **default_context,
                 'trace_status': 'ready',
@@ -118,7 +115,7 @@ class CrossConnectView(generic.ObjectView):
             'trace_links': [
                 {
                     'interface': interface,
-                    'url': f"{reverse('dcim:interface_trace', kwargs={'pk': interface.pk})}?cross_connect={cross_connect.pk}",
+                    'url': reverse('dcim:interface_trace', kwargs={'pk': interface.pk}),
                 }
                 for interface in interfaces
             ],

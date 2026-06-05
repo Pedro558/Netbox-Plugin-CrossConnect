@@ -1,6 +1,6 @@
 from core.models import ObjectType
 from django.contrib.auth.models import Permission
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from dcim.choices import InterfaceTypeChoices, PortTypeChoices
@@ -367,13 +367,17 @@ class CrossConnectViewTestCase(TestCase):
         self.assertEqual(context['trace_destination_interface'], interface_z)
         self.assertEqual(
             context['trace_url'],
-            f"{reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk})}?cross_connect={cross_connect.pk}",
+            reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk}),
         )
         self.assertIn(reverse('dcim-api:interface-trace', kwargs={'pk': interface_a.pk}), context['trace_svg_url'])
 
-    def test_native_trace_view_shows_cross_connect_subtitle(self):
-        self.user.user_permissions.add(Permission.objects.get(codename='view_interface'))
-        self.client.force_login(self.user)
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
+    def test_native_trace_view_stays_unpatched_for_cross_connect_context(self):
+        user = create_test_user(
+            'crossconnect-native-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        self.client.force_login(user)
 
         cross_connect = CrossConnect.objects.create(
             cross_connect_id='ID-RJO1-00663',
@@ -398,10 +402,11 @@ class CrossConnectViewTestCase(TestCase):
         Cable(a_terminations=[interface_a], b_terminations=[interface_b]).save()
 
         response = self.client.get(
-            f"{reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk})}?cross_connect={cross_connect.pk}"
+            reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk})
         )
 
-        self.assertContains(response, cross_connect.cross_connect_id)
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, cross_connect.cross_connect_id)
 
     def test_bulk_import_view_creates_cross_connect(self):
         user = create_test_user('crossconnect-import-user', permissions=('netbox_cross_connects.add_crossconnect',))

@@ -437,6 +437,33 @@ Checkpoint:
 
 - Trace has a documented decision before implementation begins.
 
+### Phase 9 Result
+
+Decision: `plugin-only`.
+
+Findings in the NetBox `4.4.8` codebase:
+
+- `Interface.path` exists through `dcim.models.device_components.PathEndpoint.path` and returns the endpoint's
+  `_path` `CablePath` reference.
+- `Interface.trace()` exists through `PathEndpoint.trace()` and returns path segments as `(near ends, cable, far ends)`
+  triples, matching the native trace implementation.
+- `CablePath.get_cable_ids()` exists in `dcim.models.cables.CablePath` and can be used to compare a native path against
+  the CrossConnect related-cable set.
+- Native interface trace HTML uses the registered route name `dcim:interface_trace`.
+- Native interface trace API uses `dcim-api:interface-trace`.
+- The native trace API supports `?render=svg` in `dcim.api.views.PathEndpointMixin.trace`.
+- A plugin view can link to the native HTML trace page and SVG trace API without patching `dcim.views.PathTraceView`.
+- The CrossConnect subtitle on the native trace page is intentionally omitted. Adding it would require a NetBox core
+  patch in `dcim.views.PathTraceView` and `templates/dcim/cable_trace.html`, which is outside the approved plugin-only
+  scope.
+
+Implementation rule for Phase 10:
+
+- Keep trace resolution, status messaging, and CrossConnect context on the plugin detail page.
+- Do not modify NetBox core trace views, core cable models, or native trace templates.
+- If a future requirement demands a CrossConnect subtitle inside the native trace page, record it as a separate
+  NetBox fork decision and get explicit approval before implementation.
+
 ## Phase 10: Trace Implementation if Approved
 
 Goal: reproduce the trace behavior only after Phase 9 proves the approach.
