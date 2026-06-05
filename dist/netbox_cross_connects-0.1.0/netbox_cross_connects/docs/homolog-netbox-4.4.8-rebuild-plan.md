@@ -589,11 +589,9 @@ Tasks:
 Expected installation flow:
 
 ```bash
-source /opt/netbox/venv/bin/activate
-pip install ./netbox_cross_connects-0.1.0-py3-none-any.whl
 cd /opt/netbox/netbox
-/opt/netbox/venv/bin/python manage.py migrate
-/opt/netbox/venv/bin/python manage.py collectstatic --no-input
+python manage.py migrate
+python manage.py collectstatic --no-input
 sudo systemctl restart netbox netbox-rq
 ```
 
@@ -606,29 +604,6 @@ Custom field setup:
 Checkpoint:
 
 - Homolog operators have a clear deployment checklist.
-
-### Phase 13 Result
-
-Status: complete.
-
-Deployment artifacts:
-
-- `dist/netbox_cross_connects-0.1.0-py3-none-any.whl`
-- `dist/netbox_cross_connects-0.1.0.tar.gz`
-- `dist/netbox_cross_connects-0.1.0/`
-
-Package details:
-
-- Target NetBox version: `4.4.8`
-- Plugin version: `0.1.0`
-- Python package name: `netbox-cross-connects`
-- NetBox plugin name: `netbox_cross_connects`
-- Included migration: `netbox_cross_connects/migrations/0001_initial.py`
-- NetBox core patches included: none
-
-The deployment package follows the NetBox plugin installation model: install the plugin into the NetBox virtual
-environment with `pip`, enable it in `configuration.py`, run migrations, collect static files, and restart NetBox
-services.
 
 ## Definition of Done
 
