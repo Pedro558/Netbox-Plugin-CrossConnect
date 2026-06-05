@@ -63,6 +63,8 @@ class CrossConnectView(generic.ObjectView):
         return interface_sides
 
     def _get_trace_context(self, request, cross_connect, related_cables):
+        related_cables = list(related_cables)
+        related_cable_ids = {cable.pk for cable in related_cables}
         default_context = {
             'trace_status': 'unavailable',
             'trace_message': _('Trace is unavailable until exactly two endpoint interfaces can be inferred.'),
@@ -75,6 +77,10 @@ class CrossConnectView(generic.ObjectView):
 
         if not request.user.has_perm('dcim.view_interface'):
             default_context['trace_message'] = _('Permission to view interfaces is required to trace this cross connect.')
+            return default_context
+
+        if not related_cable_ids:
+            default_context['trace_message'] = _('Trace requires at least one related cable.')
             return default_context
 
         interface_sides = self._get_interface_sides(related_cables)
@@ -96,6 +102,19 @@ class CrossConnectView(generic.ObjectView):
         if len(a_side_interfaces) == 1 and len(b_side_interfaces) == 1:
             origin = a_side_interfaces[0]
             destination = b_side_interfaces[0]
+
+            if not origin.path or not origin.path.is_complete:
+                default_context['trace_message'] = _('Native trace path is incomplete for this cross connect.')
+                return default_context
+
+            if destination not in origin.path.destinations:
+                default_context['trace_message'] = _('Native trace path does not end at the expected interface.')
+                return default_context
+
+            if set(origin.path.get_cable_ids()) != related_cable_ids:
+                default_context['trace_message'] = _('Native trace path does not match the related cables for this cross connect.')
+                return default_context
+
             trace_url = reverse('dcim:interface_trace', kwargs={'pk': origin.pk})
             trace_svg_url = f"{reverse('dcim-api:interface-trace', kwargs={'pk': origin.pk})}?render=svg"
             return {
