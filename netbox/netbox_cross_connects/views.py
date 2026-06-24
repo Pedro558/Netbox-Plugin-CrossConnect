@@ -170,6 +170,28 @@ class CrossConnectBulkImportView(generic.BulkImportView):
     model_form = forms.CrossConnectImportForm
 
 
+@register_model_view(CrossConnect, 'bulk_edit', path='edit', detail=False)
+class CrossConnectBulkEditView(generic.BulkEditView):
+    queryset = CrossConnect.objects.all()
+    filterset = filtersets.CrossConnectFilterSet
+    table = tables.CrossConnectTable
+    form = forms.CrossConnectBulkEditForm
+
+
+@register_model_view(CrossConnect, 'bulk_rename', path='rename', detail=False)
+class CrossConnectBulkRenameView(generic.BulkRenameView):
+    queryset = CrossConnect.objects.all()
+    field_name = 'cross_connect_id'
+    filterset = filtersets.CrossConnectFilterSet
+
+
+@register_model_view(CrossConnect, 'bulk_delete', path='delete', detail=False)
+class CrossConnectBulkDeleteView(generic.BulkDeleteView):
+    queryset = CrossConnect.objects.all()
+    filterset = filtersets.CrossConnectFilterSet
+    table = tables.CrossConnectTable
+
+
 @register_model_view(CrossConnect, 'delete')
 class CrossConnectDeleteView(generic.ObjectDeleteView):
     queryset = CrossConnect.objects.all()

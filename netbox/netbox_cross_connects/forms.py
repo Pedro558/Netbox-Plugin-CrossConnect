@@ -2,8 +2,9 @@ from django import forms
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site
-from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
+from netbox.forms import NetBoxModelBulkEditForm, NetBoxModelFilterSetForm, NetBoxModelForm, NetBoxModelImportForm
 from tenancy.models import Tenant
+from utilities.forms import add_blank_choice
 from utilities.forms.fields import (
     CSVChoiceField,
     CSVModelChoiceField,
@@ -19,6 +20,7 @@ from .choices import CrossConnectStatusChoices
 from .models import CrossConnect
 
 __all__ = (
+    'CrossConnectBulkEditForm',
     'CrossConnectFilterForm',
     'CrossConnectForm',
     'CrossConnectImportForm',
@@ -71,6 +73,46 @@ class CrossConnectForm(NetBoxModelForm):
         widgets = {
             'activation_date': DatePicker(),
         }
+
+
+class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
+    status = forms.ChoiceField(
+        label=_('Status'),
+        choices=add_blank_choice(CrossConnectStatusChoices),
+        required=False,
+        initial='',
+    )
+    site = DynamicModelChoiceField(
+        queryset=Site.objects.all(),
+        required=False,
+        label=_('Site'),
+    )
+    tenant = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Tenant'),
+    )
+    activation_date = forms.DateField(
+        label=_('Activation date'),
+        required=False,
+        widget=DatePicker(),
+    )
+    description = forms.CharField(
+        label=_('Description'),
+        max_length=200,
+        required=False,
+    )
+    comments = CommentField()
+
+    model = CrossConnect
+    fieldsets = (
+        FieldSet('status', 'site', 'tenant', 'activation_date', 'description', name=_('Cross Connect')),
+    )
+    nullable_fields = (
+        'activation_date',
+        'description',
+        'comments',
+    )
 
 
 class CrossConnectFilterForm(NetBoxModelFilterSetForm):
