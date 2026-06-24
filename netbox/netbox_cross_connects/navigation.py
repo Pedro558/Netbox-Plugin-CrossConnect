@@ -1,3 +1,4 @@
+
 from django.utils.translation import gettext as _
 
 from netbox.plugins import PluginMenu
@@ -22,6 +23,11 @@ menu = PluginMenu(
                             permissions=["netbox_cross_connects.add_crossconnect"],
                         ),
                     ),
+                ),
+                PluginMenuItem(
+                    link="plugins:netbox_cross_connects:crossconnectattachment_list",
+                    link_text=_("Attachments"),
+                    permissions=["netbox_cross_connects.view_crossconnectattachment"],
                 ),
             ),
         ),

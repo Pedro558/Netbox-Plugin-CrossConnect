@@ -1,14 +1,17 @@
+
+from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.translation import gettext as _
 
 from dcim.models import Cable, Interface
 from extras.choices import CustomFieldTypeChoices
 from extras.models import CustomField
+from netbox.object_actions import AddObject, BulkExport
 from netbox.views import generic
 from utilities.views import register_model_view
 
 from . import filtersets, forms, tables
-from .models import CrossConnect
+from .models import CrossConnect, CrossConnectAttachment
 
 
 @register_model_view(CrossConnect, 'list', path='', detail=False)
@@ -46,6 +49,16 @@ class CrossConnectView(generic.ObjectView):
             Cable.objects.restrict(request.user, 'view')
             .filter(custom_field_data__cross_connect=cross_connect.pk)
             .prefetch_related('terminations', 'terminations__termination')
+        )
+
+    def _get_attachments(self, request, cross_connect):
+        if not request.user.has_perm('netbox_cross_connects.view_crossconnectattachment'):
+            return CrossConnectAttachment.objects.none()
+
+        return (
+            CrossConnectAttachment.objects.restrict(request.user, 'view')
+            .filter(cross_connect=cross_connect)
+            .select_related('cross_connect')
         )
 
     @staticmethod
@@ -90,14 +103,8 @@ class CrossConnectView(generic.ObjectView):
             default_context['trace_message'] = _('Trace requires exactly two endpoint interfaces on related cables.')
             return default_context
 
-        a_side_interfaces = [
-            interface for interface, sides in interface_sides.items()
-            if sides == {'A'}
-        ]
-        b_side_interfaces = [
-            interface for interface, sides in interface_sides.items()
-            if sides == {'B'}
-        ]
+        a_side_interfaces = [interface for interface, sides in interface_sides.items() if sides == {'A'}]
+        b_side_interfaces = [interface for interface, sides in interface_sides.items() if sides == {'B'}]
 
         if len(a_side_interfaces) == 1 and len(b_side_interfaces) == 1:
             origin = a_side_interfaces[0]
@@ -144,6 +151,9 @@ class CrossConnectView(generic.ObjectView):
         related_cables_custom_field = self._get_related_cables_custom_field()
         related_cables = Cable.objects.none()
         related_cables_table = None
+        attachments = self._get_attachments(request, instance)
+        attachments_table = tables.CrossConnectAttachmentEmbeddedTable(attachments, user=request.user)
+        attachments_table.configure(request)
 
         if related_cables_custom_field:
             related_cables = self._get_related_cables(request, instance)
@@ -151,6 +161,7 @@ class CrossConnectView(generic.ObjectView):
             related_cables_table.configure(request)
 
         return {
+            'attachments_table': attachments_table,
             'related_cables_custom_field': related_cables_custom_field,
             'related_cables_table': related_cables_table,
             **self._get_trace_context(request, instance, related_cables),
@@ -195,3 +206,41 @@ class CrossConnectBulkDeleteView(generic.BulkDeleteView):
 @register_model_view(CrossConnect, 'delete')
 class CrossConnectDeleteView(generic.ObjectDeleteView):
     queryset = CrossConnect.objects.all()
+
+
+@register_model_view(CrossConnectAttachment, 'list', path='', detail=False)
+class CrossConnectAttachmentListView(generic.ObjectListView):
+    queryset = CrossConnectAttachment.objects.select_related('cross_connect')
+    table = tables.CrossConnectAttachmentTable
+    actions = (AddObject, BulkExport)
+
+
+@register_model_view(CrossConnectAttachment)
+class CrossConnectAttachmentView(generic.ObjectView):
+    queryset = CrossConnectAttachment.objects.select_related('cross_connect')
+    template_name = 'netbox_cross_connects/crossconnectattachment.html'
+
+
+@register_model_view(CrossConnectAttachment, 'add', detail=False)
+@register_model_view(CrossConnectAttachment, 'edit')
+class CrossConnectAttachmentEditView(generic.ObjectEditView):
+    queryset = CrossConnectAttachment.objects.select_related('cross_connect')
+    form = forms.CrossConnectAttachmentForm
+
+    def alter_object(self, instance, request, args, kwargs):
+        if not instance.pk and request.GET.get('cross_connect'):
+            cross_connect_id = request.GET.get('cross_connect')
+            instance.cross_connect = get_object_or_404(
+                CrossConnect.objects.restrict(request.user, 'view'),
+                pk=cross_connect_id,
+            )
+        return instance
+
+    def get_extra_addanother_params(self, request):
+        cross_connect_id = request.GET.get('cross_connect')
+        return {'cross_connect': cross_connect_id} if cross_connect_id else {}
+
+
+@register_model_view(CrossConnectAttachment, 'delete')
+class CrossConnectAttachmentDeleteView(generic.ObjectDeleteView):
+    queryset = CrossConnectAttachment.objects.select_related('cross_connect')

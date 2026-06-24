@@ -1,3 +1,4 @@
+
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
@@ -17,9 +18,10 @@ from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import DatePicker
 
 from .choices import CrossConnectStatusChoices
-from .models import CrossConnect
+from .models import CrossConnect, CrossConnectAttachment
 
 __all__ = (
+    'CrossConnectAttachmentForm',
     'CrossConnectBulkEditForm',
     'CrossConnectFilterForm',
     'CrossConnectForm',
@@ -72,6 +74,39 @@ class CrossConnectForm(NetBoxModelForm):
         )
         widgets = {
             'activation_date': DatePicker(),
+        }
+
+
+class CrossConnectAttachmentForm(NetBoxModelForm):
+    cross_connect = DynamicModelChoiceField(
+        queryset=CrossConnect.objects.all(),
+        label=_('Cross Connect'),
+        selector=True,
+        required=True,
+    )
+
+    fieldsets = (
+        FieldSet(
+            'cross_connect',
+            'file',
+            'name',
+            'description',
+            'tags',
+            name=_('Attachment'),
+        ),
+    )
+
+    class Meta:
+        model = CrossConnectAttachment
+        fields = (
+            'cross_connect',
+            'file',
+            'name',
+            'description',
+            'tags',
+        )
+        help_texts = {
+            'name': _('If no name is specified, the uploaded file name will be used.'),
         }
 
 

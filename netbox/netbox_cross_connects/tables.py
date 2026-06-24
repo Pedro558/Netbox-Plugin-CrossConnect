@@ -1,4 +1,6 @@
+
 import django_tables2 as tables
+from django.template.defaultfilters import filesizeformat
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
@@ -6,9 +8,11 @@ from django.utils.translation import gettext_lazy as _
 from dcim.models import Cable
 from netbox.tables import NetBoxTable, columns
 
-from .models import CrossConnect
+from .models import CrossConnect, CrossConnectAttachment
 
 __all__ = (
+    'CrossConnectAttachmentEmbeddedTable',
+    'CrossConnectAttachmentTable',
     'CrossConnectTable',
     'RelatedCableTable',
 )
@@ -35,31 +39,55 @@ class CrossConnectTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = CrossConnect
         fields = (
-            'pk',
-            'id',
-            'cross_connect_id',
-            'ritm',
-            'status',
-            'site',
-            'tenant',
-            'activation_date',
-            'description',
-            'comments',
-            'tags',
-            'created',
-            'last_updated',
-            'actions',
+            'pk', 'id', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant',
+            'activation_date', 'description', 'comments', 'tags', 'created', 'last_updated', 'actions',
         )
         default_columns = (
-            'pk',
-            'cross_connect_id',
-            'ritm',
-            'status',
-            'site',
-            'tenant',
-            'activation_date',
-            'description',
+            'pk', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant', 'activation_date', 'description',
         )
+
+
+class BaseCrossConnectAttachmentTable(NetBoxTable):
+    name = tables.Column(verbose_name=_('Name'), linkify=True)
+    description = tables.Column(verbose_name=_('Description'))
+    file = tables.TemplateColumn(
+        verbose_name=_('File'),
+        orderable=False,
+        template_code='<a href="{{ record.file.url }}" target="_blank" rel="noopener">{{ record.filename }}</a>',
+    )
+    size = tables.Column(verbose_name=_('Size'))
+
+    def render_name(self, value, record):
+        return value or record.filename
+
+    def value_name(self, value, record):
+        return value or record.filename
+
+    def render_size(self, value):
+        return filesizeformat(value)
+
+    def value_size(self, value):
+        return value
+
+
+class CrossConnectAttachmentTable(BaseCrossConnectAttachmentTable):
+    cross_connect = tables.Column(
+        verbose_name=_('Cross Connect'),
+        linkify=True,
+    )
+    actions = columns.ActionsColumn()
+
+    class Meta(NetBoxTable.Meta):
+        model = CrossConnectAttachment
+        fields = ('id', 'cross_connect', 'name', 'description', 'file', 'size', 'created', 'last_updated', 'actions')
+        default_columns = ('id', 'cross_connect', 'name', 'description', 'file', 'size', 'actions')
+
+
+class CrossConnectAttachmentEmbeddedTable(BaseCrossConnectAttachmentTable):
+    class Meta(NetBoxTable.Meta):
+        model = CrossConnectAttachment
+        fields = ('name', 'description', 'file', 'size')
+        default_columns = ('name', 'description', 'file', 'size')
 
 
 class CableEndpointsColumn(tables.Column):
@@ -89,10 +117,7 @@ class CableEndpointsColumn(tables.Column):
         return f'<a href="{termination.get_absolute_url()}">{escape(label)}</a>'
 
     def _get_side_terms(self, record):
-        return [
-            self._format_termination(term)
-            for term in getattr(record, f'{self.side}_terminations')
-        ]
+        return [self._format_termination(term) for term in getattr(record, f'{self.side}_terminations')]
 
     def render(self, record):
         terms = ' / '.join(self._get_side_terms(record))
@@ -101,10 +126,7 @@ class CableEndpointsColumn(tables.Column):
         return mark_safe(terms)
 
     def value(self, record):
-        return ' / '.join(
-            self._termination_label(term)
-            for term in getattr(record, f'{self.side}_terminations')
-        )
+        return ' / '.join(self._termination_label(term) for term in getattr(record, f'{self.side}_terminations'))
 
 
 class RelatedCableTable(NetBoxTable):
@@ -115,34 +137,12 @@ class RelatedCableTable(NetBoxTable):
         verbose_name=_('Cable'),
         orderable=False,
     )
-    label = tables.Column(
-        verbose_name=_('Label'),
-    )
-    termination_a = CableEndpointsColumn(
-        side='a',
-        verbose_name=_('Termination A'),
-        orderable=False,
-    )
-    termination_b = CableEndpointsColumn(
-        side='b',
-        verbose_name=_('Termination B'),
-        orderable=False,
-    )
+    label = tables.Column(verbose_name=_('Label'))
+    termination_a = CableEndpointsColumn(side='a', verbose_name=_('Termination A'), orderable=False)
+    termination_b = CableEndpointsColumn(side='b', verbose_name=_('Termination B'), orderable=False)
     status = columns.ChoiceFieldColumn()
 
     class Meta(NetBoxTable.Meta):
         model = Cable
-        fields = (
-            'cable',
-            'label',
-            'termination_a',
-            'termination_b',
-            'status',
-        )
-        default_columns = (
-            'cable',
-            'label',
-            'termination_a',
-            'termination_b',
-            'status',
-        )
+        fields = ('cable', 'label', 'termination_a', 'termination_b', 'status')
+        default_columns = ('cable', 'label', 'termination_a', 'termination_b', 'status')

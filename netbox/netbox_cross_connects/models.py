@@ -1,13 +1,23 @@
+
+from pathlib import Path
+
 from django.core.validators import RegexValidator
 from django.db import models
+from django.db.models.signals import post_delete, pre_save
+from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 
-from netbox.models import PrimaryModel
+from netbox.models import NetBoxModel, PrimaryModel
 
 from .choices import CrossConnectStatusChoices
 from .validators import CrossConnectIDValidator
 
-__all__ = ('CrossConnect',)
+__all__ = ('CrossConnect', 'CrossConnectAttachment')
+
+
+def cross_connect_attachment_upload_to(instance, filename):
+    cross_connect_id = getattr(instance.cross_connect, 'cross_connect_id', 'unassigned')
+    return f"cross-connect-attachments/{cross_connect_id}/{filename}"
 
 
 class CrossConnect(PrimaryModel):
@@ -63,3 +73,62 @@ class CrossConnect(PrimaryModel):
 
     def get_status_color(self):
         return CrossConnectStatusChoices.colors.get(self.status)
+
+
+class CrossConnectAttachment(NetBoxModel):
+    cross_connect = models.ForeignKey(
+        to='netbox_cross_connects.CrossConnect',
+        on_delete=models.CASCADE,
+        related_name='attachments',
+        verbose_name=_('cross connect'),
+    )
+    file = models.FileField(
+        verbose_name=_('file'),
+        upload_to=cross_connect_attachment_upload_to,
+    )
+    name = models.CharField(
+        verbose_name=_('name'),
+        max_length=100,
+        blank=True,
+    )
+    description = models.CharField(
+        verbose_name=_('description'),
+        max_length=200,
+        blank=True,
+    )
+
+    class Meta:
+        ordering = ('name', 'pk')
+        verbose_name = _('cross connect attachment')
+        verbose_name_plural = _('cross connect attachments')
+
+    def __str__(self):
+        return self.name or self.filename
+
+    @property
+    def filename(self):
+        return Path(self.file.name).name if self.file else ''
+
+    @property
+    def size(self):
+        return self.file.size if self.file else 0
+
+
+@receiver(pre_save, sender=CrossConnectAttachment)
+def delete_replaced_cross_connect_attachment_file(sender, instance, **kwargs):
+    if not instance.pk:
+        return
+
+    try:
+        old_instance = sender.objects.get(pk=instance.pk)
+    except sender.DoesNotExist:
+        return
+
+    if old_instance.file and old_instance.file.name != instance.file.name:
+        old_instance.file.delete(save=False)
+
+
+@receiver(post_delete, sender=CrossConnectAttachment)
+def delete_cross_connect_attachment_file(sender, instance, **kwargs):
+    if instance.file:
+        instance.file.delete(save=False)
