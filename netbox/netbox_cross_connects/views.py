@@ -1,17 +1,50 @@
 
-from django.shortcuts import get_object_or_404
+import logging
+from urllib.parse import urlencode
+
+from django.contrib import messages
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
+from django.db import router, transaction
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 from django.utils.translation import gettext as _
 
+from core.exceptions import JobFailed
+from core.signals import clear_events
 from dcim.models import Cable, Interface
 from extras.choices import CustomFieldTypeChoices
 from extras.models import CustomField
 from netbox.object_actions import AddObject, BulkExport
 from netbox.views import generic
+from utilities.exceptions import AbortRequest, PermissionsViolation
+from utilities.forms import restrict_form_fields
+from utilities.htmx import htmx_partial
+from utilities.jobs import is_background_request, process_request_as_job
+from utilities.querydict import normalize_querydict, prepare_cloned_fields
+from utilities.request import safe_for_redirect
 from utilities.views import register_model_view
 
 from . import filtersets, forms, tables
 from .models import CrossConnect, CrossConnectAttachment
+
+
+def create_attachment_for_cross_connect(cross_connect, upload, name='', description=''):
+    upload.seek(0)
+    file_content = upload.read()
+
+    attachment = CrossConnectAttachment(
+        cross_connect=cross_connect,
+        name=name,
+        description=description,
+    )
+    attachment.file.save(upload.name, ContentFile(file_content), save=False)
+    attachment.full_clean()
+    attachment.save()
+    return attachment
 
 
 @register_model_view(CrossConnect, 'list', path='', detail=False)
@@ -50,6 +83,34 @@ class CrossConnectView(generic.ObjectView):
             .filter(custom_field_data__cross_connect=cross_connect.pk)
             .prefetch_related('terminations', 'terminations__termination')
         )
+
+    @staticmethod
+    def _get_next_a_side_type(termination):
+        termination_type = termination._meta.label_lower
+        return {
+            'dcim.frontport': 'dcim.rearport',
+            'dcim.rearport': 'dcim.frontport',
+        }.get(termination_type, termination_type)
+
+    def _get_add_cable_url(self, cross_connect, related_cables):
+        params = {
+            'status': 'connected',
+            'label': cross_connect.cross_connect_id,
+            'tenant': cross_connect.tenant_id,
+            'cf_cross_connect': cross_connect.pk,
+            'return_url': cross_connect.get_absolute_url(),
+        }
+
+        latest_cable = related_cables.order_by('-created', '-pk').first()
+        if latest_cable and (b_terminations := latest_cable.b_terminations):
+            termination = b_terminations[0]
+            if device := getattr(termination, 'device', None):
+                params.update({
+                    'a_terminations_type': self._get_next_a_side_type(termination),
+                    'termination_a_device': device.pk,
+                })
+
+        return f"{reverse('dcim:cable_add')}?{urlencode(params)}"
 
     def _get_attachments(self, request, cross_connect):
         if not request.user.has_perm('netbox_cross_connects.view_crossconnectattachment'):
@@ -160,10 +221,15 @@ class CrossConnectView(generic.ObjectView):
             related_cables_table = tables.RelatedCableTable(related_cables, user=request.user)
             related_cables_table.configure(request)
 
+        add_cable_url = None
+        if related_cables_custom_field and request.user.has_perm('dcim.add_cable'):
+            add_cable_url = self._get_add_cable_url(instance, related_cables)
+
         return {
             'attachments_table': attachments_table,
             'related_cables_custom_field': related_cables_custom_field,
             'related_cables_table': related_cables_table,
+            'add_cable_url': add_cable_url,
             **self._get_trace_context(request, instance, related_cables),
         }
 
@@ -187,6 +253,97 @@ class CrossConnectBulkEditView(generic.BulkEditView):
     filterset = filtersets.CrossConnectFilterSet
     table = tables.CrossConnectTable
     form = forms.CrossConnectBulkEditForm
+    template_name = 'netbox_cross_connects/crossconnect_bulk_edit.html'
+
+    def post_save_operations(self, form, obj):
+        super().post_save_operations(form, obj)
+
+        attachment_file = form.cleaned_data.get('attachment_file')
+        if attachment_file:
+            create_attachment_for_cross_connect(
+                cross_connect=obj,
+                upload=attachment_file,
+                name=form.cleaned_data.get('attachment_name', ''),
+                description=form.cleaned_data.get('attachment_description', ''),
+            )
+
+    def post(self, request, **kwargs):
+        logger = logging.getLogger('netbox.views.BulkEditView')
+        model = self.queryset.model
+
+        if request.POST.get('_all') and self.filterset is not None:
+            pk_list = self.filterset(request.GET, self.queryset.values_list('pk', flat=True), request=request).qs
+        else:
+            pk_list = request.POST.getlist('pk')
+
+        initial_data = {'pk': pk_list}
+
+        post_data = request.POST.copy()
+        post_data.setlist('pk', pk_list)
+        form = self.form(post_data, files=request.FILES, initial=initial_data)
+        restrict_form_fields(form, request.user)
+
+        if '_apply' in request.POST:
+            if form.is_valid():
+                logger.debug('Form validation was successful')
+
+                if form.cleaned_data['background_job']:
+                    job_name = _('Bulk edit {count} {object_type}').format(
+                        count=len(form.cleaned_data['pk']),
+                        object_type=model._meta.verbose_name_plural,
+                    )
+                    if process_request_as_job(self.__class__, request, name=job_name):
+                        return redirect(self.get_return_url(request))
+
+                try:
+                    with transaction.atomic(using=router.db_for_write(model)):
+                        updated_objects = self._update_objects(form, request)
+                        object_count = self.queryset.filter(pk__in=[obj.pk for obj in updated_objects]).count()
+                        if object_count != len(updated_objects):
+                            raise PermissionsViolation
+
+                    msg = _('Updated {count} {object_type}').format(
+                        count=len(updated_objects),
+                        object_type=model._meta.verbose_name_plural,
+                    )
+                    logger.info(msg)
+
+                    if is_background_request(request):
+                        request.job.logger.info(msg)
+                        return
+
+                    messages.success(self.request, msg)
+                    return redirect(self.get_return_url(request))
+
+                except (AbortRequest, PermissionsViolation, ValidationError) as e:
+                    err_messages = e.messages if type(e) is ValidationError else [e.message]
+                    for msg in err_messages:
+                        logger.debug(msg)
+                        form.add_error(None, msg)
+                        if is_background_request(request):
+                            request.job.logger.error(msg)
+                    clear_events.send(sender=self)
+                    if is_background_request(request):
+                        raise JobFailed
+
+            else:
+                logger.debug('Form validation failed')
+
+        table = self.table(self.queryset.filter(pk__in=pk_list), orderable=False)
+        if not table.rows:
+            messages.warning(
+                request,
+                _('No {object_type} were selected.').format(object_type=model._meta.verbose_name_plural)
+            )
+            return redirect(self.get_return_url(request))
+
+        return render(request, self.template_name, {
+            'model': model,
+            'form': form,
+            'table': table,
+            'return_url': self.get_return_url(request),
+            **self.get_extra_context(request),
+        })
 
 
 @register_model_view(CrossConnect, 'bulk_rename', path='rename', detail=False)
@@ -211,6 +368,8 @@ class CrossConnectDeleteView(generic.ObjectDeleteView):
 @register_model_view(CrossConnectAttachment, 'list', path='', detail=False)
 class CrossConnectAttachmentListView(generic.ObjectListView):
     queryset = CrossConnectAttachment.objects.select_related('cross_connect')
+    filterset = filtersets.CrossConnectAttachmentFilterSet
+    filterset_form = forms.CrossConnectAttachmentFilterForm
     table = tables.CrossConnectAttachmentTable
     actions = (AddObject, BulkExport)
 
@@ -222,6 +381,101 @@ class CrossConnectAttachmentView(generic.ObjectView):
 
 
 @register_model_view(CrossConnectAttachment, 'add', detail=False)
+class CrossConnectAttachmentAddView(generic.ObjectEditView):
+    queryset = CrossConnectAttachment.objects.select_related('cross_connect')
+    form = forms.CrossConnectAttachmentAddForm
+
+    def get(self, request, *args, **kwargs):
+        obj = self.get_object(**kwargs)
+        initial_data = normalize_querydict(request.GET)
+        if cross_connect_id := request.GET.get('cross_connect'):
+            initial_data.setlist('cross_connect', [cross_connect_id])
+        form = self.form(instance=obj, initial=initial_data)
+        restrict_form_fields(form, request.user)
+
+        context = {
+            'model': self.queryset.model,
+            'object': obj,
+            'form': form,
+        }
+
+        if request.GET.get('_quickadd'):
+            return render(request, 'htmx/quick_add.html', context)
+        if htmx_partial(request):
+            return render(request, self.htmx_template_name, context)
+
+        return render(request, self.template_name, {
+            **context,
+            'return_url': self.get_return_url(request, obj),
+            'prerequisite_model': None,
+            **self.get_extra_context(request, obj),
+        })
+
+    def post(self, request, *args, **kwargs):
+        logger = logging.getLogger('netbox.views.ObjectEditView')
+        obj = self.get_object(**kwargs)
+        form = self.form(data=request.POST, files=request.FILES, instance=obj)
+        restrict_form_fields(form, request.user)
+
+        if form.is_valid():
+            logger.debug('Form validation was successful')
+            try:
+                with transaction.atomic(using=router.db_for_write(CrossConnectAttachment)):
+                    created_attachments = []
+                    for cross_connect in form.cleaned_data['cross_connect']:
+                        created_attachments.append(
+                            create_attachment_for_cross_connect(
+                                cross_connect=cross_connect,
+                                upload=form.cleaned_data['file'],
+                                name=form.cleaned_data.get('name', ''),
+                                description=form.cleaned_data.get('description', ''),
+                            )
+                        )
+                        if form.cleaned_data.get('tags'):
+                            created_attachments[-1].tags.set(form.cleaned_data['tags'])
+
+                msg = _('Created {count} {object_type}').format(
+                    count=len(created_attachments),
+                    object_type=CrossConnectAttachment._meta.verbose_name_plural,
+                )
+                logger.info(msg)
+                messages.success(request, msg)
+
+                if '_addanother' in request.POST:
+                    redirect_url = request.path
+                    params = {}
+                    if 'return_url' in request.GET:
+                        params['return_url'] = request.GET.get('return_url')
+                    if request.GET.get('cross_connect'):
+                        params['cross_connect'] = request.GET.get('cross_connect')
+                    if params:
+                        from django.http import QueryDict
+                        q = QueryDict('', mutable=True)
+                        for k, v in params.items():
+                            q[k] = v
+                        redirect_url += f'?{q.urlencode()}'
+                    return redirect(redirect_url)
+
+                return redirect(self.get_return_url(request, created_attachments[0]))
+
+            except (AbortRequest, PermissionsViolation, ValidationError) as e:
+                err_messages = e.messages if type(e) is ValidationError else [e.message]
+                for msg in err_messages:
+                    logger.debug(msg)
+                    form.add_error(None, msg)
+                clear_events.send(sender=self)
+        else:
+            logger.debug('Form validation failed')
+
+        return render(request, self.template_name, {
+            'model': self.queryset.model,
+            'object': obj,
+            'form': form,
+            'return_url': self.get_return_url(request, obj),
+            **self.get_extra_context(request, obj),
+        })
+
+
 @register_model_view(CrossConnectAttachment, 'edit')
 class CrossConnectAttachmentEditView(generic.ObjectEditView):
     queryset = CrossConnectAttachment.objects.select_related('cross_connect')

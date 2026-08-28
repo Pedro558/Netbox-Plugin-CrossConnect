@@ -46,6 +46,19 @@
             </td>
           </tr>
           <tr>
+            <th scope="row">{% trans "Provider" %}</th>
+            <td>
+              {% if object.provider %}
+                {% if object.provider.group %}
+                  {{ object.provider.group|linkify }} /
+                {% endif %}
+                {{ object.provider|linkify }}
+              {% else %}
+                <span class="text-muted">{% trans "None" %}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
             <th scope="row">{% trans "Activation Date" %}</th>
             <td>{{ object.activation_date|isodate|placeholder }}</td>
           </tr>

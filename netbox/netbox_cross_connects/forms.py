@@ -21,6 +21,8 @@ from .choices import CrossConnectStatusChoices
 from .models import CrossConnect, CrossConnectAttachment
 
 __all__ = (
+    'CrossConnectAttachmentAddForm',
+    'CrossConnectAttachmentFilterForm',
     'CrossConnectAttachmentForm',
     'CrossConnectBulkEditForm',
     'CrossConnectFilterForm',
@@ -42,6 +44,26 @@ class CrossConnectForm(NetBoxModelForm):
         selector=True,
         quick_add=True,
     )
+    provider = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        label=_('Provider'),
+        selector=True,
+        quick_add=True,
+    )
+    attachment_file = forms.FileField(
+        label=_('Attachment file'),
+        required=False,
+    )
+    attachment_name = forms.CharField(
+        label=_('Attachment name'),
+        max_length=100,
+        required=False,
+    )
+    attachment_description = forms.CharField(
+        label=_('Attachment description'),
+        max_length=200,
+        required=False,
+    )
     comments = CommentField()
 
     fieldsets = (
@@ -51,11 +73,18 @@ class CrossConnectForm(NetBoxModelForm):
             'status',
             'site',
             'tenant',
+            'provider',
             'activation_date',
             'description',
             'comments',
             'tags',
             name=_('Cross Connect'),
+        ),
+        FieldSet(
+            'attachment_file',
+            'attachment_name',
+            'attachment_description',
+            name=_('Initial Attachment'),
         ),
     )
 
@@ -67,6 +96,7 @@ class CrossConnectForm(NetBoxModelForm):
             'status',
             'site',
             'tenant',
+            'provider',
             'activation_date',
             'description',
             'comments',
@@ -74,6 +104,56 @@ class CrossConnectForm(NetBoxModelForm):
         )
         widgets = {
             'activation_date': DatePicker(),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk and not self.instance.provider_id:
+            self.fields['provider'].required = False
+
+    def save(self, commit=True):
+        instance = super().save(commit=commit)
+
+        attachment_file = self.cleaned_data.get('attachment_file')
+        if commit and attachment_file:
+            CrossConnectAttachment.objects.create(
+                cross_connect=instance,
+                file=attachment_file,
+                name=self.cleaned_data.get('attachment_name', ''),
+                description=self.cleaned_data.get('attachment_description', ''),
+            )
+
+        return instance
+
+
+class CrossConnectAttachmentAddForm(NetBoxModelForm):
+    cross_connect = DynamicModelMultipleChoiceField(
+        queryset=CrossConnect.objects.all(),
+        label=_('Cross Connect'),
+        required=True,
+    )
+
+    fieldsets = (
+        FieldSet(
+            'cross_connect',
+            'file',
+            'name',
+            'description',
+            'tags',
+            name=_('Attachment'),
+        ),
+    )
+
+    class Meta:
+        model = CrossConnectAttachment
+        fields = (
+            'file',
+            'name',
+            'description',
+            'tags',
+        )
+        help_texts = {
+            'name': _('If no name is specified, the uploaded file name will be used.'),
         }
 
 
@@ -110,6 +190,19 @@ class CrossConnectAttachmentForm(NetBoxModelForm):
         }
 
 
+class CrossConnectAttachmentFilterForm(NetBoxModelFilterSetForm):
+    model = CrossConnectAttachment
+    fieldsets = (
+        FieldSet('q', 'filter_id'),
+        FieldSet('cross_connect_id', name=_('Attributes')),
+    )
+    cross_connect_id = DynamicModelMultipleChoiceField(
+        queryset=CrossConnect.objects.all(),
+        required=False,
+        label=_('Cross Connect'),
+    )
+
+
 class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
     status = forms.ChoiceField(
         label=_('Status'),
@@ -127,6 +220,11 @@ class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         label=_('Tenant'),
     )
+    provider = DynamicModelChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Provider'),
+    )
     activation_date = forms.DateField(
         label=_('Activation date'),
         required=False,
@@ -137,11 +235,26 @@ class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
         max_length=200,
         required=False,
     )
+    attachment_file = forms.FileField(
+        label=_('Attachment file'),
+        required=False,
+    )
+    attachment_name = forms.CharField(
+        label=_('Attachment name'),
+        max_length=100,
+        required=False,
+    )
+    attachment_description = forms.CharField(
+        label=_('Attachment description'),
+        max_length=200,
+        required=False,
+    )
     comments = CommentField()
 
     model = CrossConnect
     fieldsets = (
-        FieldSet('status', 'site', 'tenant', 'activation_date', 'description', name=_('Cross Connect')),
+        FieldSet('status', 'site', 'tenant', 'provider', 'activation_date', 'description', name=_('Cross Connect')),
+        FieldSet('attachment_file', 'attachment_name', 'attachment_description', name=_('Attachment')),
     )
     nullable_fields = (
         'activation_date',
@@ -154,7 +267,7 @@ class CrossConnectFilterForm(NetBoxModelFilterSetForm):
     model = CrossConnect
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
-        FieldSet('status', 'site_id', 'tenant_id', name=_('Attributes')),
+        FieldSet('status', 'site_id', 'tenant_id', 'provider_id', name=_('Attributes')),
     )
     status = forms.MultipleChoiceField(
         choices=CrossConnectStatusChoices,
@@ -170,6 +283,11 @@ class CrossConnectFilterForm(NetBoxModelFilterSetForm):
         queryset=Tenant.objects.all(),
         required=False,
         label=_('Tenant'),
+    )
+    provider_id = DynamicModelMultipleChoiceField(
+        queryset=Tenant.objects.all(),
+        required=False,
+        label=_('Provider'),
     )
     tag = TagFilterField(model)
 
@@ -192,6 +310,12 @@ class CrossConnectImportForm(NetBoxModelImportForm):
         to_field_name='name',
         help_text=_('Assigned tenant'),
     )
+    provider = CSVModelChoiceField(
+        label=_('Provider'),
+        queryset=Tenant.objects.all(),
+        to_field_name='name',
+        help_text=_('Assigned provider'),
+    )
 
     class Meta:
         model = CrossConnect
@@ -201,6 +325,7 @@ class CrossConnectImportForm(NetBoxModelImportForm):
             'status',
             'site',
             'tenant',
+            'provider',
             'activation_date',
             'last_known_path',
             'description',

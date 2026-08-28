@@ -1,6 +1,7 @@
 
 from pathlib import Path
 
+from django.core.exceptions import ValidationError
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.signals import post_delete, pre_save
@@ -53,6 +54,14 @@ class CrossConnect(PrimaryModel):
         on_delete=models.PROTECT,
         related_name='cross_connects',
     )
+    provider = models.ForeignKey(
+        to='tenancy.Tenant',
+        on_delete=models.PROTECT,
+        related_name='provided_cross_connects',
+        verbose_name=_('provider'),
+        blank=True,
+        null=True,
+    )
     activation_date = models.DateField(
         verbose_name=_('activation date'),
         blank=True,
@@ -73,6 +82,13 @@ class CrossConnect(PrimaryModel):
 
     def get_status_color(self):
         return CrossConnectStatusChoices.colors.get(self.status)
+
+    def clean(self):
+        super().clean()
+        if self._state.adding and not self.provider_id:
+            raise ValidationError({
+                'provider': _('Provider is required when creating a cross connect.'),
+            })
 
 
 class CrossConnectAttachment(NetBoxModel):

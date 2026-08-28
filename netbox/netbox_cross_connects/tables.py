@@ -32,6 +32,10 @@ class CrossConnectTable(NetBoxTable):
         linkify=True,
         verbose_name=_('Tenant'),
     )
+    provider = tables.Column(
+        linkify=True,
+        verbose_name=_('Provider'),
+    )
     tags = columns.TagColumn(
         url_name='plugins:netbox_cross_connects:crossconnect_list',
     )
@@ -39,11 +43,11 @@ class CrossConnectTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = CrossConnect
         fields = (
-            'pk', 'id', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant',
+            'pk', 'id', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant', 'provider',
             'activation_date', 'description', 'comments', 'tags', 'created', 'last_updated', 'actions',
         )
         default_columns = (
-            'pk', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant', 'activation_date', 'description',
+            'pk', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant', 'provider', 'activation_date', 'description',
         )
 
 
