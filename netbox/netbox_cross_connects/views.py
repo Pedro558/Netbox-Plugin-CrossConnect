@@ -1,21 +1,24 @@
 
 import logging
+import re
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.files.base import ContentFile
 from django.db import router, transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views import View
 from django.urls import reverse
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
+from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from core.exceptions import JobFailed
 from core.signals import clear_events
-from dcim.models import Cable, Interface
+from dcim.models import Cable, FrontPort, Interface, RearPort, Site
 from extras.choices import CustomFieldTypeChoices
 from extras.models import CustomField
 from netbox.object_actions import AddObject, BulkExport
@@ -29,6 +32,7 @@ from utilities.request import safe_for_redirect
 from utilities.views import register_model_view
 
 from . import filtersets, forms, tables
+from .choices import CrossConnectStatusChoices
 from .models import CrossConnect, CrossConnectAttachment
 
 
@@ -45,6 +49,47 @@ def create_attachment_for_cross_connect(cross_connect, upload, name='', descript
     attachment.full_clean()
     attachment.save()
     return attachment
+
+
+class CrossConnectNextIDView(View):
+    """Return the next Cross Connect ID suggested for a selected site."""
+
+    def get(self, request):
+        if not request.user.has_perm('netbox_cross_connects.add_crossconnect'):
+            raise PermissionDenied
+
+        site_id = request.GET.get('site_id')
+        if not site_id:
+            return JsonResponse({'error': _('A site must be selected.')}, status=400)
+
+        site = get_object_or_404(Site, pk=site_id)
+        site_code = site.name.upper()
+        if not re.fullmatch(r'[A-Z0-9]+', site_code):
+            return JsonResponse({
+                'error': _('The Site name must contain only letters A-Z and numbers to generate a Cross Connect ID.'),
+            }, status=400)
+
+        prefix = f'ID-{site_code}-'
+        latest_cross_connect = (
+            CrossConnect.objects.filter(
+                site=site,
+                cross_connect_id__startswith=prefix,
+            )
+            .order_by('-cross_connect_id')
+            .first()
+        )
+        next_sequence = 1
+        if latest_cross_connect:
+            next_sequence = int(latest_cross_connect.cross_connect_id.rsplit('-', 1)[1]) + 1
+
+        if next_sequence > 99999:
+            return JsonResponse({
+                'error': _('The Cross Connect ID sequence for this Site has reached its limit.'),
+            }, status=400)
+
+        return JsonResponse({
+            'cross_connect_id': f'{prefix}{next_sequence:05d}',
+        })
 
 
 @register_model_view(CrossConnect, 'list', path='', detail=False)
@@ -92,6 +137,25 @@ class CrossConnectView(generic.ObjectView):
             'dcim.rearport': 'dcim.frontport',
         }.get(termination_type, termination_type)
 
+    @staticmethod
+    def _is_available_termination(termination):
+        return not termination.cable_id and not termination.mark_connected
+
+    def _get_corresponding_port(self, termination):
+        if isinstance(termination, FrontPort):
+            corresponding_port = termination.rear_port
+        elif isinstance(termination, RearPort):
+            front_ports = list(termination.frontports.all()[:2])
+            if len(front_ports) != 1:
+                return None
+            corresponding_port = front_ports[0]
+        else:
+            return None
+
+        if self._is_available_termination(corresponding_port):
+            return corresponding_port
+        return None
+
     def _get_add_cable_url(self, cross_connect, related_cables):
         params = {
             'status': 'connected',
@@ -109,6 +173,8 @@ class CrossConnectView(generic.ObjectView):
                     'a_terminations_type': self._get_next_a_side_type(termination),
                     'termination_a_device': device.pk,
                 })
+                if corresponding_port := self._get_corresponding_port(termination):
+                    params['a_terminations'] = corresponding_port.pk
 
         return f"{reverse('dcim:cable_add')}?{urlencode(params)}"
 
@@ -225,13 +291,127 @@ class CrossConnectView(generic.ObjectView):
         if related_cables_custom_field and request.user.has_perm('dcim.add_cable'):
             add_cable_url = self._get_add_cable_url(instance, related_cables)
 
+        deletable_related_cables = Cable.objects.restrict(request.user, 'delete').filter(
+            custom_field_data__cross_connect=instance.pk,
+        )
+        can_deactivate_cross = request.user.has_perms((
+            'netbox_cross_connects.change_crossconnect',
+            'dcim.delete_cable',
+        )) and (
+            instance.status != CrossConnectStatusChoices.STATUS_OFFLINE or deletable_related_cables.exists()
+        )
+
         return {
             'attachments_table': attachments_table,
             'related_cables_custom_field': related_cables_custom_field,
             'related_cables_table': related_cables_table,
             'add_cable_url': add_cable_url,
+            'can_deactivate_cross': can_deactivate_cross,
             **self._get_trace_context(request, instance, related_cables),
         }
+
+
+@register_model_view(CrossConnect, 'deactivate', path='deactivate')
+class CrossConnectDeactivateView(generic.ObjectView):
+    queryset = CrossConnect.objects.all()
+    template_name = 'netbox_cross_connects/crossconnect_deactivate.html'
+    additional_permissions = ('dcim.delete_cable',)
+
+    def get_required_permission(self):
+        return 'netbox_cross_connects.change_crossconnect'
+
+    @staticmethod
+    def _related_cables_queryset(request, cross_connect):
+        return (
+            Cable.objects.restrict(request.user, 'delete')
+            .filter(custom_field_data__cross_connect=cross_connect.pk)
+            .prefetch_related('terminations', 'terminations__termination')
+        )
+
+    @staticmethod
+    def _format_termination(termination):
+        return tables.CableEndpointsColumn._termination_label(termination)
+
+    def _build_snapshot(self, request, cross_connect, related_cables, reason):
+        timestamp = timezone.localtime(timezone.now()).strftime('%Y-%m-%d %H:%M:%S %Z')
+        lines = [
+            f'Deactivated at: {timestamp}',
+            f'Deactivated by: {request.user}',
+            f'Reason: {reason.strip()}',
+            '',
+            f'Related cables removed: {len(related_cables)}',
+        ]
+
+        for cable in related_cables:
+            a_terminations = ' / '.join(self._format_termination(term) for term in cable.a_terminations) or 'None'
+            b_terminations = ' / '.join(self._format_termination(term) for term in cable.b_terminations) or 'None'
+            lines.extend((
+                f'- Cable #{cable.pk}: {cable}',
+                f'  A: {a_terminations}',
+                f'  B: {b_terminations}',
+            ))
+
+        return '\n'.join(lines)
+
+    def _get_context(self, request, cross_connect, form=None):
+        related_cables = self._related_cables_queryset(request, cross_connect)
+        cable_table = tables.RelatedCableTable(related_cables, user=request.user)
+        cable_table.configure(request)
+        return {
+            'object': cross_connect,
+            'form': form or forms.CrossConnectDeactivateForm(),
+            'related_cables': related_cables,
+            'cable_table': cable_table,
+        }
+
+    def _assert_all_related_cables_are_deletable(self, request, cross_connect, related_cables):
+        total_related_cables = Cable.objects.filter(
+            custom_field_data__cross_connect=cross_connect.pk,
+        ).count()
+        if total_related_cables != len(related_cables):
+            raise PermissionDenied(_('You do not have permission to delete every related cable.'))
+
+    def get(self, request, **kwargs):
+        cross_connect = self.get_object(**kwargs)
+        return render(request, self.template_name, self._get_context(request, cross_connect))
+
+    def post(self, request, **kwargs):
+        cross_connect = self.get_object(**kwargs)
+        form = forms.CrossConnectDeactivateForm(request.POST)
+        if not form.is_valid():
+            return render(request, self.template_name, self._get_context(request, cross_connect, form))
+
+        try:
+            with transaction.atomic():
+                cross_connect = CrossConnect.objects.select_for_update().get(pk=cross_connect.pk)
+                related_cables = list(self._related_cables_queryset(request, cross_connect).select_for_update())
+                self._assert_all_related_cables_are_deletable(request, cross_connect, related_cables)
+                snapshot = self._build_snapshot(request, cross_connect, related_cables, form.cleaned_data['reason'])
+
+                cross_connect.snapshot()
+                cross_connect.last_known_path = snapshot
+                if cross_connect.status != CrossConnectStatusChoices.STATUS_OFFLINE:
+                    cross_connect.status = CrossConnectStatusChoices.STATUS_OFFLINE
+                cross_connect._changelog_message = _(
+                    'Cross deactivated. Reason: {reason}'
+                ).format(reason=form.cleaned_data['reason'].strip())
+                cross_connect.save()
+
+                for cable in related_cables:
+                    cable.snapshot()
+                    cable._changelog_message = _(
+                        'Removed during deactivation of cross connect {cross_connect}.'
+                    ).format(cross_connect=cross_connect.cross_connect_id)
+                    cable.delete()
+
+        except AbortRequest as error:
+            form.add_error(None, error.message)
+            return render(request, self.template_name, self._get_context(request, cross_connect, form))
+
+        messages.success(request, _(
+            'Cross connect deactivated and {count} related cable(s) removed.'
+        ).format(count=len(related_cables)))
+        return redirect(cross_connect.get_absolute_url())
 
 
 @register_model_view(CrossConnect, 'add', detail=False)
@@ -239,6 +419,7 @@ class CrossConnectView(generic.ObjectView):
 class CrossConnectEditView(generic.ObjectEditView):
     queryset = CrossConnect.objects.all()
     form = forms.CrossConnectForm
+    template_name = 'netbox_cross_connects/crossconnect_edit.html'
 
 
 @register_model_view(CrossConnect, 'bulk_import', path='import', detail=False)

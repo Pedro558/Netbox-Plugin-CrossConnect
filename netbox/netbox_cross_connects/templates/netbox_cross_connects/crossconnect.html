@@ -4,6 +4,15 @@
 {% load plugins %}
 {% load i18n %}
 
+{% block extra_controls %}
+  {% if can_deactivate_cross %}
+    <a href="{% url 'plugins:netbox_cross_connects:crossconnect_deactivate' pk=object.pk %}" class="btn btn-danger">
+      <i class="mdi mdi-link-off" aria-hidden="true"></i>
+      {% if object.status == 'offline' %}{% trans "Remove Related Cables" %}{% else %}{% trans "Deactivate Cross" %}{% endif %}
+    </a>
+  {% endif %}
+{% endblock extra_controls %}
+
 {% block content %}
   <div class="row">
     <div class="col col-12 col-md-6">

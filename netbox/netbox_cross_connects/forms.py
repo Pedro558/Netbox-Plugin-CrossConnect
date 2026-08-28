@@ -1,5 +1,6 @@
 
 from django import forms
+from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from dcim.models import Site
@@ -24,6 +25,7 @@ __all__ = (
     'CrossConnectAttachmentAddForm',
     'CrossConnectAttachmentFilterForm',
     'CrossConnectAttachmentForm',
+    'CrossConnectDeactivateForm',
     'CrossConnectBulkEditForm',
     'CrossConnectFilterForm',
     'CrossConnectForm',
@@ -110,6 +112,10 @@ class CrossConnectForm(NetBoxModelForm):
         super().__init__(*args, **kwargs)
         if self.instance and self.instance.pk and not self.instance.provider_id:
             self.fields['provider'].required = False
+        elif not self.instance or not self.instance.pk:
+            self.fields['site'].widget.attrs['data-cross-connect-id-url'] = reverse(
+                'plugins:netbox_cross_connects:crossconnect_next_id'
+            )
 
     def save(self, commit=True):
         instance = super().save(commit=commit)
@@ -124,6 +130,18 @@ class CrossConnectForm(NetBoxModelForm):
             )
 
         return instance
+
+
+class CrossConnectDeactivateForm(forms.Form):
+    reason = forms.CharField(
+        label=_('Deactivation reason'),
+        widget=forms.Textarea(attrs={'rows': 3}),
+        help_text=_('This reason will be recorded in the last known path and changelog.'),
+    )
+    confirm = forms.BooleanField(
+        label=_('I understand that the related cables will be permanently deleted.'),
+        required=True,
+    )
 
 
 class CrossConnectAttachmentAddForm(NetBoxModelForm):
