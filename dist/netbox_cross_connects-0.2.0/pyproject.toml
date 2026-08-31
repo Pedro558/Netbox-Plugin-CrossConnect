@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=70.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netbox-cross-connects"
+version = "0.2.0"
+description = "NetBox plugin for managing cross connects."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "LicenseRef-Proprietary"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Django",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["netbox_cross_connects*"]
+exclude = ["netbox_cross_connects.tests*"]
+
+[tool.setuptools.package-data]
+netbox_cross_connects = [
+    "templates/**/*.html",
+    "static/**/*.js",
+    "docs/**/*.md",
+]

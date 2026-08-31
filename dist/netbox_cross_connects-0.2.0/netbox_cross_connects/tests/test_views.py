@@ -1,0 +1,780 @@
+from core.models import ObjectType
+from django.test import RequestFactory, TestCase, override_settings
+from django.urls import reverse
+
+from dcim.choices import InterfaceTypeChoices, PortTypeChoices
+from dcim.models import Cable, FrontPort, Interface, RearPort, Region, Site
+from extras.choices import CustomFieldTypeChoices
+from extras.models import CustomField
+from tenancy.models import Tenant, TenantGroup
+from utilities.testing import create_test_device, create_test_user
+
+from netbox_cross_connects.choices import CrossConnectStatusChoices
+from netbox_cross_connects.forms import CrossConnectForm, CrossConnectImportForm
+from netbox_cross_connects.models import CrossConnect
+from netbox_cross_connects.tables import RelatedCableTable
+from netbox_cross_connects.views import CrossConnectView
+
+
+class CrossConnectViewTestCase(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.factory = RequestFactory()
+        cls.region = Region.objects.create(name='Region 1', slug='region-1')
+        cls.site = Site.objects.create(name='Site 1', slug='site-1', region=cls.region)
+        cls.tenant_group = TenantGroup.objects.create(name='Tenant Group 1', slug='tenant-group-1')
+        cls.tenant = Tenant.objects.create(name='Tenant 1', slug='tenant-1', group=cls.tenant_group)
+        cls.user = create_test_user('crossconnect-user', permissions=('dcim.view_cable',))
+        cls.user.is_superuser = True
+        cls.user.save()
+
+    def _create_related_cables_custom_field(self):
+        custom_field = CustomField.objects.create(
+            name='cross_connect',
+            type=CustomFieldTypeChoices.TYPE_OBJECT,
+            related_object_type=ObjectType.objects.get_for_model(CrossConnect),
+        )
+        custom_field.object_types.set([ObjectType.objects.get_for_model(Cable)])
+        return custom_field
+
+    def _create_cross_connect(self, cross_connect_id='ID-RJO1-00650', ritm='RITM0012345'):
+        return CrossConnect.objects.create(
+            cross_connect_id=cross_connect_id,
+            ritm=ritm,
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+    def _create_interface_cable(self, name_suffix, cross_connect=None):
+        device_a = create_test_device(f'device-a-{name_suffix}', site=self.site)
+        device_b = create_test_device(f'device-b-{name_suffix}', site=self.site)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        custom_field_data = {}
+        if cross_connect:
+            custom_field_data['cross_connect'] = cross_connect.pk
+
+        cable = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[interface_b],
+            custom_field_data=custom_field_data,
+        )
+        cable.save()
+        return cable
+
+    def _fresh_cables(self, *cables):
+        return list(
+            Cable.objects.filter(pk__in=[cable.pk for cable in cables])
+            .prefetch_related('terminations', 'terminations__termination')
+        )
+
+    def _get_trace_context_for_cables(self, cross_connect, cables, user=None):
+        request = self.factory.get('/')
+        request.user = user or self.user
+        return CrossConnectView()._get_trace_context(request, cross_connect, cables)
+
+    def test_cross_connect_form_is_valid(self):
+        form = CrossConnectForm(data={
+            'cross_connect_id': 'ID-RJO1-00653',
+            'ritm': 'RITM0012348',
+            'status': CrossConnectStatusChoices.STATUS_ACTIVE,
+            'site': self.site.pk,
+            'tenant': self.tenant.pk,
+            'activation_date': '2026-05-24',
+            'description': 'Cross connect X',
+            'comments': 'Created by tests',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_cross_connect_import_form_is_valid(self):
+        form = CrossConnectImportForm(data={
+            'cross_connect_id': 'ID-RJO1-00654',
+            'ritm': 'RITM0012349',
+            'status': CrossConnectStatusChoices.STATUS_ACTIVE,
+            'site': self.site.name,
+            'tenant': self.tenant.name,
+            'activation_date': '2026-05-25',
+            'last_known_path': 'Panel A > Panel B',
+            'description': 'Imported cross connect',
+        })
+
+        self.assertTrue(form.is_valid(), form.errors)
+
+    def test_cross_connect_ui_routes(self):
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00652',
+            ritm='RITM0012347',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        self.assertEqual(
+            reverse('plugins:netbox_cross_connects:crossconnect_list'),
+            '/plugins/cross-connects/cross-connects/',
+        )
+        self.assertEqual(
+            reverse('plugins:netbox_cross_connects:crossconnect_add'),
+            '/plugins/cross-connects/cross-connects/add/',
+        )
+        self.assertEqual(
+            reverse('plugins:netbox_cross_connects:crossconnect_bulk_import'),
+            '/plugins/cross-connects/cross-connects/import/',
+        )
+        self.assertEqual(
+            reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk}),
+            f'/plugins/cross-connects/cross-connects/{cross_connect.pk}/',
+        )
+        self.assertEqual(
+            reverse('plugins-api:netbox_cross_connects-api:crossconnect-list'),
+            '/api/plugins/cross-connects/cross-connects/',
+        )
+
+    def test_phase_6_views_load(self):
+        user = create_test_user(
+            'crossconnect-phase6-user',
+            permissions=(
+                'netbox_cross_connects.view_crossconnect',
+                'netbox_cross_connects.add_crossconnect',
+                'netbox_cross_connects.change_crossconnect',
+                'netbox_cross_connects.delete_crossconnect',
+            ),
+        )
+        user.is_superuser = True
+        user.save()
+        self.client.force_login(user)
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00656',
+            ritm='RITM0012356',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        urls = (
+            reverse('plugins:netbox_cross_connects:crossconnect_list'),
+            reverse('plugins:netbox_cross_connects:crossconnect_add'),
+            reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk}),
+            reverse('plugins:netbox_cross_connects:crossconnect_edit', kwargs={'pk': cross_connect.pk}),
+            reverse('plugins:netbox_cross_connects:crossconnect_delete', kwargs={'pk': cross_connect.pk}),
+            reverse('plugins:netbox_cross_connects:crossconnect_bulk_import'),
+        )
+
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(url)
+                self.assertEqual(response.status_code, 200)
+
+    def test_detail_page_renders_without_related_cables_custom_field(self):
+        user = create_test_user(
+            'crossconnect-missing-cf-user',
+            permissions=('netbox_cross_connects.view_crossconnect',),
+        )
+        user.is_superuser = True
+        user.save()
+        self.client.force_login(user)
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00657',
+            ritm='RITM0012357',
+        )
+
+        response = self.client.get(
+            reverse('plugins:netbox_cross_connects:crossconnect', kwargs={'pk': cross_connect.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'Related Cables')
+        self.assertContains(response, 'Create the custom field')
+
+    def test_detail_view_includes_related_cables_table(self):
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00650',
+            ritm='RITM0012345',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+        custom_field = self._create_related_cables_custom_field()
+        device_a = create_test_device('device-a', site=self.site)
+        device_b = create_test_device('device-b', site=self.site)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        cable = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[interface_b],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable.save()
+
+        request = self.factory.get('/')
+        request.user = self.user
+
+        view = CrossConnectView()
+        context = view.get_extra_context(request, cross_connect)
+        table = context['related_cables_table']
+
+        self.assertEqual(context['related_cables_custom_field'], custom_field)
+        self.assertEqual(next(iter(table.rows)).record.pk, cable.pk)
+
+    def test_detail_view_lists_only_cables_linked_to_cross_connect(self):
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00658',
+            ritm='RITM0012358',
+        )
+        other_cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00659',
+            ritm='RITM0012359',
+        )
+        custom_field = self._create_related_cables_custom_field()
+        linked_cable = self._create_interface_cable('linked', cross_connect=cross_connect)
+        unrelated_cable = self._create_interface_cable('unrelated')
+        other_linked_cable = self._create_interface_cable('other-linked', cross_connect=other_cross_connect)
+
+        request = self.factory.get('/')
+        request.user = self.user
+
+        context = CrossConnectView().get_extra_context(request, cross_connect)
+        table = context['related_cables_table']
+        cable_pks = [row.record.pk for row in table.rows]
+
+        self.assertEqual(context['related_cables_custom_field'], custom_field)
+        self.assertEqual(cable_pks, [linked_cable.pk])
+        self.assertNotIn(unrelated_cable.pk, cable_pks)
+        self.assertNotIn(other_linked_cable.pk, cable_pks)
+
+    def test_detail_view_hides_related_cables_without_cable_permission(self):
+        user = create_test_user('crossconnect-no-cable-perm-user')
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00664',
+            ritm='RITM0012364',
+        )
+        self._create_related_cables_custom_field()
+        self._create_interface_cable('no-perm', cross_connect=cross_connect)
+
+        request = self.factory.get('/')
+        request.user = user
+
+        context = CrossConnectView().get_extra_context(request, cross_connect)
+        table = context['related_cables_table']
+
+        self.assertEqual(len(table.rows), 0)
+
+    def test_related_cable_table_renders_termination_a_and_b_columns(self):
+        device_a = create_test_device('device-a-render', site=self.site)
+        device_b = create_test_device('device-b-render', site=self.site)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        cable = Cable(a_terminations=[interface_a], b_terminations=[interface_b])
+        cable.save()
+
+        table = RelatedCableTable([cable])
+        row = next(iter(table.rows))
+
+        self.assertIn('Site 1', row.get_cell('termination_a'))
+        self.assertIn('device-a-render', row.get_cell('termination_a'))
+        self.assertIn('xe-0/0/0', row.get_cell('termination_a'))
+        self.assertIn('Site 1', row.get_cell('termination_b'))
+        self.assertIn('device-b-render', row.get_cell('termination_b'))
+        self.assertIn('xe-0/0/1', row.get_cell('termination_b'))
+
+    def test_detail_view_resolves_native_trace_for_complete_patch_panel_path(self):
+        user = create_test_user(
+            'crossconnect-ready-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        user.is_superuser = True
+        user.save()
+
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00660',
+            ritm='RITM0012360',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+        self._create_related_cables_custom_field()
+
+        device_a = create_test_device('trace-device-a', site=self.site)
+        device_b = create_test_device('trace-device-b', site=self.site)
+        patch_panel_1 = create_test_device('patch-panel-1', site=self.site)
+        patch_panel_2 = create_test_device('patch-panel-2', site=self.site)
+
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_z = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        rear_port_1 = RearPort.objects.create(
+            device=patch_panel_1,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_1 = FrontPort.objects.create(
+            device=patch_panel_1,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_1,
+            rear_port_position=1,
+        )
+        rear_port_2 = RearPort.objects.create(
+            device=patch_panel_2,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_2 = FrontPort.objects.create(
+            device=patch_panel_2,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_2,
+            rear_port_position=1,
+        )
+
+        cable_1 = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[front_port_1],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_1.save()
+        cable_2 = Cable(
+            a_terminations=[rear_port_1],
+            b_terminations=[rear_port_2],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_2.save()
+        cable_3 = Cable(
+            a_terminations=[front_port_2],
+            b_terminations=[interface_z],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_3.save()
+
+        context = self._get_trace_context_for_cables(
+            cross_connect, self._fresh_cables(cable_1, cable_2, cable_3), user=user
+        )
+
+        self.assertEqual(context['trace_status'], 'ready')
+        self.assertEqual(context['trace_origin_interface'], interface_a)
+        self.assertEqual(context['trace_destination_interface'], interface_z)
+        self.assertEqual(
+            context['trace_url'],
+            reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk}),
+        )
+        self.assertIn(reverse('dcim-api:interface-trace', kwargs={'pk': interface_a.pk}), context['trace_svg_url'])
+
+    def test_trace_is_unavailable_without_interface_permission(self):
+        user = create_test_user('crossconnect-no-interface-trace-user', permissions=('dcim.view_cable',))
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00665',
+            ritm='RITM0012365',
+        )
+        cable = self._create_interface_cable('trace-no-interface-perm', cross_connect=cross_connect)
+
+        context = self._get_trace_context_for_cables(cross_connect, self._fresh_cables(cable), user=user)
+
+        self.assertEqual(context['trace_status'], 'unavailable')
+        self.assertIsNone(context['trace_url'])
+        self.assertIn('Permission to view interfaces', context['trace_message'])
+
+    def test_trace_is_unavailable_without_related_cables(self):
+        user = create_test_user(
+            'crossconnect-empty-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        user.is_superuser = True
+        user.save()
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00666',
+            ritm='RITM0012366',
+        )
+
+        context = self._get_trace_context_for_cables(cross_connect, [], user=user)
+
+        self.assertEqual(context['trace_status'], 'unavailable')
+        self.assertIsNone(context['trace_url'])
+        self.assertIn('at least one related cable', context['trace_message'])
+
+    def test_trace_is_unavailable_for_incomplete_native_path(self):
+        user = create_test_user(
+            'crossconnect-incomplete-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        user.is_superuser = True
+        user.save()
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00667',
+            ritm='RITM0012367',
+        )
+
+        device_a = create_test_device('trace-incomplete-device-a', site=self.site)
+        device_z = create_test_device('trace-incomplete-device-z', site=self.site)
+        patch_panel_1 = create_test_device('trace-incomplete-panel-1', site=self.site)
+        patch_panel_2 = create_test_device('trace-incomplete-panel-2', site=self.site)
+
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_z = Interface.objects.create(
+            device=device_z,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        rear_port_1 = RearPort.objects.create(
+            device=patch_panel_1,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_1 = FrontPort.objects.create(
+            device=patch_panel_1,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_1,
+            rear_port_position=1,
+        )
+        rear_port_2 = RearPort.objects.create(
+            device=patch_panel_2,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+
+        cable_1 = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[front_port_1],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_1.save()
+        cable_2 = Cable(
+            a_terminations=[rear_port_2],
+            b_terminations=[interface_z],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_2.save()
+
+        context = self._get_trace_context_for_cables(
+            cross_connect, self._fresh_cables(cable_1, cable_2), user=user
+        )
+
+        self.assertEqual(context['trace_status'], 'unavailable')
+        self.assertIsNone(context['trace_url'])
+        self.assertIn('incomplete', context['trace_message'])
+
+    def test_trace_is_unavailable_when_native_path_has_unrelated_cables(self):
+        user = create_test_user(
+            'crossconnect-mismatch-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        user.is_superuser = True
+        user.save()
+        cross_connect = self._create_cross_connect(
+            cross_connect_id='ID-RJO1-00668',
+            ritm='RITM0012368',
+        )
+
+        device_a = create_test_device('trace-mismatch-device-a', site=self.site)
+        device_z = create_test_device('trace-mismatch-device-z', site=self.site)
+        patch_panel_1 = create_test_device('trace-mismatch-panel-1', site=self.site)
+        patch_panel_2 = create_test_device('trace-mismatch-panel-2', site=self.site)
+
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_z = Interface.objects.create(
+            device=device_z,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        rear_port_1 = RearPort.objects.create(
+            device=patch_panel_1,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_1 = FrontPort.objects.create(
+            device=patch_panel_1,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_1,
+            rear_port_position=1,
+        )
+        rear_port_2 = RearPort.objects.create(
+            device=patch_panel_2,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port_2 = FrontPort.objects.create(
+            device=patch_panel_2,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port_2,
+            rear_port_position=1,
+        )
+
+        cable_1 = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[front_port_1],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_1.save()
+        Cable(a_terminations=[rear_port_1], b_terminations=[rear_port_2]).save()
+        cable_3 = Cable(
+            a_terminations=[front_port_2],
+            b_terminations=[interface_z],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_3.save()
+
+        context = self._get_trace_context_for_cables(
+            cross_connect, self._fresh_cables(cable_1, cable_3), user=user
+        )
+
+        self.assertEqual(context['trace_status'], 'unavailable')
+        self.assertIsNone(context['trace_url'])
+        self.assertIn('does not match', context['trace_message'])
+
+    @override_settings(EXEMPT_VIEW_PERMISSIONS=['*'])
+    def test_native_trace_view_stays_unpatched_for_cross_connect_context(self):
+        user = create_test_user(
+            'crossconnect-native-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        self.client.force_login(user)
+
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00663',
+            ritm='RITM0012363',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        device_a = create_test_device('trace-header-device-a', site=self.site)
+        device_b = create_test_device('trace-header-device-b', site=self.site)
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        Cable(a_terminations=[interface_a], b_terminations=[interface_b]).save()
+
+        response = self.client.get(
+            reverse('dcim:interface_trace', kwargs={'pk': interface_a.pk})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertNotContains(response, cross_connect.cross_connect_id)
+
+    def test_bulk_import_view_creates_cross_connect(self):
+        user = create_test_user('crossconnect-import-user', permissions=('netbox_cross_connects.add_crossconnect',))
+        user.is_superuser = True
+        user.save()
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse('plugins:netbox_cross_connects:crossconnect_bulk_import'),
+            {
+                'data': '\n'.join((
+                    'cross_connect_id,ritm,status,site,tenant,activation_date,last_known_path,description',
+                    'ID-RJO1-00655,RITM0012350,active,Site 1,Tenant 1,2026-05-26,Patch panel A > Patch panel B,Imported from CSV',
+                )),
+                'format': 'csv',
+                'csv_delimiter': 'auto',
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers['Location'], '/plugins/cross-connects/cross-connects/?modified_by_request=' + response.headers['X-Request-ID'])
+        self.assertTrue(CrossConnect.objects.filter(cross_connect_id='ID-RJO1-00655').exists())
+
+    def test_detail_view_reports_ambiguous_trace_direction_when_both_endpoints_are_a_side(self):
+        user = create_test_user(
+            'crossconnect-ambiguous-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        user.is_superuser = True
+        user.save()
+
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00661',
+            ritm='RITM0012361',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+        self._create_related_cables_custom_field()
+
+        device_a = create_test_device('ambiguous-device-a', site=self.site)
+        device_z = create_test_device('ambiguous-device-z', site=self.site)
+        patch_panel = create_test_device('ambiguous-patch-panel', site=self.site)
+
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_z = Interface.objects.create(
+            device=device_z,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        rear_port = RearPort.objects.create(
+            device=patch_panel,
+            name='RP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            positions=1,
+        )
+        front_port = FrontPort.objects.create(
+            device=patch_panel,
+            name='FP1',
+            type=PortTypeChoices.TYPE_8P8C,
+            rear_port=rear_port,
+            rear_port_position=1,
+        )
+
+        cable_1 = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[rear_port],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_1.save()
+        cable_2 = Cable(
+            a_terminations=[interface_z],
+            b_terminations=[front_port],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_2.save()
+
+        context = self._get_trace_context_for_cables(
+            cross_connect, self._fresh_cables(cable_1, cable_2), user=user
+        )
+
+        self.assertEqual(context['trace_status'], 'ambiguous')
+        self.assertIsNone(context['trace_url'])
+        self.assertCountEqual(
+            [link['interface'] for link in context['trace_links']],
+            [interface_a, interface_z],
+        )
+
+    def test_detail_view_rejects_trace_when_related_cables_have_more_than_two_endpoint_interfaces(self):
+        user = create_test_user(
+            'crossconnect-too-many-endpoints-trace-user',
+            permissions=('dcim.view_cable', 'dcim.view_interface'),
+        )
+        user.is_superuser = True
+        user.save()
+
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00662',
+            ritm='RITM0012362',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+        self._create_related_cables_custom_field()
+
+        device_a = create_test_device('invalid-device-a', site=self.site)
+        device_b = create_test_device('invalid-device-b', site=self.site)
+        device_c = create_test_device('invalid-device-c', site=self.site)
+
+        interface_a = Interface.objects.create(
+            device=device_a,
+            name='xe-0/0/0',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_b = Interface.objects.create(
+            device=device_b,
+            name='xe-0/0/1',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_c = Interface.objects.create(
+            device=device_c,
+            name='xe-0/0/2',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+        interface_d = Interface.objects.create(
+            device=device_c,
+            name='xe-0/0/3',
+            type=InterfaceTypeChoices.TYPE_10GE_FIXED,
+        )
+
+        cable_1 = Cable(
+            a_terminations=[interface_a],
+            b_terminations=[interface_b],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_1.save()
+        cable_2 = Cable(
+            a_terminations=[interface_c],
+            b_terminations=[interface_d],
+            custom_field_data={'cross_connect': cross_connect.pk},
+        )
+        cable_2.save()
+
+        context = self._get_trace_context_for_cables(
+            cross_connect, self._fresh_cables(cable_1, cable_2), user=user
+        )
+
+        self.assertEqual(context['trace_status'], 'unavailable')
+        self.assertIsNone(context['trace_url'])
+        self.assertIn('exactly two endpoint interfaces', context['trace_message'])
+
+    def test_detail_view_reports_missing_related_cables_custom_field(self):
+        cross_connect = CrossConnect.objects.create(
+            cross_connect_id='ID-RJO1-00651',
+            ritm='RITM0012346',
+            status=CrossConnectStatusChoices.STATUS_ACTIVE,
+            site=self.site,
+            tenant=self.tenant,
+        )
+
+        request = self.factory.get('/')
+        request.user = self.user
+
+        view = CrossConnectView()
+        context = view.get_extra_context(request, cross_connect)
+
+        self.assertIsNone(context['related_cables_custom_field'])
+        self.assertIsNone(context['related_cables_table'])

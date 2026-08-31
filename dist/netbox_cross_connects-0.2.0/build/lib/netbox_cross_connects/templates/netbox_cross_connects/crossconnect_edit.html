@@ -1,0 +1,9 @@
+{% extends 'generic/object_edit.html' %}
+{% load static %}
+
+{% block javascript %}
+  {{ block.super }}
+  {% if not object.pk %}
+    <script src="{% static 'netbox_cross_connects/js/crossconnect-id-suggestion.js' %}"></script>
+  {% endif %}
+{% endblock javascript %}

@@ -1,0 +1,37 @@
+
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row">
+    <div class="col col-12 col-md-6">
+      <div class="card">
+        <h2 class="card-header">{% trans "Attachment" %}</h2>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name|default:object.filename }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cross Connect" %}</th>
+            <td>{{ object.cross_connect|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "File" %}</th>
+            <td><a href="{{ object.file.url }}" target="_blank" rel="noopener">{{ object.filename }}</a></td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Size" %}</th>
+            <td>{{ object.size|filesizeformat }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+      {% include 'inc/panels/tags.html' %}
+    </div>
+  </div>
+{% endblock %}
