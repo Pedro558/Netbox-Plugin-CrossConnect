@@ -11,7 +11,7 @@ from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel, PrimaryModel
 
 from .choices import CrossConnectStatusChoices
-from .validators import CrossConnectIDValidator
+from .validators import CrossConnectIDValidator, validate_cross_connect_attachment_file
 
 __all__ = ('CrossConnect', 'CrossConnectAttachment')
 
@@ -101,6 +101,7 @@ class CrossConnectAttachment(NetBoxModel):
     file = models.FileField(
         verbose_name=_('file'),
         upload_to=cross_connect_attachment_upload_to,
+        validators=(validate_cross_connect_attachment_file,),
     )
     name = models.CharField(
         verbose_name=_('name'),

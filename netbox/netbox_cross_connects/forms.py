@@ -20,6 +20,7 @@ from utilities.forms.widgets import DatePicker
 
 from .choices import CrossConnectStatusChoices
 from .models import CrossConnect, CrossConnectAttachment
+from .validators import validate_cross_connect_attachment_file
 
 __all__ = (
     'CrossConnectAttachmentAddForm',
@@ -54,6 +55,7 @@ class CrossConnectForm(NetBoxModelForm):
     )
     attachment_file = forms.FileField(
         label=_('Attachment file'),
+        validators=(validate_cross_connect_attachment_file,),
         required=False,
     )
     attachment_name = forms.CharField(
@@ -255,6 +257,7 @@ class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
     )
     attachment_file = forms.FileField(
         label=_('Attachment file'),
+        validators=(validate_cross_connect_attachment_file,),
         required=False,
     )
     attachment_name = forms.CharField(

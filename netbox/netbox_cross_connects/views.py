@@ -34,9 +34,11 @@ from utilities.views import register_model_view
 from . import filtersets, forms, tables
 from .choices import CrossConnectStatusChoices
 from .models import CrossConnect, CrossConnectAttachment
+from .validators import validate_cross_connect_attachment_file
 
 
 def create_attachment_for_cross_connect(cross_connect, upload, name='', description=''):
+    validate_cross_connect_attachment_file(upload)
     upload.seek(0)
     file_content = upload.read()
 
@@ -570,7 +572,7 @@ class CrossConnectAttachmentAddView(generic.ObjectEditView):
         obj = self.get_object(**kwargs)
         initial_data = normalize_querydict(request.GET)
         if cross_connect_id := request.GET.get('cross_connect'):
-            initial_data.setlist('cross_connect', [cross_connect_id])
+            initial_data.update(cross_connect=[cross_connect_id])
         form = self.form(instance=obj, initial=initial_data)
         restrict_form_fields(form, request.user)
 
