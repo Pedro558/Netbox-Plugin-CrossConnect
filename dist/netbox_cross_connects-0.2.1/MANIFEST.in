@@ -1,0 +1,6 @@
+recursive-include netbox_cross_connects/templates *.html
+recursive-include netbox_cross_connects/static *.js
+recursive-include netbox_cross_connects/docs *.md
+recursive-exclude netbox_cross_connects/tests *
+recursive-exclude netbox_cross_connects __pycache__
+recursive-exclude netbox_cross_connects *.pyc
