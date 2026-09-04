@@ -42,6 +42,10 @@
             <td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
           </tr>
           <tr>
+            <th scope="row">{% trans "Cross Review" %}</th>
+            <td>{% badge object.get_cross_review_display bg_color=object.get_cross_review_color %}</td>
+          </tr>
+          <tr>
             <th scope="row">{% trans "Site" %}</th>
             <td>{{ object.site|linkify }}</td>
           </tr>

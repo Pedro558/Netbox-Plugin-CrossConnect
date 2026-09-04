@@ -18,7 +18,7 @@ from utilities.forms.fields import (
 from utilities.forms.rendering import FieldSet
 from utilities.forms.widgets import DatePicker
 
-from .choices import CrossConnectStatusChoices
+from .choices import CrossConnectReviewChoices, CrossConnectStatusChoices
 from .models import CrossConnect, CrossConnectAttachment
 from .validators import validate_cross_connect_attachment_file
 
@@ -75,6 +75,7 @@ class CrossConnectForm(NetBoxModelForm):
             'cross_connect_id',
             'ritm',
             'status',
+            'cross_review',
             'site',
             'tenant',
             'provider',
@@ -98,6 +99,7 @@ class CrossConnectForm(NetBoxModelForm):
             'cross_connect_id',
             'ritm',
             'status',
+            'cross_review',
             'site',
             'tenant',
             'provider',
@@ -230,6 +232,12 @@ class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
         required=False,
         initial='',
     )
+    cross_review = forms.ChoiceField(
+        label=_('Cross Review'),
+        choices=add_blank_choice(CrossConnectReviewChoices),
+        required=False,
+        initial='',
+    )
     site = DynamicModelChoiceField(
         queryset=Site.objects.all(),
         required=False,
@@ -274,7 +282,7 @@ class CrossConnectBulkEditForm(NetBoxModelBulkEditForm):
 
     model = CrossConnect
     fieldsets = (
-        FieldSet('status', 'site', 'tenant', 'provider', 'activation_date', 'description', name=_('Cross Connect')),
+        FieldSet('status', 'cross_review', 'site', 'tenant', 'provider', 'activation_date', 'description', name=_('Cross Connect')),
         FieldSet('attachment_file', 'attachment_name', 'attachment_description', name=_('Attachment')),
     )
     nullable_fields = (
@@ -288,12 +296,17 @@ class CrossConnectFilterForm(NetBoxModelFilterSetForm):
     model = CrossConnect
     fieldsets = (
         FieldSet('q', 'filter_id', 'tag'),
-        FieldSet('status', 'site_id', 'tenant_id', 'provider_id', name=_('Attributes')),
+        FieldSet('status', 'cross_review', 'site_id', 'tenant_id', 'provider_id', name=_('Attributes')),
     )
     status = forms.MultipleChoiceField(
         choices=CrossConnectStatusChoices,
         required=False,
         label=_('Status'),
+    )
+    cross_review = forms.MultipleChoiceField(
+        choices=CrossConnectReviewChoices,
+        required=False,
+        label=_('Cross Review'),
     )
     site_id = DynamicModelMultipleChoiceField(
         queryset=Site.objects.all(),
@@ -318,6 +331,12 @@ class CrossConnectImportForm(NetBoxModelImportForm):
         label=_('Status'),
         choices=CrossConnectStatusChoices,
         help_text=_('Operational status'),
+    )
+    cross_review = CSVChoiceField(
+        label=_('Cross Review'),
+        choices=CrossConnectReviewChoices,
+        required=False,
+        help_text=_('Review status; defaults to Pending when omitted.'),
     )
     site = CSVModelChoiceField(
         label=_('Site'),
@@ -344,6 +363,7 @@ class CrossConnectImportForm(NetBoxModelImportForm):
             'cross_connect_id',
             'ritm',
             'status',
+            'cross_review',
             'site',
             'tenant',
             'provider',

@@ -10,7 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel, PrimaryModel
 
-from .choices import CrossConnectStatusChoices
+from .choices import CrossConnectReviewChoices, CrossConnectStatusChoices
 from .validators import CrossConnectIDValidator, validate_cross_connect_attachment_file
 
 __all__ = ('CrossConnect', 'CrossConnectAttachment')
@@ -43,6 +43,12 @@ class CrossConnect(PrimaryModel):
         max_length=50,
         choices=CrossConnectStatusChoices,
         default=CrossConnectStatusChoices.STATUS_ACTIVE,
+    )
+    cross_review = models.CharField(
+        verbose_name=_('cross review'),
+        max_length=20,
+        choices=CrossConnectReviewChoices,
+        default=CrossConnectReviewChoices.REVIEW_PENDING,
     )
     site = models.ForeignKey(
         to='dcim.Site',
@@ -82,6 +88,9 @@ class CrossConnect(PrimaryModel):
 
     def get_status_color(self):
         return CrossConnectStatusChoices.colors.get(self.status)
+
+    def get_cross_review_color(self):
+        return CrossConnectReviewChoices.colors.get(self.cross_review)
 
     def clean(self):
         super().clean()

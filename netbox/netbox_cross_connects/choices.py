@@ -2,7 +2,7 @@ from django.utils.translation import gettext_lazy as _
 
 from utilities.choices import ChoiceSet
 
-__all__ = ('CrossConnectStatusChoices',)
+__all__ = ('CrossConnectReviewChoices', 'CrossConnectStatusChoices')
 
 
 class CrossConnectStatusChoices(ChoiceSet):
@@ -20,4 +20,16 @@ class CrossConnectStatusChoices(ChoiceSet):
         (STATUS_OFFLINE, _('Offline'), 'red'),
         (STATUS_DECOMMISSIONING, _('Decommissioning'), 'orange'),
         #(STATUS_DECOMMISSIONED, _('Decommissioned'), 'gray'),
+    ]
+
+
+class CrossConnectReviewChoices(ChoiceSet):
+    key = 'CrossConnect.cross_review'
+
+    REVIEW_PENDING = 'pending'
+    REVIEW_DONE = 'done'
+
+    CHOICES = [
+        (REVIEW_PENDING, _('Pending'), 'yellow'),
+        (REVIEW_DONE, _('Done'), 'green'),
     ]

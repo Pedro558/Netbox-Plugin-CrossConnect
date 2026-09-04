@@ -24,6 +24,9 @@ class CrossConnectTable(NetBoxTable):
         verbose_name=_('Cross Connect ID'),
     )
     status = columns.ChoiceFieldColumn()
+    cross_review = columns.ChoiceFieldColumn(
+        verbose_name=_('Cross Review'),
+    )
     site = tables.Column(
         linkify=True,
         verbose_name=_('Site'),
@@ -43,11 +46,11 @@ class CrossConnectTable(NetBoxTable):
     class Meta(NetBoxTable.Meta):
         model = CrossConnect
         fields = (
-            'pk', 'id', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant', 'provider',
+            'pk', 'id', 'cross_connect_id', 'ritm', 'status', 'cross_review', 'site', 'tenant', 'provider',
             'activation_date', 'description', 'comments', 'tags', 'created', 'last_updated', 'actions',
         )
         default_columns = (
-            'pk', 'cross_connect_id', 'ritm', 'status', 'site', 'tenant', 'provider', 'activation_date', 'description',
+            'pk', 'cross_connect_id', 'ritm', 'status', 'cross_review', 'site', 'tenant', 'provider', 'activation_date', 'description',
         )
 
 

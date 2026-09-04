@@ -7,7 +7,7 @@ from dcim.models import Site
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Tenant
 
-from .choices import CrossConnectStatusChoices
+from .choices import CrossConnectReviewChoices, CrossConnectStatusChoices
 from .models import CrossConnect, CrossConnectAttachment
 
 __all__ = ('CrossConnectAttachmentFilterSet', 'CrossConnectFilterSet')
@@ -50,6 +50,9 @@ class CrossConnectFilterSet(NetBoxModelFilterSet):
     status = django_filters.MultipleChoiceFilter(
         choices=CrossConnectStatusChoices,
     )
+    cross_review = django_filters.MultipleChoiceFilter(
+        choices=CrossConnectReviewChoices,
+    )
 
     class Meta:
         model = CrossConnect
@@ -58,6 +61,7 @@ class CrossConnectFilterSet(NetBoxModelFilterSet):
             'cross_connect_id',
             'ritm',
             'status',
+            'cross_review',
             'activation_date',
             'provider_id',
             'provider',
