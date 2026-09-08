@@ -1,0 +1,115 @@
+
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load plugins %}
+{% load i18n %}
+
+{% block extra_controls %}
+  {% if can_deactivate_cross %}
+    <a href="{% url 'plugins:netbox_cross_connects:crossconnect_deactivate' pk=object.pk %}" class="btn btn-danger">
+      <i class="mdi mdi-link-off" aria-hidden="true"></i>
+      {% if object.status == 'offline' %}{% trans "Remove Related Cables" %}{% else %}{% trans "Deactivate Cross" %}{% endif %}
+    </a>
+  {% endif %}
+{% endblock extra_controls %}
+
+{% block content %}
+  <div class="row">
+    <div class="col col-12 col-md-6">
+      <div class="card">
+        <h2 class="card-header">{% trans "Cross Connect" %}</h2>
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Cross Connect ID" %}</th>
+            <td>
+              <div class="float-end">
+                {% copy_content "cross_connect_id" %}
+              </div>
+              <span id="cross_connect_id">{{ object.cross_connect_id }}</span>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "RITM" %}</th>
+            <td>
+              <div class="float-end">
+                {% copy_content "ritm" %}
+              </div>
+              <span id="ritm">{{ object.ritm }}</span>
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{% badge object.get_status_display bg_color=object.get_status_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cross Review" %}</th>
+            <td>{% badge object.get_cross_review_display bg_color=object.get_cross_review_color %}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Site" %}</th>
+            <td>{{ object.site|linkify }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Tenant" %}</th>
+            <td>
+              {% if object.tenant.group %}
+                {{ object.tenant.group|linkify }} /
+              {% endif %}
+              {{ object.tenant|linkify }}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Provider" %}</th>
+            <td>
+              {% if object.provider %}
+                {% if object.provider.group %}
+                  {{ object.provider.group|linkify }} /
+                {% endif %}
+                {{ object.provider|linkify }}
+              {% else %}
+                <span class="text-muted">{% trans "None" %}</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Activation Date" %}</th>
+            <td>{{ object.activation_date|isodate|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Description" %}</th>
+            <td>{{ object.description|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+      {% include 'inc/panels/custom_fields.html' %}
+      {% include 'inc/panels/tags.html' %}
+      {% include 'inc/panels/comments.html' %}
+      {% plugin_left_page object %}
+    </div>
+    <div class="col col-12 col-md-6">
+      {% include 'netbox_cross_connects/panels/trace.html' %}
+      <div class="card">
+        <h2 class="card-header">{% trans "Last Known Path" %}</h2>
+        <div class="card-body">
+          {% if object.last_known_path %}
+            {{ object.last_known_path|linebreaksbr }}
+          {% else %}
+            <span class="text-muted">{% trans "None" %}</span>
+          {% endif %}
+        </div>
+      </div>
+      {% include 'netbox_cross_connects/panels/attachments.html' %}
+      {% plugin_right_page object %}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col col-12">
+      {% include 'netbox_cross_connects/panels/related_cables.html' %}
+    </div>
+  </div>
+  <div class="row">
+    <div class="col col-md-12">
+      {% plugin_full_width_page object %}
+    </div>
+  </div>
+{% endblock %}

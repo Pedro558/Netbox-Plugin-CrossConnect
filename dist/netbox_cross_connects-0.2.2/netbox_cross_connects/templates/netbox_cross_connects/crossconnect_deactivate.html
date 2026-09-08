@@ -1,0 +1,44 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers %}
+{% load i18n %}
+{% load render_table from django_tables2 %}
+
+{% block title %}{% trans "Deactivate Cross Connect" %}{% endblock %}
+
+{% block content %}
+  <div class="row justify-content-center">
+    <div class="col col-12 col-lg-9">
+      <div class="card border-danger">
+        <div class="card-header text-bg-danger">
+          {% trans "Deactivate Cross Connect" %}: {{ object }}
+        </div>
+        <div class="card-body">
+          <div class="alert alert-warning" role="alert">
+            {% trans "This operation marks the Cross Connect as Offline and permanently deletes every related cable, releasing their terminations." %}
+          </div>
+          <p>{% trans "The last known path below will be saved together with your reason before the cables are removed." %}</p>
+          <form method="post">
+            {% csrf_token %}
+            {% render_form form %}
+            <div class="d-flex justify-content-between mt-3">
+              <a href="{{ object.get_absolute_url }}" class="btn btn-outline-secondary">{% trans "Cancel" %}</a>
+              <button type="submit" class="btn btn-danger">
+                <i class="mdi mdi-link-off" aria-hidden="true"></i> {% trans "Deactivate Cross" %}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      <div class="card mt-3">
+        <div class="card-header">{% trans "Related Cables to Remove" %} ({{ related_cables|length }})</div>
+        {% if cable_table.rows %}
+          <div class="table-responsive">
+            {% render_table cable_table 'inc/table.html' %}
+          </div>
+        {% else %}
+          <div class="card-body text-muted">{% trans "No related cables will be removed." %}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+{% endblock content %}

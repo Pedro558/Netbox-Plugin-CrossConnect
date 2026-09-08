@@ -1,0 +1,10 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: netbox-cross-connects\n"
+"Language: pt\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Unable to suggest a Cross Connect ID."
+msgstr "Não foi possível sugerir um ID da Cross Connect."

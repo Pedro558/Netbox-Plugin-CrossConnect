@@ -1,0 +1,217 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: netbox-cross-connects\n"
+"Language: pt\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgid "Planned"
+msgstr "Planejado"
+
+msgid "Active"
+msgstr "Ativo"
+
+msgid "Offline"
+msgstr "Offline"
+
+msgid "Decommissioning"
+msgstr "Em descomissionamento"
+
+msgid "Pending"
+msgstr "Pendente"
+
+msgid "Done"
+msgstr "Concluído"
+
+msgid "Cross Connect"
+msgstr "Cross Connect"
+
+msgid "Cross Connects"
+msgstr "Cross Connects"
+
+msgid "Cross Connect ID"
+msgstr "ID da Cross Connect"
+
+msgid "cross connect ID"
+msgstr "ID da Cross Connect"
+
+msgid "Cross Review"
+msgstr "Revisão da Cross Connect"
+
+msgid "cross review"
+msgstr "revisão da Cross Connect"
+
+msgid "Cross connect ID must match the format ID-<CODE>-<5 digits>."
+msgstr "O ID da Cross Connect deve seguir o formato ID-<CÓDIGO>-<5 dígitos>."
+
+msgid "Attachment"
+msgstr "Anexo"
+
+msgid "Attachments"
+msgstr "Anexos"
+
+msgid "Attachment file"
+msgstr "Arquivo do anexo"
+
+msgid "Attachment name"
+msgstr "Nome do anexo"
+
+msgid "Attachment description"
+msgstr "Descrição do anexo"
+
+msgid "Initial Attachment"
+msgstr "Anexo inicial"
+
+msgid "Add Attachment"
+msgstr "Adicionar anexo"
+
+msgid "No attachments found"
+msgstr "Nenhum anexo encontrado"
+
+msgid "Permission required to view attachments"
+msgstr "Permissão necessária para visualizar anexos"
+
+msgid "If no name is specified, the uploaded file name will be used."
+msgstr "Se nenhum nome for informado, será usado o nome do arquivo enviado."
+
+msgid "Only PDF, JPG, JPEG, and PNG files are allowed."
+msgstr "São permitidos somente arquivos PDF, JPG, JPEG e PNG."
+
+msgid "Attachment files must not exceed 25 MB."
+msgstr "Os arquivos de anexo não podem exceder 25 MB."
+
+msgid "The uploaded file is not a valid PDF."
+msgstr "O arquivo enviado não é um PDF válido."
+
+msgid "The file content does not match its extension."
+msgstr "O conteúdo do arquivo não corresponde à sua extensão."
+
+msgid "The uploaded file is not a valid %(file_type)s image."
+msgstr "O arquivo enviado não é uma imagem %(file_type)s válida."
+
+msgid "Related Cables"
+msgstr "Cabos relacionados"
+
+msgid "Add Cable"
+msgstr "Adicionar cabo"
+
+msgid "Remove Related Cables"
+msgstr "Remover cabos relacionados"
+
+msgid "Related Cables to Remove"
+msgstr "Cabos relacionados a remover"
+
+msgid "No related cables will be removed."
+msgstr "Nenhum cabo relacionado será removido."
+
+msgid "Deactivate Cross"
+msgstr "Desativar Cross Connect"
+
+msgid "Deactivate Cross Connect"
+msgstr "Desativar Cross Connect"
+
+msgid "Deactivation reason"
+msgstr "Motivo da desativação"
+
+msgid "This reason will be recorded in the last known path and changelog."
+msgstr "Este motivo será registrado no último caminho conhecido e no histórico de alterações."
+
+msgid "I understand that the related cables will be permanently deleted."
+msgstr "Entendo que os cabos relacionados serão excluídos permanentemente."
+
+msgid "This operation marks the Cross Connect as Offline and permanently deletes every related cable, releasing their terminations."
+msgstr "Esta operação marca a Cross Connect como Offline e exclui permanentemente todos os cabos relacionados, liberando suas terminações."
+
+msgid "The last known path below will be saved together with your reason before the cables are removed."
+msgstr "O último caminho conhecido abaixo será salvo junto ao motivo antes da remoção dos cabos."
+
+msgid "Last Known Path"
+msgstr "Último caminho conhecido"
+
+msgid "last known path"
+msgstr "último caminho conhecido"
+
+msgid "Trace"
+msgstr "Rastreamento"
+
+msgid "Native trace resolved from %(origin)s to %(destination)s."
+msgstr "Rastreamento nativo resolvido de %(origin)s para %(destination)s."
+
+msgid "Open Trace"
+msgstr "Abrir rastreamento"
+
+msgid "Open SVG"
+msgstr "Abrir SVG"
+
+msgid "Trace from %(interface)s"
+msgstr "Rastrear a partir de %(interface)s"
+
+msgid "Trace is unavailable until exactly two endpoint interfaces can be inferred."
+msgstr "O rastreamento não está disponível até que exatamente duas interfaces de extremidade possam ser identificadas."
+
+msgid "Permission to view interfaces is required to trace this cross connect."
+msgstr "É necessária permissão para visualizar interfaces e rastrear esta Cross Connect."
+
+msgid "Trace requires at least one related cable."
+msgstr "O rastreamento requer ao menos um cabo relacionado."
+
+msgid "Trace requires exactly two endpoint interfaces on related cables."
+msgstr "O rastreamento requer exatamente duas interfaces de extremidade nos cabos relacionados."
+
+msgid "Native trace path is incomplete for this cross connect."
+msgstr "O caminho do rastreamento nativo está incompleto para esta Cross Connect."
+
+msgid "Native trace path does not end at the expected interface."
+msgstr "O caminho do rastreamento nativo não termina na interface esperada."
+
+msgid "Native trace path does not match the related cables for this cross connect."
+msgstr "O caminho do rastreamento nativo não corresponde aos cabos relacionados desta Cross Connect."
+
+msgid "Native trace is available."
+msgstr "O rastreamento nativo está disponível."
+
+msgid "Trace direction is ambiguous because the endpoint interfaces are not one A-side and one B-side."
+msgstr "A direção do rastreamento é ambígua porque as interfaces de extremidade não estão uma no lado A e outra no lado B."
+
+msgid "A site must be selected."
+msgstr "Um site deve ser selecionado."
+
+msgid "The Site name must contain only letters A-Z and numbers to generate a Cross Connect ID."
+msgstr "O nome do Site deve conter apenas letras de A a Z e números para gerar um ID da Cross Connect."
+
+msgid "The Cross Connect ID sequence for this Site has reached its limit."
+msgstr "A sequência de IDs da Cross Connect para este Site atingiu o limite."
+
+msgid "Unable to suggest a Cross Connect ID."
+msgstr "Não foi possível sugerir um ID da Cross Connect."
+
+msgid "Provider is required when creating a cross connect."
+msgstr "O Provedor é obrigatório ao criar uma Cross Connect."
+
+msgid "You do not have permission to delete every related cable."
+msgstr "Você não tem permissão para excluir todos os cabos relacionados."
+
+msgid "Cross deactivated. Reason: {reason}"
+msgstr "Cross Connect desativada. Motivo: {reason}"
+
+msgid "Removed during deactivation of cross connect {cross_connect}."
+msgstr "Removido durante a desativação da Cross Connect {cross_connect}."
+
+msgid "Cross connect deactivated and {count} related cable(s) removed."
+msgstr "Cross Connect desativada e {count} cabo(s) relacionado(s) removido(s)."
+
+msgid "Review status; defaults to Pending when omitted."
+msgstr "Status da revisão; o padrão é Pendente quando omitido."
+
+msgid "Operational status"
+msgstr "Status operacional"
+
+msgid "Assigned site"
+msgstr "Site atribuído"
+
+msgid "Assigned tenant"
+msgstr "Tenant atribuído"
+
+msgid "Assigned provider"
+msgstr "Provedor atribuído"

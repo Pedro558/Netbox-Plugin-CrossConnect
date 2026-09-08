@@ -1,0 +1,27 @@
+
+{% load i18n %}
+{% load render_table from django_tables2 %}
+
+<div class="card">
+  <h2 class="card-header">
+    {% trans "Attachments" %}
+    {% if perms.netbox_cross_connects.add_crossconnectattachment %}
+      <div class="card-actions">
+        <a href="{% url 'plugins:netbox_cross_connects:crossconnectattachment_add' %}?cross_connect={{ object.pk }}&return_url={{ object.get_absolute_url }}" class="btn btn-ghost-primary btn-sm">
+          <i class="mdi mdi-plus-thick" aria-hidden="true"></i> {% trans "Add Attachment" %}
+        </a>
+      </div>
+    {% endif %}
+  </h2>
+  {% if perms.netbox_cross_connects.view_crossconnectattachment %}
+    {% if attachments_table.rows %}
+      <div class="table-responsive">
+        {% render_table attachments_table 'inc/table.html' %}
+      </div>
+    {% else %}
+      <div class="card-body text-muted">{% trans "No attachments found" %}</div>
+    {% endif %}
+  {% else %}
+    <div class="card-body text-muted">{% trans "Permission required to view attachments" %}</div>
+  {% endif %}
+</div>
